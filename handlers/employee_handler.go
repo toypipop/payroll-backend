@@ -40,6 +40,62 @@ func CreateEmployee(c *gin.Context) {
 	c.JSON(http.StatusCreated, input)
 }
 
+// UpdateEmployee handles updating employee data (English Comment)
+func UpdateEmployee(c *gin.Context) {
+	id := c.Param("id")
+	var employee models.Employee
+
+	// 1. Check if employee exists
+	if err := config.DB.First(&employee, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found"})
+		return
+	}
+
+	// 2. Create a struct for binding update data (Exclude ID and Password)
+	var updateData struct {
+		EmployeeCode string `json:"employee_code"`
+		FirstName    string `json:"first_name"`
+		LastName     string `json:"last_name"`
+		Email        string `json:"email"`
+		DeptID       uint   `json:"dept_id"`
+		PosID        uint   `json:"pos_id"`
+		Status       string `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 3. Use Updates with a map or struct to avoid unique constraint with itself
+	// GORM will skip fields that haven't changed
+	result := config.DB.Model(&employee).Updates(updateData)
+
+	if result.Error != nil {
+		// Return clear error message if code or email is taken by ANOTHER user
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed: " + result.Error.Error()})
+		return
+	}
+
+	// 4. Reload the employee with associations to return to frontend
+	config.DB.Preload("Department").Preload("Position").First(&employee, id)
+
+	c.JSON(http.StatusOK, employee)
+}
+
+/* --- Delete Employee (English Comment) --- */
+func DeleteEmployee(c *gin.Context) {
+	id := c.Param("id")
+
+	// Perform Unscoped() for permanent delete or just Delete() for Soft Delete
+	if err := config.DB.Delete(&models.Employee{}, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete record"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
+}
+
 // GetMyProfile fetches the profile of the logged-in user
 func GetMyProfile(c *gin.Context) {
 	// 1. Get user_id from context (set by Middleware)

@@ -32,8 +32,20 @@ func SetupRouter() *gin.Engine {
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware()) // Use middleware for this group
 	{
-		api.GET("/employees", handlers.GetEmployees)
-		// Other protected routes go here
+		// Employee Management
+		api.GET("/employees", handlers.GetEmployees)          // List all
+		api.POST("/employees", handlers.CreateEmployee)       // Add new
+		api.PUT("/employees/:id", handlers.UpdateEmployee)    // Edit existing
+		api.DELETE("/employees/:id", handlers.DeleteEmployee) // Remove
+
+		api.GET("/departments", handlers.GetDepartments)
+		api.GET("/positions", handlers.GetPositions)
+
+		api.GET("/companies", handlers.GetCompanies)
+		api.POST("/companies", handlers.CreateCompany)
+		api.PUT("/companies/:id", handlers.UpdateCompany)
+		api.DELETE("/companies/:id", handlers.DeleteCompany)
+
 	}
 
 	return r
