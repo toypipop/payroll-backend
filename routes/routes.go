@@ -41,10 +41,10 @@ func SetupRouter() *gin.Engine {
 		api.GET("/departments", handlers.GetDepartments)
 		api.GET("/positions", handlers.GetPositions)
 
-		api.GET("/companies", handlers.GetCompanies)
-		api.POST("/companies", handlers.CreateCompany)
-		api.PUT("/companies/:id", handlers.UpdateCompany)
-		api.DELETE("/companies/:id", handlers.DeleteCompany)
+		api.GET("/company", handlers.Getcompany)
+		api.POST("/company", handlers.CreateCompany)
+		api.PUT("/company/:id", handlers.UpdateCompany)
+		api.DELETE("/company/:id", handlers.DeleteCompany)
 
 	}
 

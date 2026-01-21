@@ -4,17 +4,16 @@ import (
 	"net/http"
 	"strings"
 
+	"payroll-backend/handlers"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Secret key must match the one in Login handler
-var jwtSecret = []byte("your_super_secret_key_2026")
-
-// AuthMiddleware validates the JWT token in the Authorization header
+/* --- AuthMiddleware validates JWT and extracts Tenant info (English Comment) --- */
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 1. Get token from Header (Authorization: Bearer <token>)
+		// 1. Get Token from Header (English Comment)
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
@@ -22,19 +21,20 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 2. Extract token string
+		// 2. Check "Bearer " prefix (English Comment)
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
 			c.Abort()
 			return
 		}
 
 		tokenString := parts[1]
+		claims := &handlers.TokenClaims{}
 
-		// 3. Parse and validate token
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return jwtSecret, nil
+		// 3. Parse and Validate Token (English Comment)
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			return handlers.GetJWTSecret(), nil // แนะนำให้ทำ getter สำหรับ jwtSecret
 		})
 
 		if err != nil || !token.Valid {
@@ -43,9 +43,10 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 4. Set user data into context for next handlers
-		claims := token.Claims.(jwt.MapClaims)
-		c.Set("user_id", claims["user_id"])
+		// 4. Set Tenant Data to Context (English Comment)
+		c.Set("user_id", claims.UserID)
+		c.Set("company_id", claims.CompanyID)
+		c.Set("role_id", claims.RoleID)
 
 		c.Next()
 	}

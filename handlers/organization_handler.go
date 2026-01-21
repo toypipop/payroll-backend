@@ -34,11 +34,11 @@ func GetPositions(c *gin.Context) {
 	c.JSON(http.StatusOK, positions)
 }
 
-// GET: Fetch all companies
-func GetCompanies(c *gin.Context) {
-	var companies []models.Company
-	config.DB.Find(&companies)
-	c.JSON(http.StatusOK, companies)
+// GET: Fetch all company
+func Getcompany(c *gin.Context) {
+	var company []models.Company
+	config.DB.Find(&company)
+	c.JSON(http.StatusOK, company)
 }
 
 // POST: Create new company

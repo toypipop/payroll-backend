@@ -9,6 +9,7 @@ type SalaryStructure struct {
 
 type PayrollCycle struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
+	CompanyID uint      `gorm:"index;not null" json:"company_id"` // Data isolation
 	CycleName string    `json:"cycle_name"`
 	StartDate time.Time `json:"start_date"`
 	EndDate   time.Time `json:"end_date"`

@@ -23,7 +23,7 @@ func ConnectDatabase() {
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true, // Table will be "company" instead of "companies"
+			SingularTable: true, // Table will be "company" instead of "company"
 		},
 	})
 

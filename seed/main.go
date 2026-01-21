@@ -8,37 +8,56 @@ import (
 )
 
 func main() {
-	// 1. Initialize DB Connection
 	config.ConnectDatabase()
 
-	// 2. Get Password from Environment Variable
 	adminPass := os.Getenv("ADMIN_PASSWORD")
 	if adminPass == "" {
-		log.Fatal("Error: Please set ADMIN_PASSWORD environment variable before running")
+		log.Fatal("Error: Please set ADMIN_PASSWORD environment variable")
 	}
 
-	dept := models.Department{DeptName: "IT Administration"}
-	config.DB.FirstOrCreate(&dept, models.Department{DeptName: "IT Administration"})
+	// 1. Create Initial Company (English Comment)
+	company := models.Company{
+		Name:  "Default Corporation",
+		TaxID: "1234567890123",
+	}
+	// Use FirstOrCreate to prevent duplicate company during re-seed
+	config.DB.FirstOrCreate(&company, models.Company{TaxID: "1234567890123"})
 
-	pos := models.Position{PosName: "System Administrator"}
-	config.DB.FirstOrCreate(&pos, models.Position{PosName: "System Administrator"})
+	// 2. Create Master Data linked to Company (English Comment)
+	dept := models.Department{
+		DeptName:  "IT Administration",
+		CompanyID: company.ID,
+	}
+	config.DB.FirstOrCreate(&dept, models.Department{
+		DeptName:  "IT Administration",
+		CompanyID: company.ID,
+	})
 
-	// 3. Define Admin User
+	pos := models.Position{
+		PosName:   "System Administrator",
+		CompanyID: company.ID,
+	}
+	config.DB.FirstOrCreate(&pos, models.Position{
+		PosName:   "System Administrator",
+		CompanyID: company.ID,
+	})
+
+	// 3. Create Admin Employee linked to Company (English Comment)
 	admin := models.Employee{
+		CompanyID:    company.ID,
 		EmployeeCode: "ADM001",
 		FirstName:    "System",
 		LastName:     "Admin",
 		Email:        "admin@payroll.com",
-		Password:     adminPass, // The 'BeforeCreate' hook will hash this automatically
+		Password:     adminPass,
 		DeptID:       dept.ID,
 		PosID:        pos.ID,
 		Status:       "ACTIVE",
 	}
 
-	// 4. Create record using GORM
 	if err := config.DB.Create(&admin).Error; err != nil {
 		log.Fatalf("Failed to seed admin: %v", err)
 	}
 
-	log.Println("✅ Admin user (admin@payroll.com) created successfully!")
+	log.Println("✅ Seed completed: Company and Admin user created!")
 }

@@ -4,16 +4,27 @@ import (
 	"net/http"
 	"payroll-backend/config"
 	"payroll-backend/models"
+	"payroll-backend/repository" // Added repository import
 
 	"github.com/gin-gonic/gin"
 )
 
-// GetEmployees fetches all employees with their department and position
+// GetEmployees fetches all employees within the same company
 func GetEmployees(c *gin.Context) {
+	// 1. Get company_id from context (English Comment)
+	companyID, exists := c.Get("company_id")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Tenant information not found"})
+		return
+	}
+
 	var employees []models.Employee
 
-	// Use GORM Preload to fetch related data (Joins)
-	result := config.DB.Preload("Department").Preload("Position").Find(&employees)
+	// 2. Apply ScopeCompany before finding data (English Comment)
+	result := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
+		Preload("Department").
+		Preload("Position").
+		Find(&employees)
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
@@ -23,7 +34,7 @@ func GetEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, employees)
 }
 
-// CreateEmployee adds a new employee record
+// CreateEmployee adds a new employee record tied to the user's company
 func CreateEmployee(c *gin.Context) {
 	var input models.Employee
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -31,7 +42,10 @@ func CreateEmployee(c *gin.Context) {
 		return
 	}
 
-	// Save to database
+	// 1. Force set CompanyID from token context (English Comment)
+	companyID, _ := c.Get("company_id")
+	input.CompanyID = companyID.(uint)
+
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -40,18 +54,18 @@ func CreateEmployee(c *gin.Context) {
 	c.JSON(http.StatusCreated, input)
 }
 
-// UpdateEmployee handles updating employee data (English Comment)
+// UpdateEmployee handles updating employee data within the same company
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
+	companyID, _ := c.Get("company_id")
 	var employee models.Employee
 
-	// 1. Check if employee exists
-	if err := config.DB.First(&employee, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found"})
+	// 1. Find employee only within the user's company (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).First(&employee, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found in your company"})
 		return
 	}
 
-	// 2. Create a struct for binding update data (Exclude ID and Password)
 	var updateData struct {
 		EmployeeCode string `json:"employee_code"`
 		FirstName    string `json:"first_name"`
@@ -67,38 +81,34 @@ func UpdateEmployee(c *gin.Context) {
 		return
 	}
 
-	// 3. Use Updates with a map or struct to avoid unique constraint with itself
-	// GORM will skip fields that haven't changed
-	result := config.DB.Model(&employee).Updates(updateData)
-
-	if result.Error != nil {
-		// Return clear error message if code or email is taken by ANOTHER user
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed: " + result.Error.Error()})
+	// 2. Perform update (English Comment)
+	if err := config.DB.Model(&employee).Updates(updateData).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed: " + err.Error()})
 		return
 	}
 
-	// 4. Reload the employee with associations to return to frontend
 	config.DB.Preload("Department").Preload("Position").First(&employee, id)
-
 	c.JSON(http.StatusOK, employee)
 }
 
-/* --- Delete Employee (English Comment) --- */
+/* --- Delete Employee within company scope (English Comment) --- */
 func DeleteEmployee(c *gin.Context) {
 	id := c.Param("id")
+	companyID, _ := c.Get("company_id")
 
-	// Perform Unscoped() for permanent delete or just Delete() for Soft Delete
-	if err := config.DB.Delete(&models.Employee{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete record"})
+	// 1. Ensure the record belongs to the company before deleting (English Comment)
+	result := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Delete(&models.Employee{}, id)
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }
 
-// GetMyProfile fetches the profile of the logged-in user
+// GetMyProfile fetches the profile of the logged-in user (OWN scope)
 func GetMyProfile(c *gin.Context) {
-	// 1. Get user_id from context (set by Middleware)
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
@@ -106,8 +116,8 @@ func GetMyProfile(c *gin.Context) {
 	}
 
 	var employee models.Employee
-	// 2. Query only the data belonging to this user (Data Scope: OWN)
-	if err := config.DB.First(&employee, userID).Error; err != nil {
+	// Profile is already naturally isolated by UserID (English Comment)
+	if err := config.DB.Preload("Department").Preload("Position").First(&employee, userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employee record not found"})
 		return
 	}
