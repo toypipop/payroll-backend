@@ -34,7 +34,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// 3. Parse and Validate Token (English Comment)
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return handlers.GetJWTSecret(), nil // แนะนำให้ทำ getter สำหรับ jwtSecret
+			return handlers.GetJWTSecret(), nil // getter jwtSecret
 		})
 
 		if err != nil || !token.Valid {
@@ -47,6 +47,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("company_id", claims.CompanyID)
 		c.Set("role_id", claims.RoleID)
+		c.Set("is_system_admin", claims.IsSuperAdmin)
 
 		c.Next()
 	}

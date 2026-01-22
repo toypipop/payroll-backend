@@ -12,39 +12,55 @@ func main() {
 
 	adminPass := os.Getenv("ADMIN_PASSWORD")
 	if adminPass == "" {
-		log.Fatal("Error: Please set ADMIN_PASSWORD environment variable")
+		adminPass = "Admin@123" // Default password if env is missing
 	}
 
-	// 1. Create Initial Company (English Comment)
+	// 1. Create System Admin Role (English Comment)
+	adminRole := models.Role{
+		RoleName:     "SUPER_ADMIN",
+		Description:  "System administrator with full access",
+		IsSuperAdmin: true,
+	}
+	config.DB.Where(models.Role{RoleName: "SUPER_ADMIN"}).FirstOrCreate(&adminRole)
+
+	// 2. Create Initial Company (English Comment)
 	company := models.Company{
 		Name:  "Default Corporation",
 		TaxID: "1234567890123",
 	}
-	// Use FirstOrCreate to prevent duplicate company during re-seed
-	config.DB.FirstOrCreate(&company, models.Company{TaxID: "1234567890123"})
+	config.DB.Where(models.Company{TaxID: "1234567890123"}).FirstOrCreate(&company)
 
-	// 2. Create Master Data linked to Company (English Comment)
-	dept := models.Department{
-		DeptName:  "IT Administration",
-		CompanyID: company.ID,
+	// 3. Create AppModule (Dashboard, Employee, Settings) (English Comment)
+	modules := []models.AppModule{
+		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "LayoutDashboard", Order: 1},
+		{ModuleName: "Employees", ModuleKey: "EMPLOYEE", RoutePath: "/employees", Icon: "Users", Order: 2},
+		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 3},
 	}
-	config.DB.FirstOrCreate(&dept, models.Department{
-		DeptName:  "IT Administration",
-		CompanyID: company.ID,
-	})
 
-	pos := models.Position{
-		PosName:   "System Administrator",
-		CompanyID: company.ID,
+	for _, m := range modules {
+		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).FirstOrCreate(&m)
+
+		// 4. Assign Full Access to SUPER_ADMIN for each module (English Comment)
+		access := models.RoleModuleAccess{
+			RoleID:    adminRole.ID,
+			ModuleID:  m.ID,
+			CanView:   true,
+			CanEdit:   true,
+			DataScope: "ALL",
+		}
+		config.DB.Where(models.RoleModuleAccess{RoleID: adminRole.ID, ModuleID: m.ID}).FirstOrCreate(&access)
 	}
-	config.DB.FirstOrCreate(&pos, models.Position{
-		PosName:   "System Administrator",
-		CompanyID: company.ID,
-	})
 
-	// 3. Create Admin Employee linked to Company (English Comment)
+	// 5. Master Data (English Comment)
+	dept := models.Department{DeptName: "IT Administration", CompanyID: company.ID}
+	config.DB.Where(models.Department{DeptName: "IT Administration", CompanyID: company.ID}).FirstOrCreate(&dept)
+
+	pos := models.Position{PosName: "System Administrator", CompanyID: company.ID}
+	config.DB.Where(models.Position{PosName: "System Administrator", CompanyID: company.ID}).FirstOrCreate(&pos)
+
 	admin := models.Employee{
 		CompanyID:    company.ID,
+		RoleID:       adminRole.ID,
 		EmployeeCode: "ADM001",
 		FirstName:    "System",
 		LastName:     "Admin",
@@ -55,9 +71,9 @@ func main() {
 		Status:       "ACTIVE",
 	}
 
-	if err := config.DB.Create(&admin).Error; err != nil {
+	if err := config.DB.Where("email = ?", "admin@payroll.com").FirstOrCreate(&admin).Error; err != nil {
 		log.Fatalf("Failed to seed admin: %v", err)
 	}
 
-	log.Println("✅ Seed completed: Company and Admin user created!")
+	log.Println("✅ Seed completed: Modules and Admin created!")
 }

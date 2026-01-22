@@ -17,11 +17,11 @@ func GetJWTSecret() []byte {
 	return jwtSecret
 }
 
-/* --- Custom JWT Claims structure (English Comment) --- */
 type TokenClaims struct {
-	UserID    uint `json:"user_id"`
-	CompanyID uint `json:"company_id"` // Crucial for Multi-tenancy logic
-	RoleID    uint `json:"role_id"`    // For RBAC logic
+	UserID       uint `json:"user_id"`
+	CompanyID    uint `json:"company_id"`
+	RoleID       uint `json:"role_id"`
+	IsSuperAdmin bool `json:"is_super_admin"`
 	jwt.RegisteredClaims
 }
 
@@ -34,24 +34,25 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Find employee and preload their Role if necessary (English Comment)
-	if err := config.DB.Where("email = ?", input.Email).First(&employee).Error; err != nil {
+	// 1. Find employee and Preload Role to get RoleName later (English Comment)
+	if err := config.DB.Preload("Role").Where("email = ?", input.Email).First(&employee).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
+	// 2. Check Password (English Comment)
 	err := bcrypt.CompareHashAndPassword([]byte(employee.Password), []byte(input.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
-	/* --- 4. Create JWT Token with Multi-tenant Claims (English Comment) --- */
+	// 3. Create Token with RoleID (English Comment)
 	claims := TokenClaims{
-		UserID:    employee.ID,
-		CompanyID: employee.CompanyID, // Link token to company
-		// Assuming your employee model will have RoleID field (English Comment)
-		// RoleID: employee.RoleID,
+		UserID:       employee.ID,
+		CompanyID:    employee.CompanyID,
+		RoleID:       employee.RoleID,
+		IsSuperAdmin: employee.Role.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -66,9 +67,10 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// 4. Send Response (English Comment)
 	c.JSON(http.StatusOK, models.LoginResponse{
 		Token:    tokenString,
 		FullName: employee.FirstName + " " + employee.LastName,
-		Role:     "ADMIN", // Logic to fetch role name can be added here
+		Role:     employee.Role.RoleName, // Return actual role name to frontend
 	})
 }

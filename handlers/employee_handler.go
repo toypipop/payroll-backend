@@ -109,18 +109,17 @@ func DeleteEmployee(c *gin.Context) {
 
 // GetMyProfile fetches the profile of the logged-in user (OWN scope)
 func GetMyProfile(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
-		return
-	}
+	userID, _ := c.Get("user_id")
+	companyID, _ := c.Get("company_id") // Get from context
 
 	var employee models.Employee
-	// Profile is already naturally isolated by UserID (English Comment)
-	if err := config.DB.Preload("Department").Preload("Position").First(&employee, userID).Error; err != nil {
+	// Add company scope for strict isolation (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
+		Preload("Department").
+		Preload("Position").
+		First(&employee, userID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employee record not found"})
 		return
 	}
-
 	c.JSON(http.StatusOK, employee)
 }

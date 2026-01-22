@@ -25,10 +25,12 @@ type Employee struct {
 	Password  string `gorm:"not null" json:"-"`
 	DeptID    uint   `json:"dept_id"`
 	PosID     uint   `json:"pos_id"`
+	RoleID    uint   `gorm:"not null" json:"role_id"`
 	Status    string `gorm:"default:'ACTIVE'" json:"status"`
 
 	Department Department `gorm:"foreignKey:DeptID" json:"department"`
 	Position   Position   `gorm:"foreignKey:PosID" json:"position"`
+	Role       Role       `gorm:"foreignKey:RoleID" json:"role"`
 }
 
 // BeforeCreate hook for password hashing (English Comment)

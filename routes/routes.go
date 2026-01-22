@@ -32,20 +32,18 @@ func SetupRouter() *gin.Engine {
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware()) // Use middleware for this group
 	{
-		// Employee Management
-		api.GET("/employees", handlers.GetEmployees)          // List all
-		api.POST("/employees", handlers.CreateEmployee)       // Add new
-		api.PUT("/employees/:id", handlers.UpdateEmployee)    // Edit existing
-		api.DELETE("/employees/:id", handlers.DeleteEmployee) // Remove
+		api.GET("/employees", handlers.GetEmployees)
+		api.POST("/employees", handlers.CreateEmployee)
+		api.PUT("/employees/:id", handlers.UpdateEmployee)
+		api.DELETE("/employees/:id", handlers.DeleteEmployee)
 
 		api.GET("/departments", handlers.GetDepartments)
 		api.GET("/positions", handlers.GetPositions)
 
-		api.GET("/company", handlers.Getcompany)
+		api.GET("/company", handlers.GetCompany)
 		api.POST("/company", handlers.CreateCompany)
 		api.PUT("/company/:id", handlers.UpdateCompany)
 		api.DELETE("/company/:id", handlers.DeleteCompany)
-
 	}
 
 	return r
