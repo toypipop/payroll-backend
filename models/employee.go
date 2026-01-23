@@ -26,19 +26,27 @@ type Employee struct {
 	DeptID    uint   `json:"dept_id"`
 	PosID     uint   `json:"pos_id"`
 	RoleID    uint   `gorm:"not null" json:"role_id"`
-	Status    string `gorm:"default:'ACTIVE'" json:"status"`
+
+	IsActive bool `gorm:"default:true" json:"is_active"`
 
 	Department Department `gorm:"foreignKey:DeptID" json:"department"`
 	Position   Position   `gorm:"foreignKey:PosID" json:"position"`
 	Role       Role       `gorm:"foreignKey:RoleID" json:"role"`
 }
 
-// BeforeCreate hook for password hashing (English Comment)
-func (e *Employee) BeforeCreate(tx *gorm.DB) (err error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(e.Password), 10)
-	if err != nil {
-		return err
+func (e *Employee) BeforeSave(tx *gorm.DB) (err error) {
+	if e.Password != "" {
+		if !isHashed(e.Password) {
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(e.Password), 10)
+			if err != nil {
+				return err
+			}
+			e.Password = string(hashedPassword)
+		}
 	}
-	e.Password = string(hashedPassword)
 	return nil
+}
+
+func isHashed(password string) bool {
+	return len(password) == 60 && (password[:4] == "$2a$" || password[:4] == "$2b$")
 }

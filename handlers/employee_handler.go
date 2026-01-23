@@ -4,26 +4,20 @@ import (
 	"net/http"
 	"payroll-backend/config"
 	"payroll-backend/models"
-	"payroll-backend/repository" // Added repository import
+	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// GetEmployees fetches all employees within the same company
+// GetEmployees updated with Role Preload (English Comment)
 func GetEmployees(c *gin.Context) {
-	// 1. Get company_id from context (English Comment)
-	companyID, exists := c.Get("company_id")
-	if !exists {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Tenant information not found"})
-		return
-	}
-
+	companyID, _ := c.Get("company_id")
 	var employees []models.Employee
 
-	// 2. Apply ScopeCompany before finding data (English Comment)
 	result := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
 		Preload("Department").
 		Preload("Position").
+		Preload("Role"). // Added Preload for Role name in table
 		Find(&employees)
 
 	if result.Error != nil {
@@ -54,15 +48,14 @@ func CreateEmployee(c *gin.Context) {
 	c.JSON(http.StatusCreated, input)
 }
 
-// UpdateEmployee handles updating employee data within the same company
+/* --- Updated UpdateEmployee Handler (English Comment) --- */
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
 	companyID, _ := c.Get("company_id")
 	var employee models.Employee
 
-	// 1. Find employee only within the user's company (English Comment)
 	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).First(&employee, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found in your company"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found"})
 		return
 	}
 
@@ -73,7 +66,9 @@ func UpdateEmployee(c *gin.Context) {
 		Email        string `json:"email"`
 		DeptID       uint   `json:"dept_id"`
 		PosID        uint   `json:"pos_id"`
-		Status       string `json:"status"`
+		RoleID       uint   `json:"role_id"`
+		IsActive     bool   `json:"is_active"`
+		Password     string `json:"password"`
 	}
 
 	if err := c.ShouldBindJSON(&updateData); err != nil {
@@ -81,13 +76,27 @@ func UpdateEmployee(c *gin.Context) {
 		return
 	}
 
-	// 2. Perform update (English Comment)
-	if err := config.DB.Model(&employee).Updates(updateData).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed: " + err.Error()})
+	// Assigning to the object (English Comment)
+	employee.EmployeeCode = updateData.EmployeeCode
+	employee.FirstName = updateData.FirstName
+	employee.LastName = updateData.LastName
+	employee.Email = updateData.Email
+	employee.DeptID = updateData.DeptID
+	employee.PosID = updateData.PosID
+	employee.RoleID = updateData.RoleID
+	employee.IsActive = updateData.IsActive
+
+	// Simply set password if not empty, BeforeSave hook will handle the rest (English Comment)
+	if updateData.Password != "" {
+		employee.Password = updateData.Password
+	}
+
+	if err := config.DB.Save(&employee).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
 		return
 	}
 
-	config.DB.Preload("Department").Preload("Position").First(&employee, id)
+	config.DB.Preload("Department").Preload("Position").Preload("Role").First(&employee, id)
 	c.JSON(http.StatusOK, employee)
 }
 

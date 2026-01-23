@@ -12,8 +12,22 @@ import (
 
 /* --- Master Data Handlers (English Comments) --- */
 
-// GetDepartments - Fetch all available departments
+// GetRoles fetches all roles where is_super_admin is false (English Comment)
+func GetRoles(c *gin.Context) {
+	var roles []models.Role
 
+	// Select * FROM roles WHERE is_super_admin = false (English Comment)
+	err := config.DB.Where("is_super_admin = ?", false).Find(&roles).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, roles)
+}
+
+// GetDepartments - Fetch all available departments
 func GetDepartments(c *gin.Context) {
 	companyID, _ := c.Get("company_id") // Get from Middleware
 	var depts []models.Department

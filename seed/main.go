@@ -21,7 +21,13 @@ func main() {
 		Description:  "System administrator with full access",
 		IsSuperAdmin: true,
 	}
+	userRole := models.Role{
+		RoleName:     "USER",
+		Description:  "Regular user with limited access",
+		IsSuperAdmin: false,
+	}
 	config.DB.Where(models.Role{RoleName: "SUPER_ADMIN"}).FirstOrCreate(&adminRole)
+	config.DB.Where(models.Role{RoleName: "USER"}).FirstOrCreate(&userRole)
 
 	// 2. Create Initial Company (English Comment)
 	company := models.Company{
@@ -68,12 +74,12 @@ func main() {
 		Password:     adminPass,
 		DeptID:       dept.ID,
 		PosID:        pos.ID,
-		Status:       "ACTIVE",
+		IsActive:     true,
 	}
 
 	if err := config.DB.Where("email = ?", "admin@payroll.com").FirstOrCreate(&admin).Error; err != nil {
 		log.Fatalf("Failed to seed admin: %v", err)
 	}
 
-	log.Println("✅ Seed completed: Modules and Admin created!")
+	log.Println("Seed completed: Modules and Admin created!")
 }
