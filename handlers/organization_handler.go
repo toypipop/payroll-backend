@@ -47,11 +47,11 @@ func GetPositions(c *gin.Context) {
 	c.JSON(http.StatusOK, positions)
 }
 
-/* --- handlers/organization_handler.go (Updated with is_system_admin) --- */
+/* --- handlers/organization_handler.go (Updated with is_super_admin) --- */
 
 // GET: Fetch company (Filtered by Role)
 func GetCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_system_admin")
+	isSysAdmin, _ := c.Get("is_super_admin")
 	companyID, _ := c.Get("company_id")
 
 	var companys []models.Company
@@ -68,7 +68,7 @@ func GetCompany(c *gin.Context) {
 
 // POST: Create new company (System Admin Only)
 func CreateCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_system_admin")
+	isSysAdmin, _ := c.Get("is_super_admin")
 
 	// Role check (English Comment)
 	if !isSysAdmin.(bool) {
@@ -91,7 +91,7 @@ func CreateCompany(c *gin.Context) {
 
 // PUT: Update company (System Admin or Own Company)
 func UpdateCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_system_admin")
+	isSysAdmin, _ := c.Get("is_super_admin")
 	userCompanyID, _ := c.Get("company_id")
 	targetID := c.Param("id") // ID from URL
 
@@ -126,7 +126,7 @@ func UpdateCompany(c *gin.Context) {
 
 // DELETE: Remove company (System Admin Only)
 func DeleteCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_system_admin")
+	isSysAdmin, _ := c.Get("is_super_admin")
 
 	if !isSysAdmin.(bool) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: System Admin only"})
