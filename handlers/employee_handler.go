@@ -17,7 +17,7 @@ func GetEmployees(c *gin.Context) {
 	result := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
 		Preload("Department").
 		Preload("Position").
-		Preload("Role"). // Added Preload for Role name in table
+		Preload("Role").
 		Find(&employees)
 
 	if result.Error != nil {
@@ -29,6 +29,7 @@ func GetEmployees(c *gin.Context) {
 }
 
 // CreateEmployee adds a new employee record tied to the user's company
+// CreateEmployee adds a new employee record tied to the user's company
 func CreateEmployee(c *gin.Context) {
 	var input models.Employee
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -36,10 +37,18 @@ func CreateEmployee(c *gin.Context) {
 		return
 	}
 
-	// 1. Force set CompanyID from token context (English Comment)
+	// 1. Validate: Prevent creating Super Admin (English Comment)
+	var role models.Role
+	if err := config.DB.First(&role, input.RoleID).Error; err == nil && role.IsSuperAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot create employee with Super Admin role"})
+		return
+	}
+
+	// 2. Force set CompanyID from token context (English Comment)
 	companyID, _ := c.Get("company_id")
 	input.CompanyID = companyID.(uint)
 
+	// 3. Create record (English Comment)
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -47,69 +56,69 @@ func CreateEmployee(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, input)
 }
-
-/* --- Updated UpdateEmployee Handler (English Comment) --- */
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
 	companyID, _ := c.Get("company_id")
-	var employee models.Employee
+	var emp models.Employee
 
-	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).First(&employee, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found"})
+	// 1. Fetch & Guard: Block if target is currently a Super Admin (English Comment)
+	err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Preload("Role").First(&emp, id).Error
+	if err != nil || emp.Role.IsSuperAdmin {
+		msg := "Employee not found"
+		if err == nil {
+			msg = "Forbidden: Cannot modify a Super Admin"
+		}
+		c.JSON(http.StatusForbidden, gin.H{"error": msg})
 		return
 	}
 
-	var updateData struct {
-		EmployeeCode string `json:"employee_code"`
-		FirstName    string `json:"first_name"`
-		LastName     string `json:"last_name"`
-		Email        string `json:"email"`
-		DeptID       uint   `json:"dept_id"`
-		PosID        uint   `json:"pos_id"`
-		RoleID       uint   `json:"role_id"`
-		IsActive     bool   `json:"is_active"`
-		Password     string `json:"password"`
-	}
-
-	if err := c.ShouldBindJSON(&updateData); err != nil {
+	var data map[string]interface{}
+	if err := c.ShouldBindJSON(&data); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Assigning to the object (English Comment)
-	employee.EmployeeCode = updateData.EmployeeCode
-	employee.FirstName = updateData.FirstName
-	employee.LastName = updateData.LastName
-	employee.Email = updateData.Email
-	employee.DeptID = updateData.DeptID
-	employee.PosID = updateData.PosID
-	employee.RoleID = updateData.RoleID
-	employee.IsActive = updateData.IsActive
-
-	// Simply set password if not empty, BeforeSave hook will handle the rest (English Comment)
-	if updateData.Password != "" {
-		employee.Password = updateData.Password
+	// 2. Guard: Block if trying to change to a Super Admin role (English Comment)
+	if roleID, ok := data["role_id"].(float64); ok {
+		var newRole models.Role
+		if err := config.DB.First(&newRole, uint(roleID)).Error; err == nil && newRole.IsSuperAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Cannot promote to Super Admin"})
+			return
+		}
 	}
 
-	if err := config.DB.Save(&employee).Error; err != nil {
+	// 3. Perform Update (English Comment)
+	if err := config.DB.Model(&emp).Updates(data).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
 		return
 	}
 
-	config.DB.Preload("Department").Preload("Position").Preload("Role").First(&employee, id)
-	c.JSON(http.StatusOK, employee)
+	config.DB.Preload("Department").Preload("Position").Preload("Role").First(&emp, id)
+	c.JSON(http.StatusOK, emp)
 }
 
-/* --- Delete Employee within company scope (English Comment) --- */
 func DeleteEmployee(c *gin.Context) {
 	id := c.Param("id")
 	companyID, _ := c.Get("company_id")
+	var employee models.Employee
 
-	// 1. Ensure the record belongs to the company before deleting (English Comment)
-	result := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Delete(&models.Employee{}, id)
+	// 1. Find employee and check their role status first (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
+		Preload("Role").
+		First(&employee, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+		return
+	}
 
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
+	// 2. Prevent deletion of Super Admin (English Comment)
+	if employee.Role.IsSuperAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Super Admin records cannot be deleted"})
+		return
+	}
+
+	// 3. Perform soft delete (English Comment)
+	if err := config.DB.Delete(&employee).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
 		return
 	}
 
@@ -119,7 +128,7 @@ func DeleteEmployee(c *gin.Context) {
 // GetMyProfile fetches the profile of the logged-in user (OWN scope)
 func GetMyProfile(c *gin.Context) {
 	userID, _ := c.Get("user_id")
-	companyID, _ := c.Get("company_id") // Get from context
+	companyID, _ := c.Get("company_id")
 
 	var employee models.Employee
 	// Add company scope for strict isolation (English Comment)

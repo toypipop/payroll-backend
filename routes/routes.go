@@ -30,25 +30,29 @@ func SetupRouter() *gin.Engine {
 
 	// 3. Protected Routes (English Comment)
 	api := r.Group("/api/v1")
-	api.Use(middleware.AuthMiddleware()) // Must be before CheckPermission
+	api.Use(middleware.AuthMiddleware())
 	{
-		// --- Employee Management ---
-		api.GET("/employees", middleware.CheckPermission("EMPLOYEE", false), handlers.GetEmployees)
-		api.POST("/employees", middleware.CheckPermission("EMPLOYEE", true), handlers.CreateEmployee)
-		api.PUT("/employees/:id", middleware.CheckPermission("EMPLOYEE", true), handlers.UpdateEmployee)
-		api.DELETE("/employees/:id", middleware.CheckPermission("EMPLOYEE", true), handlers.DeleteEmployee)
+		// --- Employee Management (CRUD with specific permissions) ---
+		api.GET("/employees", middleware.CheckPermission("EMPLOYEE", "VIEW"), handlers.GetEmployees)
+		api.POST("/employees", middleware.CheckPermission("EMPLOYEE", "CREATE"), handlers.CreateEmployee)
+		api.PUT("/employees/:id", middleware.CheckPermission("EMPLOYEE", "EDIT"), handlers.UpdateEmployee)
+		api.DELETE("/employees/:id", middleware.CheckPermission("EMPLOYEE", "DELETE"), handlers.DeleteEmployee)
 
-		// --- Master Data (View only usually) ---
-		api.GET("/departments", middleware.CheckPermission("DEPARTMENT", false), handlers.GetDepartments)
-		api.GET("/positions", middleware.CheckPermission("POSITION", false), handlers.GetPositions)
-		api.GET("/roles", handlers.GetRoles)
+		// --- Master Data (Department & Position Management) ---
+		api.GET("/departments", middleware.CheckPermission("DEPARTMENT", "VIEW"), handlers.GetDepartments)
+		api.POST("/departments", middleware.CheckPermission("DEPARTMENT", "CREATE"), handlers.CreateDepartment)
 
-		// --- Company Settings ---
-		api.GET("/company", middleware.CheckPermission("SETTING", false), handlers.GetCompany)
-		api.POST("/company", middleware.CheckPermission("SETTING", true), handlers.CreateCompany)
-		api.PUT("/company/:id", middleware.CheckPermission("SETTING", true), handlers.UpdateCompany)
-		api.DELETE("/company/:id", middleware.CheckPermission("SETTING", true), handlers.DeleteCompany)
+		api.GET("/positions", middleware.CheckPermission("POSITION", "VIEW"), handlers.GetPositions)
+		// api.POST("/positions", middleware.CheckPermission("POSITION", "CREATE"), handlers.CreatePosition)
 
+		// --- Role & Permission Management (High security area) ---
+		api.GET("/roles", middleware.CheckPermission("SETTING", "VIEW"), handlers.GetRoles)
+		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTING", "VIEW"), handlers.GetRolePermissions)
+		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTING", "EDIT"), handlers.UpdateRolePermissions)
+
+		// --- Company Profile Management ---
+		api.GET("/company", middleware.CheckPermission("SETTING", "VIEW"), handlers.GetCompany)
+		api.PUT("/company/:id", middleware.CheckPermission("SETTING", "EDIT"), handlers.UpdateCompany)
 	}
 
 	return r

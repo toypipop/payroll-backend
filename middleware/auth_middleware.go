@@ -55,21 +55,20 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// CheckPermission validates if the current user has access to a specific module (English Comment)
-func CheckPermission(moduleKey string, requireEdit bool) gin.HandlerFunc {
+// CheckPermission validates specific action access for a module (English Comment)
+func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. Retrieve values from context (English Comment)
 		valRole, roleExists := c.Get("role_id")
 		valAdmin, adminExists := c.Get("is_super_admin")
 
-		// 2. Strict check for context data (English Comment)
 		if !roleExists || !adminExists {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Security context missing"})
 			c.Abort()
 			return
 		}
 
-		// 3. Safe Type Conversion for RoleID (Support uint and float64) (English Comment)
+		// 2. Safe Type Conversion for RoleID (English Comment)
 		var rID uint
 		switch v := valRole.(type) {
 		case uint:
@@ -80,16 +79,16 @@ func CheckPermission(moduleKey string, requireEdit bool) gin.HandlerFunc {
 			rID = uint(v)
 		}
 
-		// 4. Safe Type Assertion for IsSuperAdmin (English Comment)
 		isSuper, _ := valAdmin.(bool)
 
-		// 5. Super Admin Bypass: Grant all access (English Comment)
+		// 3. Super Admin Bypass (English Comment)
 		if isSuper {
+			c.Set("data_scope", "ALL") // Super Admin always sees everything
 			c.Next()
 			return
 		}
 
-		// 6. Database Authorization Check (English Comment)
+		// 4. Database Authorization Check (English Comment)
 		var access models.RoleModuleAccess
 		err := config.DB.Table("role_module_accesses").
 			Joins("JOIN app_modules ON app_modules.id = role_module_accesses.module_id").
@@ -97,25 +96,33 @@ func CheckPermission(moduleKey string, requireEdit bool) gin.HandlerFunc {
 			First(&access).Error
 
 		if err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission for this module"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this module"})
 			c.Abort()
 			return
 		}
 
-		// 7. Action-level Validation (English Comment)
-		if !access.CanView {
-			c.JSON(http.StatusForbidden, gin.H{"error": "View access denied"})
+		// 5. Action-level Validation based on new fields (English Comment)
+		allowed := false
+		switch action {
+		case "VIEW":
+			allowed = access.CanView
+		case "CREATE":
+			allowed = access.CanCreate
+		case "EDIT":
+			allowed = access.CanEdit
+		case "DELETE":
+			allowed = access.CanDelete
+		default:
+			allowed = false
+		}
+
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied for action: " + action})
 			c.Abort()
 			return
 		}
 
-		if requireEdit && !access.CanEdit {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Edit permission required"})
-			c.Abort()
-			return
-		}
-
-		// 8. Set DataScope for row-level filtering in Handlers (English Comment)
+		// 6. Set DataScope for row-level filtering in Handlers (English Comment)
 		c.Set("data_scope", access.DataScope)
 		c.Next()
 	}
