@@ -46,13 +46,13 @@ func SetupRouter() *gin.Engine {
 		// api.POST("/positions", middleware.CheckPermission("POSITION", "CREATE"), handlers.CreatePosition)
 
 		// --- Role & Permission Management (High security area) ---
-		api.GET("/roles", middleware.CheckPermission("SETTING", "VIEW"), handlers.GetRoles)
-		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTING", "VIEW"), handlers.GetRolePermissions)
-		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTING", "EDIT"), handlers.UpdateRolePermissions)
+		api.GET("/roles", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRoles)
+		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRolePermissions)
+		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateRolePermissions)
 
 		// --- Company Profile Management ---
-		api.GET("/company", middleware.CheckPermission("SETTING", "VIEW"), handlers.GetCompany)
-		api.PUT("/company/:id", middleware.CheckPermission("SETTING", "EDIT"), handlers.UpdateCompany)
+		api.GET("/company", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetCompany)
+		api.PUT("/company/:id", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateCompany)
 	}
 
 	return r

@@ -59,35 +59,19 @@ func GetPositions(c *gin.Context) {
 	c.JSON(http.StatusOK, positions)
 }
 
-/* --- handlers/organization_handler.go --- */
-
-// GET: Fetch company (Filtered by Role)
 func GetCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_super_admin")
 	companyID, _ := c.Get("company_id")
 
 	var companys []models.Company
 
-	if isSysAdmin.(bool) {
-		// System Admin: Fetch all companys (English Comment)
-		config.DB.Find(&companys)
-	} else {
-		// Regular User: Fetch only their own company (English Comment)
-		config.DB.Where("id = ?", companyID).Find(&companys)
-	}
+	// Fetch only the company associated with the user's company_id
+	config.DB.Where("id = ?", companyID).Find(&companys)
+
 	c.JSON(http.StatusOK, companys)
 }
 
-// POST: Create new company (System Admin Only)
+// POST: Create new company
 func CreateCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_super_admin")
-
-	// Role check (English Comment)
-	if !isSysAdmin.(bool) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: System Admin only"})
-		return
-	}
-
 	var company models.Company
 	if err := c.ShouldBindJSON(&company); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -101,16 +85,15 @@ func CreateCompany(c *gin.Context) {
 	c.JSON(http.StatusCreated, company)
 }
 
-// PUT: Update company (System Admin or Own Company)
+// PUT: Update company (Own Company Only)
 func UpdateCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_super_admin")
 	userCompanyID, _ := c.Get("company_id")
-	targetID := c.Param("id") // ID from URL
+	targetID := c.Param("id")
 
 	var company models.Company
 
-	// Logic: If not sys admin, the targetID must match user's companyID (English Comment)
-	if !isSysAdmin.(bool) && targetID != fmt.Sprintf("%v", userCompanyID) {
+	// Verify if the target ID matches the user's authorized company ID
+	if targetID != fmt.Sprintf("%v", userCompanyID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own company"})
 		return
 	}
@@ -136,16 +119,11 @@ func UpdateCompany(c *gin.Context) {
 	c.JSON(http.StatusOK, company)
 }
 
-// DELETE: Remove company (System Admin Only)
+// DELETE: Remove company
 func DeleteCompany(c *gin.Context) {
-	isSysAdmin, _ := c.Get("is_super_admin")
-
-	if !isSysAdmin.(bool) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied: System Admin only"})
-		return
-	}
-
 	id := c.Param("id")
+
+	// Perform deletion based on the provided ID
 	if err := config.DB.Delete(&models.Company{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
 		return

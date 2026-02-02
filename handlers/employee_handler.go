@@ -7,6 +7,7 @@ import (
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // GetEmployees updated with Role Preload (English Comment)
@@ -29,7 +30,6 @@ func GetEmployees(c *gin.Context) {
 }
 
 // CreateEmployee adds a new employee record tied to the user's company
-// CreateEmployee adds a new employee record tied to the user's company
 func CreateEmployee(c *gin.Context) {
 	var input models.Employee
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -44,6 +44,16 @@ func CreateEmployee(c *gin.Context) {
 		return
 	}
 
+	// --- NEW: Hash Password before Create (English Comment) ---
+	if input.Password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
+			return
+		}
+		input.Password = string(hashedPassword)
+	}
+
 	// 2. Force set CompanyID from token context (English Comment)
 	companyID, _ := c.Get("company_id")
 	input.CompanyID = companyID.(uint)
@@ -56,12 +66,13 @@ func CreateEmployee(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, input)
 }
+
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
 	companyID, _ := c.Get("company_id")
 	var emp models.Employee
 
-	// 1. Fetch & Guard: Block if target is currently a Super Admin (English Comment)
+	// 1. Fetch & Guard: Block if target is a Super Admin (English Comment)
 	err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Preload("Role").First(&emp, id).Error
 	if err != nil || emp.Role.IsSuperAdmin {
 		msg := "Employee not found"
@@ -76,6 +87,16 @@ func UpdateEmployee(c *gin.Context) {
 	if err := c.ShouldBindJSON(&data); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// --- NEW: Hash Password for map updates (English Comment) ---
+	if pwd, ok := data["password"].(string); ok && pwd != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(pwd), 10)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
+			return
+		}
+		data["password"] = string(hashedPassword)
 	}
 
 	// 2. Guard: Block if trying to change to a Super Admin role (English Comment)

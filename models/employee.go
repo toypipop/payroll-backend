@@ -3,8 +3,6 @@ package models
 import (
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 	"gorm.io/plugin/soft_delete"
 )
 
@@ -32,21 +30,4 @@ type Employee struct {
 	Department Department `gorm:"foreignKey:DeptID" json:"department"`
 	Position   Position   `gorm:"foreignKey:PosID" json:"position"`
 	Role       Role       `gorm:"foreignKey:RoleID" json:"role"`
-}
-
-func (e *Employee) BeforeSave(tx *gorm.DB) (err error) {
-	if e.Password != "" {
-		if !isHashed(e.Password) {
-			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(e.Password), 10)
-			if err != nil {
-				return err
-			}
-			e.Password = string(hashedPassword)
-		}
-	}
-	return nil
-}
-
-func isHashed(password string) bool {
-	return len(password) == 60 && (password[:4] == "$2a$" || password[:4] == "$2b$")
 }
