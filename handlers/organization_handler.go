@@ -59,7 +59,7 @@ func GetPositions(c *gin.Context) {
 	c.JSON(http.StatusOK, positions)
 }
 
-/* --- handlers/organization_handler.go (Updated with is_super_admin) --- */
+/* --- handlers/organization_handler.go --- */
 
 // GET: Fetch company (Filtered by Role)
 func GetCompany(c *gin.Context) {
