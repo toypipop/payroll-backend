@@ -2,8 +2,14 @@ package repository
 
 import "gorm.io/gorm"
 
-func ScopeCompany(companyID uint) func(db *gorm.DB) *gorm.DB {
+func ScopeCompanies(companiesID uint, columnName ...string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("company_id = ?", companyID)
+		col := "companies_id"
+
+		if len(columnName) > 0 {
+			col = columnName[0]
+		}
+
+		return db.Where(col+" = ?", companiesID)
 	}
 }

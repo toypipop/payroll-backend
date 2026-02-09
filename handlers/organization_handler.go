@@ -25,16 +25,22 @@ func GetRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, roles)
 }
 
-// GetDepartments - Fetch all available departments
+// GetDepartments - Fetch departments within the companies scope (English Comment)
 func GetDepartments(c *gin.Context) {
-	companyID, _ := c.Get("company_id") // Get from Middleware
-	var depts []models.Department
+	companiesID, _ := c.Get("companies_id")
+	var departments []models.Department
 
-	// Filter by company
-	config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Find(&depts)
-	c.JSON(http.StatusOK, depts)
+	// Apply ScopeCompanies and Preload Companies details (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).
+		Preload("Companies").
+		Find(&departments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
+		return
+	}
+	c.JSON(http.StatusOK, departments)
 }
 
+// CreateDepartment - Create a new department for the user's companies (English Comment)
 func CreateDepartment(c *gin.Context) {
 	var dept models.Department
 	if err := c.ShouldBindJSON(&dept); err != nil {
@@ -42,64 +48,204 @@ func CreateDepartment(c *gin.Context) {
 		return
 	}
 
-	// Assign company_id from token
-	companyID, _ := c.Get("company_id")
-	dept.CompanyID = companyID.(uint)
+	// Force CompaniesID from token to ensure data integrity (English Comment)
+	companiesID, _ := c.Get("companies_id")
+	dept.CompaniesID = companiesID.(uint)
 
-	config.DB.Create(&dept)
+	if err := config.DB.Create(&dept).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create department"})
+		return
+	}
 	c.JSON(http.StatusCreated, dept)
 }
 
-// GetPositions - Fetch all available positions
-func GetPositions(c *gin.Context) {
-	companyID, _ := c.Get("company_id")
-	var positions []models.Position
-	// Added Scope (English Comment)
-	config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Find(&positions)
-	c.JSON(http.StatusOK, positions)
-}
+// UpdateDepartment - Update department with ownership validation via Scope (English Comment)
+func UpdateDepartment(c *gin.Context) {
+	id := c.Param("id")
+	companiesID, _ := c.Get("companies_id")
+	var dept models.Department
 
-func GetCompany(c *gin.Context) {
-	companyID, _ := c.Get("company_id")
+	// Use Scopes to ensure the user can only find their companies's record (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).
+		Where("id = ?", id).First(&dept).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
+		return
+	}
 
-	var companys []models.Company
-
-	// Fetch only the company associated with the user's company_id
-	config.DB.Where("id = ?", companyID).Find(&companys)
-
-	c.JSON(http.StatusOK, companys)
-}
-
-// POST: Create new company
-func CreateCompany(c *gin.Context) {
-	var company models.Company
-	if err := c.ShouldBindJSON(&company); err != nil {
+	if err := c.ShouldBindJSON(&dept); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := config.DB.Create(&company).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create company"})
-		return
-	}
-	c.JSON(http.StatusCreated, company)
+	// Re-assign CompaniesID to prevent unauthorized change (English Comment)
+	dept.CompaniesID = companiesID.(uint)
+
+	config.DB.Save(&dept)
+	c.JSON(http.StatusOK, dept)
 }
 
-// PUT: Update company (Own Company Only)
-func UpdateCompany(c *gin.Context) {
-	userCompanyID, _ := c.Get("company_id")
-	targetID := c.Param("id")
+// DeleteDepartment - Remove department within the allowed companies scope (English Comment)
+func DeleteDepartment(c *gin.Context) {
+	id := c.Param("id")
+	companiesID, _ := c.Get("companies_id")
 
-	var company models.Company
+	// Use Scopes to prevent deleting records from other companies (English Comment)
+	result := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).
+		Where("id = ?", id).Delete(&models.Department{})
 
-	// Verify if the target ID matches the user's authorized company ID
-	if targetID != fmt.Sprintf("%v", userCompanyID) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own company"})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
 	}
 
-	if err := config.DB.First(&company, targetID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Company not found"})
+	c.JSON(http.StatusOK, gin.H{"message": "Department deleted successfully"})
+}
+
+// GetPositions - Fetch positions within the companies scope (English Comment)
+func GetPositions(c *gin.Context) {
+	compID, _ := c.Get("companies_id")
+	var positions []models.Position
+
+	// Use Scopes to filter by companies and Preload for companies details (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompanies(compID.(uint))).
+		Preload("Companies").
+		Find(&positions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
+		return
+	}
+	c.JSON(http.StatusOK, positions)
+}
+
+// CreatePosition - Create a new position for the companies (English Comment)
+func CreatePosition(c *gin.Context) {
+	var pos models.Position
+	if err := c.ShouldBindJSON(&pos); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Force CompaniesID from token context (English Comment)
+	compID, _ := c.Get("companies_id")
+	pos.CompaniesID = compID.(uint)
+
+	if err := config.DB.Create(&pos).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create position"})
+		return
+	}
+	c.JSON(http.StatusCreated, pos)
+}
+
+// UpdatePosition - Update position data with ownership check (English Comment)
+func UpdatePosition(c *gin.Context) {
+	id := c.Param("id")
+	compID, _ := c.Get("companies_id")
+	var pos models.Position
+
+	// Check ownership using Scope before updating (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompanies(compID.(uint))).
+		Where("id = ?", id).First(&pos).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&pos); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure CompaniesID remains the same (English Comment)
+	pos.CompaniesID = compID.(uint)
+
+	config.DB.Save(&pos)
+	c.JSON(http.StatusOK, pos)
+}
+
+// DeletePosition - Delete position with companies scope validation (English Comment)
+func DeletePosition(c *gin.Context) {
+	id := c.Param("id")
+	compID, _ := c.Get("companies_id")
+
+	// Delete with Scope to prevent deleting other companies's data (English Comment)
+	result := config.DB.Scopes(repository.ScopeCompanies(compID.(uint))).
+		Where("id = ?", id).Delete(&models.Position{})
+
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Position deleted successfully"})
+}
+
+func GetCompanies(c *gin.Context) {
+	fmt.Println(">>>> GET_COMPANY_START <<<<") // พิมพ์ให้เห็นชัดๆ ใน Terminal
+
+	val, exists := c.Get("companies_id")
+	if !exists {
+		fmt.Println("!!!! ERROR: No companies_id in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	compID := val.(uint)
+	fmt.Printf(">>>> DEBUG: CompID = %d, Type = %T\n", compID, val)
+
+	var companies []models.Companies
+
+	// บังคับ Debug และเก็บ Result เพื่อเช็ค Error
+	dbResult := config.DB.Debug().Scopes(repository.ScopeCompanies(compID, "id")).Find(&companies)
+
+	if dbResult.Error != nil {
+		fmt.Println("!!!! DB_ERROR:", dbResult.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": dbResult.Error.Error()})
+		return
+	}
+
+	fmt.Printf(">>>> SUCCESS: Found %d rows\n", dbResult.RowsAffected)
+	c.JSON(http.StatusOK, companies)
+}
+
+func GetAllCompanies(c *gin.Context) {
+	var companies []models.Companies
+
+	if err := config.DB.Order("id desc").Find(&companies).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch all companies"})
+		return
+	}
+
+	c.JSON(http.StatusOK, companies)
+}
+
+// POST: Create new companies
+func CreateCompanies(c *gin.Context) {
+	var companies models.Companies
+	if err := c.ShouldBindJSON(&companies); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := config.DB.Create(&companies).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create companies"})
+		return
+	}
+	c.JSON(http.StatusCreated, companies)
+}
+
+// PUT: Update companies (Own Companies Only)
+func UpdateCompanies(c *gin.Context) {
+	userCompaniesID, _ := c.Get("companies_id")
+	targetID := c.Param("id")
+
+	var companies models.Companies
+
+	// Verify if the target ID matches the user's authorized companies ID
+	if targetID != fmt.Sprintf("%v", userCompaniesID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own companies"})
+		return
+	}
+
+	if err := config.DB.First(&companies, targetID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Companies not found"})
 		return
 	}
 
@@ -115,16 +261,16 @@ func UpdateCompany(c *gin.Context) {
 		return
 	}
 
-	config.DB.Model(&company).Updates(updateData)
-	c.JSON(http.StatusOK, company)
+	config.DB.Model(&companies).Updates(updateData)
+	c.JSON(http.StatusOK, companies)
 }
 
-// DELETE: Remove company
-func DeleteCompany(c *gin.Context) {
+// DELETE: Remove companies
+func DeleteCompanies(c *gin.Context) {
 	id := c.Param("id")
 
 	// Perform deletion based on the provided ID
-	if err := config.DB.Delete(&models.Company{}, id).Error; err != nil {
+	if err := config.DB.Delete(&models.Companies{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
 		return
 	}

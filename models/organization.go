@@ -8,16 +8,23 @@ import (
 
 type Department struct {
 	ID        uint   `gorm:"primaryKey" json:"id"`
-	CompanyID uint   `gorm:"index;not null" json:"company_id"` // Link to company
+	CompaniesID uint   `gorm:"index;not null" json:"companies_id"` // Link to companies
 	DeptName  string `gorm:"not null" json:"dept_name"`
+
+	// Add this to enable Preload("Companies") (English Comment)
+	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 type Position struct {
 	ID        uint   `gorm:"primaryKey" json:"id"`
-	CompanyID uint   `gorm:"index;not null" json:"company_id"` // Link to company
+	CompaniesID uint   `gorm:"index;not null" json:"companies_id"` // Link to companies
 	PosName   string `gorm:"not null" json:"pos_name"`
+
+	// Add this to enable Preload("Companies") (English Comment)
+	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
-type Company struct {
+
+type Companies struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

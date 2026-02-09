@@ -12,10 +12,10 @@ import (
 
 // GetEmployees updated with Role Preload (English Comment)
 func GetEmployees(c *gin.Context) {
-	companyID, _ := c.Get("company_id")
+	companiesID, _ := c.Get("companies_id")
 	var employees []models.Employee
 
-	result := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
+	result := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).
 		Preload("Department").
 		Preload("Position").
 		Preload("Role").
@@ -29,7 +29,7 @@ func GetEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, employees)
 }
 
-// CreateEmployee adds a new employee record tied to the user's company
+// CreateEmployee adds a new employee record tied to the user's companies
 func CreateEmployee(c *gin.Context) {
 	var input models.Employee
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -54,9 +54,9 @@ func CreateEmployee(c *gin.Context) {
 		input.Password = string(hashedPassword)
 	}
 
-	// 2. Force set CompanyID from token context (English Comment)
-	companyID, _ := c.Get("company_id")
-	input.CompanyID = companyID.(uint)
+	// 2. Force set CompaniesID from token context (English Comment)
+	companiesID, _ := c.Get("companies_id")
+	input.CompaniesID = companiesID.(uint)
 
 	// 3. Create record (English Comment)
 	if err := config.DB.Create(&input).Error; err != nil {
@@ -69,11 +69,11 @@ func CreateEmployee(c *gin.Context) {
 
 func UpdateEmployee(c *gin.Context) {
 	id := c.Param("id")
-	companyID, _ := c.Get("company_id")
+	companiesID, _ := c.Get("companies_id")
 	var emp models.Employee
 
 	// 1. Fetch & Guard: Block if target is a Super Admin (English Comment)
-	err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).Preload("Role").First(&emp, id).Error
+	err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).Preload("Role").First(&emp, id).Error
 	if err != nil || emp.Role.IsSuperAdmin {
 		msg := "Employee not found"
 		if err == nil {
@@ -120,11 +120,11 @@ func UpdateEmployee(c *gin.Context) {
 
 func DeleteEmployee(c *gin.Context) {
 	id := c.Param("id")
-	companyID, _ := c.Get("company_id")
+	companiesID, _ := c.Get("companies_id")
 	var employee models.Employee
 
 	// 1. Find employee and check their role status first (English Comment)
-	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
+	if err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).
 		Preload("Role").
 		First(&employee, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
@@ -144,21 +144,4 @@ func DeleteEmployee(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
-}
-
-// GetMyProfile fetches the profile of the logged-in user (OWN scope)
-func GetMyProfile(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	companyID, _ := c.Get("company_id")
-
-	var employee models.Employee
-	// Add company scope for strict isolation (English Comment)
-	if err := config.DB.Scopes(repository.ScopeCompany(companyID.(uint))).
-		Preload("Department").
-		Preload("Position").
-		First(&employee, userID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employee record not found"})
-		return
-	}
-	c.JSON(http.StatusOK, employee)
 }

@@ -5,8 +5,8 @@ import "time"
 type Role struct {
 	ID uint `gorm:"primaryKey" json:"id"`
 	// Support Multi-tenancy for roles (English Comment)
-	CompanyID    uint      `gorm:"index:idx_role_company;not null" json:"company_id"`
-	RoleName     string    `gorm:"index:idx_role_company;not null" json:"role_name"`
+	CompaniesID    uint      `gorm:"index:idx_role_companies;not null" json:"companies_id"`
+	RoleName     string    `gorm:"index:idx_role_companies;not null" json:"role_name"`
 	Description  string    `json:"description"`
 	IsSuperAdmin bool      `gorm:"default:false" json:"is_super_admin"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -27,14 +27,17 @@ type AppModule struct {
 }
 
 type RoleModuleAccess struct {
-	RoleID    uint   `gorm:"primaryKey" json:"role_id"`
-	ModuleID  uint   `gorm:"primaryKey" json:"module_id"`
-	CanView   bool   `gorm:"default:true" json:"can_view"`
-	CanCreate bool   `gorm:"default:false" json:"can_create"` // Added
-	CanEdit   bool   `gorm:"default:false" json:"can_edit"`
-	CanDelete bool   `gorm:"default:false" json:"can_delete"` // Added
-	DataScope string `gorm:"type:varchar(20);default:'OWN'" json:"data_scope"`
+	ID        uint `gorm:"primaryKey" json:"id"`
+	CompaniesID uint `gorm:"uniqueIndex:idx_role_module;not null" json:"companies_id"`
+	RoleID    uint `gorm:"uniqueIndex:idx_role_module;not null" json:"role_id"`
+	ModuleID  uint `gorm:"uniqueIndex:idx_role_module;not null" json:"module_id"`
 
-	Role      Role      `gorm:"foreignKey:RoleID" json:"-"`
-	AppModule AppModule `gorm:"foreignKey:ModuleID" json:"module"`
+	CanView   bool `json:"can_view"`
+	CanCreate bool `json:"can_create"`
+	CanEdit   bool `json:"can_edit"`
+	CanDelete bool `json:"can_delete"`
+
+	DataScope string `json:"data_scope"`
+
+	AppModule AppModule `gorm:"foreignKey:ModuleID" json:"app_module"`
 }

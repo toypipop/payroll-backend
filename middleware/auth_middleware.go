@@ -48,7 +48,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// 4. Set Tenant Data to Context (English Comment)
 		c.Set("user_id", claims.UserID)
-		c.Set("company_id", claims.CompanyID)
+		c.Set("companies_id", claims.CompaniesID)
 		c.Set("role_id", claims.RoleID)
 		c.Set("is_super_admin", claims.IsSuperAdmin)
 

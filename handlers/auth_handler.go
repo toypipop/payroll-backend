@@ -19,7 +19,7 @@ func GetJWTSecret() []byte {
 
 type TokenClaims struct {
 	UserID       uint `json:"user_id"`
-	CompanyID    uint `json:"company_id"`
+	CompaniesID    uint `json:"companies_id"`
 	RoleID       uint `json:"role_id"`
 	IsSuperAdmin bool `json:"is_super_admin"`
 	jwt.RegisteredClaims
@@ -36,21 +36,21 @@ func Login(c *gin.Context) {
 
 	// 1. Find employee and Preload Role to get RoleName later (English Comment)
 	if err := config.DB.Preload("Role").Where("email = ?", input.Email).First(&employee).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
 		return
 	}
 
 	// 2. Check Password (English Comment)
 	err := bcrypt.CompareHashAndPassword([]byte(employee.Password), []byte(input.Password))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
 	// 3. Create Token with RoleID (English Comment)
 	claims := TokenClaims{
 		UserID:       employee.ID,
-		CompanyID:    employee.CompanyID,
+		CompaniesID:    employee.CompaniesID,
 		RoleID:       employee.RoleID,
 		IsSuperAdmin: employee.Role.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{

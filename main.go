@@ -25,7 +25,7 @@ func main() {
 		&models.SalaryStructure{},
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
-		&models.Company{},
+		&models.Companies{},
 	)
 
 	if err != nil {

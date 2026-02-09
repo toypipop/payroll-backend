@@ -41,6 +41,8 @@ func SetupRouter() *gin.Engine {
 		// --- Master Data (Department & Position Management) ---
 		api.GET("/departments", middleware.CheckPermission("DEPARTMENT", "VIEW"), handlers.GetDepartments)
 		api.POST("/departments", middleware.CheckPermission("DEPARTMENT", "CREATE"), handlers.CreateDepartment)
+		api.PUT("/departments/:id", middleware.CheckPermission("DEPARTMENT", "EDIT"), handlers.UpdateDepartment)
+		api.DELETE("/departments/:id", middleware.CheckPermission("DEPARTMENT", "DELETE"), handlers.DeleteDepartment)
 
 		api.GET("/positions", middleware.CheckPermission("POSITION", "VIEW"), handlers.GetPositions)
 		// api.POST("/positions", middleware.CheckPermission("POSITION", "CREATE"), handlers.CreatePosition)
@@ -50,9 +52,12 @@ func SetupRouter() *gin.Engine {
 		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRolePermissions)
 		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateRolePermissions)
 
-		// --- Company Profile Management ---
-		api.GET("/company", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetCompany)
-		api.PUT("/company/:id", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateCompany)
+		// --- Companies Profile Management ---
+		api.GET("/companies/all", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetAllCompanies)
+		api.GET("/companies/options", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetCompanies)
+		api.POST("/companies", middleware.CheckPermission("SETTINGS", "CREATE"), handlers.CreateCompanies)
+		api.PUT("/companies/:id", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateCompanies)
+		api.DELETE("/companies/:id", middleware.CheckPermission("SETTINGS", "DELETE"), handlers.DeleteCompanies)
 	}
 
 	return r
