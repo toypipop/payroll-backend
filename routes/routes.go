@@ -58,6 +58,9 @@ func SetupRouter() *gin.Engine {
 		api.POST("/companies", middleware.CheckPermission("SETTINGS", "CREATE"), handlers.CreateCompanies)
 		api.PUT("/companies/:id", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateCompanies)
 		api.DELETE("/companies/:id", middleware.CheckPermission("SETTINGS", "DELETE"), handlers.DeleteCompanies)
+
+		// routes/router.go
+		api.POST("/salaries", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateSalariesStructure)
 	}
 
 	return r

@@ -22,7 +22,7 @@ func main() {
 		&models.Department{},
 		&models.Position{},
 		&models.Employee{},
-		&models.SalaryStructure{},
+		&models.SalariesStructure{},
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
 		&models.Companies{},

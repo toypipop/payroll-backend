@@ -12,12 +12,13 @@ import (
 
 /* --- Master Data Handlers (English Comments) --- */
 
-// GetRoles fetches all available roles without any filters (English Comment)
+// GetRoles fetches all available roles excluding Super Admins (English Comment)
 func GetRoles(c *gin.Context) {
 	var roles []models.Role
 
-	// Select * FROM roles (English Comment)
-	if err := config.DB.Find(&roles).Error; err != nil {
+	// Filter out rows where is_super_admin is true (English Comment)
+	// Query: SELECT * FROM roles WHERE is_super_admin = false AND deleted_at = 0
+	if err := config.DB.Where("is_super_admin = ?", false).Find(&roles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
 		return
 	}
