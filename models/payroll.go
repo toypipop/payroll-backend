@@ -6,7 +6,7 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
-// SalariesStructure defines the base pay for each employee
+// SalariesStructure defines the base pay for each Employees
 type SalariesStructure struct {
 	// Standard Timestamps
 	CreatedAt time.Time `json:"created_at"`
@@ -15,9 +15,10 @@ type SalariesStructure struct {
 	// but we add it to track salaries history/changes (English Comment)
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_salaries_deleted;not null;default:0" json:"-"`
 
-	EmployeeID    uint      `gorm:"primaryKey;uniqueIndex:idx_emp_salaries_deleted" json:"employee_id"`
+	EmployeesID   uint      `gorm:"primaryKey;uniqueIndex:idx_emp_salaries_deleted" json:"Employees_id"`
 	BaseSalaries  float64   `gorm:"type:decimal(15,2)" json:"base_salaries"`
 	EffectiveDate time.Time `json:"effective_date"`
+	IsEnabled     bool      `json:"is_enabled" gorm:"default:true"`
 }
 
 // PayrollCycle manages the time periods for salaries processing
@@ -36,7 +37,7 @@ type PayrollCycle struct {
 	IsClosed  bool      `gorm:"default:false" json:"is_closed"`
 }
 
-// PayrollTransaction records the actual payout for an employee
+// PayrollTransaction records the actual payout for an Employees
 type PayrollTransaction struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"created_at"` // Date of transaction
@@ -45,7 +46,7 @@ type PayrollTransaction struct {
 	DeletedAt soft_delete.DeletedAt `gorm:"index" json:"-"`
 
 	CycleID        uint    `gorm:"not null" json:"cycle_id"`
-	EmployeeID     uint    `gorm:"not null" json:"employee_id"`
+	EmployeesID    uint    `gorm:"not null" json:"Employees_id"`
 	SalariesAtTime float64 `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
 	NetPay         float64 `gorm:"type:decimal(15,2)" json:"net_pay"`
 }

@@ -16,9 +16,9 @@ func parseUint(s string) uint {
 	return uint(val)
 }
 
-// GetRolePermissions fetches all modules and current access for a specific role
-func GetRolePermissions(c *gin.Context) {
-	roleID := c.Param("id")
+// GetRolesPermissions fetches all modules and current access for a specific roles
+func GetRolesPermissions(c *gin.Context) {
+	rolesID := c.Param("id")
 
 	// Get companies_id from middleware context (English Comment)
 	valID, _ := c.Get("companies_id")
@@ -28,11 +28,11 @@ func GetRolePermissions(c *gin.Context) {
 	var modules []models.AppModule
 	config.DB.Order("`order` asc").Find(&modules)
 
-	// 2. Get existing access for this role filtered by companies (English Comment)
-	// Even if we search by roleID, ScopeCompanies ensures the role belongs to the companies.
-	var access []models.RoleModuleAccess
+	// 2. Get existing access for this roles filtered by companies (English Comment)
+	// Even if we search by rolesID, ScopeCompanies ensures the roles belongs to the companies.
+	var access []models.RolesModuleAccess
 	if err := config.DB.Scopes(repository.ScopeCompanies(compID)).
-		Where("role_id = ?", roleID).
+		Where("roles_id = ?", rolesID).
 		Find(&access).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch access"})
 		return
@@ -45,15 +45,15 @@ func GetRolePermissions(c *gin.Context) {
 	})
 }
 
-// UpdateRolePermissions updates or creates permissions for a role
-func UpdateRolePermissions(c *gin.Context) {
-	roleID := c.Param("id")
+// UpdateRolesPermissions updates or creates permissions for a roles
+func UpdateRolesPermissions(c *gin.Context) {
+	rolesID := c.Param("id")
 
 	// Get companies_id from middleware context (English Comment)
 	valID, _ := c.Get("companies_id")
 	compID := valID.(uint)
 
-	var input []models.RoleModuleAccess
+	var input []models.RolesModuleAccess
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -61,19 +61,19 @@ func UpdateRolePermissions(c *gin.Context) {
 
 	// Use transaction to ensure data consistency (English Comment)
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. Clear old permissions for this role within the companies scope (English Comment)
+		// 1. Clear old permissions for this roles within the companies scope (English Comment)
 		if err := tx.Scopes(repository.ScopeCompanies(compID)).
-			Where("role_id = ?", roleID).
-			Delete(&models.RoleModuleAccess{}).Error; err != nil {
+			Where("roles_id = ?", rolesID).
+			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err
 		}
 
 		// 2. Insert new permissions (English Comment)
 		if len(input) > 0 {
-			rID := parseUint(roleID)
+			rID := parseUint(rolesID)
 			for i := range input {
-				// Ensure all records match current Role and Companies (English Comment)
-				input[i].RoleID = rID
+				// Ensure all records match current Roles and Companies (English Comment)
+				input[i].RolesID = rID
 				input[i].CompaniesID = compID
 			}
 			if err := tx.Create(&input).Error; err != nil {

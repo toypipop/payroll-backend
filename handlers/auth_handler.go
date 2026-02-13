@@ -20,39 +20,39 @@ func GetJWTSecret() []byte {
 type TokenClaims struct {
 	UserID       uint `json:"user_id"`
 	CompaniesID    uint `json:"companies_id"`
-	RoleID       uint `json:"role_id"`
+	RolesID       uint `json:"roles_id"`
 	IsSuperAdmin bool `json:"is_super_admin"`
 	jwt.RegisteredClaims
 }
 
 func Login(c *gin.Context) {
 	var input models.LoginRequest
-	var employee models.Employee
+	var Employees models.Employees
 
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
 		return
 	}
 
-	// 1. Find employee and Preload Role to get RoleName later (English Comment)
-	if err := config.DB.Preload("Role").Where("email = ?", input.Email).First(&employee).Error; err != nil {
+	// 1. Find Employees and Preload Roles to get RolesName later (English Comment)
+	if err := config.DB.Preload("Roles").Where("email = ?", input.Email).First(&Employees).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
 		return
 	}
 
 	// 2. Check Password (English Comment)
-	err := bcrypt.CompareHashAndPassword([]byte(employee.Password), []byte(input.Password))
+	err := bcrypt.CompareHashAndPassword([]byte(Employees.Password), []byte(input.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
-	// 3. Create Token with RoleID (English Comment)
+	// 3. Create Token with RolesID (English Comment)
 	claims := TokenClaims{
-		UserID:       employee.ID,
-		CompaniesID:    employee.CompaniesID,
-		RoleID:       employee.RoleID,
-		IsSuperAdmin: employee.Role.IsSuperAdmin,
+		UserID:       Employees.ID,
+		CompaniesID:    Employees.CompaniesID,
+		RolesID:       Employees.RolesID,
+		IsSuperAdmin: Employees.Roles.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -70,7 +70,7 @@ func Login(c *gin.Context) {
 	// 4. Send Response (English Comment)
 	c.JSON(http.StatusOK, models.LoginResponse{
 		Token:    tokenString,
-		FullName: employee.FirstName + " " + employee.LastName,
-		Role:     employee.Role.RoleName, // Return actual role name to frontend
+		FullName: Employees.FirstName + " " + Employees.LastName,
+		Roles:     Employees.Roles.RolesName, // Return actual roles name to frontend
 	})
 }

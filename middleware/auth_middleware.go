@@ -49,7 +49,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 4. Set Tenant Data to Context (English Comment)
 		c.Set("user_id", claims.UserID)
 		c.Set("companies_id", claims.CompaniesID)
-		c.Set("role_id", claims.RoleID)
+		c.Set("roles_id", claims.RolesID)
 		c.Set("is_super_admin", claims.IsSuperAdmin)
 
 		c.Next()
@@ -58,10 +58,10 @@ func AuthMiddleware() gin.HandlerFunc {
 
 func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		valRole, _ := c.Get("role_id")
+		valRoles, _ := c.Get("roles_id")
 
 		var rID uint
-		switch v := valRole.(type) {
+		switch v := valRoles.(type) {
 		case uint:
 			rID = v
 		case float64:
@@ -70,18 +70,18 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 			rID = uint(v)
 		}
 
-		var access models.RoleModuleAccess
+		var access models.RolesModuleAccess
 
 		// DEBUG 1: Use Debug() to see the generated SQL in console (English Comment)
 		query := config.DB.Debug().InnerJoins("AppModule").
-			Where(&models.RoleModuleAccess{RoleID: rID}).
+			Where(&models.RolesModuleAccess{RolesID: rID}).
 			Where("`AppModule`.`module_key` = ?", moduleKey) // Use backticks for safety
 
 		err := query.First(&access).Error
 
 		if err != nil {
 			// DEBUG 2: Log details to find if it's 'Record Not Found' or 'SQL Error' (English Comment)
-			log.Printf("[DEBUG] ModuleKey: %s, RoleID: %d, Error: %v", moduleKey, rID, err)
+			log.Printf("[DEBUG] ModuleKey: %s, RolesID: %d, Error: %v", moduleKey, rID, err)
 			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied", "debug_msg": err.Error()})
 			c.Abort()
 			return

@@ -14,12 +14,12 @@ func main() {
 	// 0. Auto Migrate Tables to ensure schema exists
 	err := config.DB.AutoMigrate(
 		&models.Companies{},
-		&models.Role{},
+		&models.Roles{},
 		&models.AppModule{},
-		&models.RoleModuleAccess{},
+		&models.RolesModuleAccess{},
 		&models.Department{},
 		&models.Position{},
-		&models.Employee{},
+		&models.Employees{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -33,26 +33,26 @@ func main() {
 	config.DB.Where(models.Companies{TaxID: "1234567890123"}).FirstOrCreate(&companies)
 
 	// 2. Create Roles tied to Companies
-	adminRole := models.Role{
-		RoleName:     "SUPER_ADMIN",
+	adminRoles := models.Roles{
+		RolesName:     "SUPER_ADMIN",
 		Description:  "System administrator with full access",
 		IsSuperAdmin: true,
 		CompaniesID:    companies.ID,
 	}
-	config.DB.Where(models.Role{RoleName: "SUPER_ADMIN", CompaniesID: companies.ID}).FirstOrCreate(&adminRole)
+	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: companies.ID}).FirstOrCreate(&adminRoles)
 
-	userRole := models.Role{
-		RoleName:     "USER",
+	userRoles := models.Roles{
+		RolesName:     "USER",
 		Description:  "Regular user with limited access",
 		IsSuperAdmin: false,
 		CompaniesID:    companies.ID,
 	}
-	config.DB.Where(models.Role{RoleName: "USER", CompaniesID: companies.ID}).FirstOrCreate(&userRole)
+	config.DB.Where(models.Roles{RolesName: "USER", CompaniesID: companies.ID}).FirstOrCreate(&userRoles)
 
 	// 3. Create AppModule (Global System Level)
 	modules := []models.AppModule{
 		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "LayoutDashboard", Order: 1},
-		{ModuleName: "Employees", ModuleKey: "EMPLOYEE", RoutePath: "/employees", Icon: "Users", Order: 2},
+		{ModuleName: "Employees", ModuleKey: "Employees", RoutePath: "/Employees", Icon: "Users", Order: 2},
 		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 3},
 		{ModuleName: "Departments", ModuleKey: "DEPARTMENT", RoutePath: "/departments", Icon: "Building", Order: 4},
 		{ModuleName: "Positions", ModuleKey: "POSITION", RoutePath: "/positions", Icon: "UserCheck", Order: 5},
@@ -63,8 +63,8 @@ func main() {
 		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).FirstOrCreate(&existingModule, m)
 
 		// 4. Assign Full Access to SUPER_ADMIN
-		access := models.RoleModuleAccess{
-			RoleID:    adminRole.ID,
+		access := models.RolesModuleAccess{
+			RolesID:    adminRoles.ID,
 			ModuleID:  existingModule.ID,
 			CompaniesID: companies.ID,
 			CanView:   true,
@@ -73,7 +73,7 @@ func main() {
 			CanDelete: true,
 			DataScope: "ALL",
 		}
-		config.DB.Where(models.RoleModuleAccess{RoleID: adminRole.ID, ModuleID: existingModule.ID}).FirstOrCreate(&access)
+		config.DB.Where(models.RolesModuleAccess{RolesID: adminRoles.ID, ModuleID: existingModule.ID}).FirstOrCreate(&access)
 	}
 
 	// 5. Master Data
@@ -83,21 +83,21 @@ func main() {
 	pos := models.Position{PosName: "System Administrator", CompaniesID: companies.ID}
 	config.DB.Where(models.Position{PosName: "System Administrator", CompaniesID: companies.ID}).FirstOrCreate(&pos)
 
-	// 6. Professional Seeding Style for Employee
+	// 6. Professional Seeding Style for Employees
 	adminPass := "admin@admin.com"
-	// Use cost 10 to match CreateEmployee logic
+	// Use cost 10 to match CreateEmployees logic
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(adminPass), 10)
 
-	admin := models.Employee{
+	admin := models.Employees{
 		Email: "admin@admin.com", // Unique identifier for seeding
 	}
 
 	// Use Unscoped to find soft-deleted records and Assign to force update fields
-	err = config.DB.Unscoped().Where(models.Employee{Email: admin.Email}).
-		Assign(models.Employee{
+	err = config.DB.Unscoped().Where(models.Employees{Email: admin.Email}).
+		Assign(models.Employees{
 			CompaniesID:    companies.ID,
-			RoleID:       adminRole.ID,
-			EmployeeCode: "ADM001",
+			RolesID:       adminRoles.ID,
+			EmployeesCode: "ADM001",
 			FirstName:    "System",
 			LastName:     "Admin",
 			Password:     string(hashedPassword),

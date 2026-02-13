@@ -6,17 +6,17 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
-// Role model with fixed size for Indexing (English Comment)
-type Role struct {
+// Roles model with fixed size for Indexing (English Comment)
+type Roles struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	// Use Composite Unique Index with DeletedAt
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_role_name_company_deleted;not null;default:0" json:"-"`
+	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;default:0" json:"-"`
 
-	CompaniesID uint `gorm:"uniqueIndex:idx_role_name_company_deleted;not null" json:"companies_id"`
-	// Add size:255 to RoleName to support MySQL Index (English Comment)
-	RoleName     string `gorm:"uniqueIndex:idx_role_name_company_deleted;not null;size:255" json:"role_name"`
+	CompaniesID uint `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null" json:"companies_id"`
+	// Add size:255 to RolesName to support MySQL Index (English Comment)
+	RolesName    string `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;size:255" json:"roles_name"`
 	Description  string `json:"description"`
 	IsSuperAdmin bool   `gorm:"default:false" json:"is_super_admin"`
 }
@@ -38,16 +38,16 @@ type AppModule struct {
 	IsActive  bool   `gorm:"default:true" json:"is_active"`
 }
 
-// RoleModuleAccess model with Composite Unique Index (English Comment)
-type RoleModuleAccess struct {
+// RolesModuleAccess model with Composite Unique Index (English Comment)
+type RolesModuleAccess struct {
 	ID        uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time             `json:"created_at"`
 	UpdatedAt time.Time             `json:"updated_at"`
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_role_module_deleted;not null;default:0" json:"-"`
+	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_module_deleted;not null;default:0" json:"-"`
 
-	CompaniesID uint `gorm:"uniqueIndex:idx_role_module_deleted;not null" json:"companies_id"`
-	RoleID      uint `gorm:"uniqueIndex:idx_role_module_deleted;not null" json:"role_id"`
-	ModuleID    uint `gorm:"uniqueIndex:idx_role_module_deleted;not null" json:"module_id"`
+	CompaniesID uint `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"companies_id"`
+	RolesID     uint `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"roles_id"`
+	ModuleID    uint `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"module_id"`
 
 	CanView   bool   `json:"can_view"`
 	CanCreate bool   `json:"can_create"`

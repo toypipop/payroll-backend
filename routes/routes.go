@@ -32,11 +32,11 @@ func SetupRouter() *gin.Engine {
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
 	{
-		// --- Employee Management (CRUD with specific permissions) ---
-		api.GET("/employees", middleware.CheckPermission("EMPLOYEE", "VIEW"), handlers.GetEmployees)
-		api.POST("/employees", middleware.CheckPermission("EMPLOYEE", "CREATE"), handlers.CreateEmployee)
-		api.PUT("/employees/:id", middleware.CheckPermission("EMPLOYEE", "EDIT"), handlers.UpdateEmployee)
-		api.DELETE("/employees/:id", middleware.CheckPermission("EMPLOYEE", "DELETE"), handlers.DeleteEmployee)
+		// --- Employees Management (CRUD with specific permissions) ---
+		api.GET("/employees", middleware.CheckPermission("Employees", "VIEW"), handlers.GetEmployees)
+		api.POST("/employees", middleware.CheckPermission("Employees", "CREATE"), handlers.CreateEmployees)
+		api.PUT("/employees/:id", middleware.CheckPermission("Employees", "EDIT"), handlers.UpdateEmployees)
+		api.DELETE("/employees/:id", middleware.CheckPermission("Employees", "DELETE"), handlers.DeleteEmployees)
 
 		// --- Master Data (Department & Position Management) ---
 		api.GET("/departments", middleware.CheckPermission("DEPARTMENT", "VIEW"), handlers.GetDepartments)
@@ -47,10 +47,10 @@ func SetupRouter() *gin.Engine {
 		api.GET("/positions", middleware.CheckPermission("POSITION", "VIEW"), handlers.GetPositions)
 		// api.POST("/positions", middleware.CheckPermission("POSITION", "CREATE"), handlers.CreatePosition)
 
-		// --- Role & Permission Management (High security area) ---
+		// --- Roles & Permission Management (High security area) ---
 		api.GET("/roles", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRoles)
-		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRolePermissions)
-		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateRolePermissions)
+		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRolesPermissions)
+		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateRolesPermissions)
 
 		// --- Companies Profile Management ---
 		api.GET("/companies/all", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetAllCompanies)

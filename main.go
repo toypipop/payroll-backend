@@ -16,12 +16,12 @@ func main() {
 	// This will create or update tables based on your structs
 	fmt.Println("Running Database Migration...")
 	err := config.DB.AutoMigrate(
-		&models.Role{},
+		&models.Roles{},
 		&models.AppModule{},
-		&models.RoleModuleAccess{},
+		&models.RolesModuleAccess{},
 		&models.Department{},
 		&models.Position{},
-		&models.Employee{},
+		&models.Employees{},
 		&models.SalariesStructure{},
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
