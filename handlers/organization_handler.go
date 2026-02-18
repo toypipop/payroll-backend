@@ -10,8 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-/* --- Master Data Handlers (English Comments) --- */
-
 // GetRoles fetches all available roles excluding Super Admins (English Comment)
 func GetRoles(c *gin.Context) {
 	var roles []models.Roles

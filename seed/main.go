@@ -34,28 +34,51 @@ func main() {
 
 	// 2. Create Roles tied to Companies
 	adminRoles := models.Roles{
-		RolesName:     "SUPER_ADMIN",
+		RolesName:    "SUPER_ADMIN",
 		Description:  "System administrator with full access",
 		IsSuperAdmin: true,
-		CompaniesID:    companies.ID,
+		CompaniesID:  companies.ID,
 	}
 	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: companies.ID}).FirstOrCreate(&adminRoles)
 
 	userRoles := models.Roles{
-		RolesName:     "USER",
+		RolesName:    "USER",
 		Description:  "Regular user with limited access",
 		IsSuperAdmin: false,
-		CompaniesID:    companies.ID,
+		CompaniesID:  companies.ID,
 	}
 	config.DB.Where(models.Roles{RolesName: "USER", CompaniesID: companies.ID}).FirstOrCreate(&userRoles)
 
 	// 3. Create AppModule (Global System Level)
 	modules := []models.AppModule{
-		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "LayoutDashboard", Order: 1},
-		{ModuleName: "Employees", ModuleKey: "Employees", RoutePath: "/Employees", Icon: "Users", Order: 2},
-		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 3},
-		{ModuleName: "Departments", ModuleKey: "DEPARTMENT", RoutePath: "/departments", Icon: "Building", Order: 4},
-		{ModuleName: "Positions", ModuleKey: "POSITION", RoutePath: "/positions", Icon: "UserCheck", Order: 5},
+		{
+			ModuleName: "Dashboard",
+			ModuleKey:  "DASHBOARD",
+			RoutePath:  "/dashboard",
+			Icon:       "Dashboard",
+			Order:      1,
+		},
+		{
+			ModuleName: "Employees",
+			ModuleKey:  "EMPLOYEES",
+			RoutePath:  "/employees",
+			Icon:       "Employees",
+			Order:      2,
+		},
+		{
+			ModuleName: "Attendance",
+			ModuleKey:  "ATTENDANCE",
+			RoutePath:  "/attendance",
+			Icon:       "Attendance",
+			Order:      3,
+		},
+		{
+			ModuleName: "Settings",
+			ModuleKey:  "SETTINGS",
+			RoutePath:  "/settings",
+			Icon:       "Settings",
+			Order:      4,
+		},
 	}
 
 	for _, m := range modules {
@@ -64,14 +87,14 @@ func main() {
 
 		// 4. Assign Full Access to SUPER_ADMIN
 		access := models.RolesModuleAccess{
-			RolesID:    adminRoles.ID,
-			ModuleID:  existingModule.ID,
+			RolesID:     adminRoles.ID,
+			ModuleID:    existingModule.ID,
 			CompaniesID: companies.ID,
-			CanView:   true,
-			CanCreate: true,
-			CanEdit:   true,
-			CanDelete: true,
-			DataScope: "ALL",
+			CanView:     true,
+			CanCreate:   true,
+			CanEdit:     true,
+			CanDelete:   true,
+			DataScope:   "ALL",
 		}
 		config.DB.Where(models.RolesModuleAccess{RolesID: adminRoles.ID, ModuleID: existingModule.ID}).FirstOrCreate(&access)
 	}
@@ -95,15 +118,15 @@ func main() {
 	// Use Unscoped to find soft-deleted records and Assign to force update fields
 	err = config.DB.Unscoped().Where(models.Employees{Email: admin.Email}).
 		Assign(models.Employees{
-			CompaniesID:    companies.ID,
+			CompaniesID:   companies.ID,
 			RolesID:       adminRoles.ID,
 			EmployeesCode: "ADM001",
-			FirstName:    "System",
-			LastName:     "Admin",
-			Password:     string(hashedPassword),
-			DeptID:       dept.ID,
-			PosID:        pos.ID,
-			IsActive:     true,
+			FirstName:     "System",
+			LastName:      "Admin",
+			Password:      string(hashedPassword),
+			DeptID:        dept.ID,
+			PosID:         pos.ID,
+			IsActive:      true,
 		}).
 		FirstOrCreate(&admin).Error
 

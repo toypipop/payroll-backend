@@ -19,8 +19,8 @@ func GetJWTSecret() []byte {
 
 type TokenClaims struct {
 	UserID       uint `json:"user_id"`
-	CompaniesID    uint `json:"companies_id"`
-	RolesID       uint `json:"roles_id"`
+	CompaniesID  uint `json:"companies_id"`
+	RolesID      uint `json:"roles_id"`
 	IsSuperAdmin bool `json:"is_super_admin"`
 	jwt.RegisteredClaims
 }
@@ -50,8 +50,8 @@ func Login(c *gin.Context) {
 	// 3. Create Token with RolesID (English Comment)
 	claims := TokenClaims{
 		UserID:       Employees.ID,
-		CompaniesID:    Employees.CompaniesID,
-		RolesID:       Employees.RolesID,
+		CompaniesID:  Employees.CompaniesID,
+		RolesID:      Employees.RolesID,
 		IsSuperAdmin: Employees.Roles.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24)),
@@ -71,6 +71,21 @@ func Login(c *gin.Context) {
 	c.JSON(http.StatusOK, models.LoginResponse{
 		Token:    tokenString,
 		FullName: Employees.FirstName + " " + Employees.LastName,
-		Roles:     Employees.Roles.RolesName, // Return actual roles name to frontend
+		Roles:    Employees.Roles.RolesName, // Return actual roles name to frontend
 	})
+}
+
+func GetAppModules(c *gin.Context) {
+	// Note: AppModule is usually global master data, so we don't need companies_id scope here.
+	var modules []models.AppModule
+
+	// Fetch active modules and sort by Order (English Comment)
+	if err := config.DB.
+		Where("is_active = ?", true).
+		Order("`order` ASC"). // Use backticks because 'order' is a reserved word in SQL
+		Find(&modules).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch app modules"})
+		return
+	}
+	c.JSON(http.StatusOK, modules)
 }

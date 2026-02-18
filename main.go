@@ -43,3 +43,24 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
+
+// ├── Dashboard
+// ├── Employee Management
+// │   ├── Employees
+// │   └── Salaries Structure
+// ├── Time Attendance (New)
+// │   ├── Time Logs
+// │   └── Leave Requests
+// ├── Payroll Processing (New)
+// │   ├── Payroll Cycles
+// │   ├── Run Payroll (Calculation)
+// │   └── Transactions
+// ├── Settings
+// │   ├── Companies
+// │   ├── Department
+// │   ├── Position
+// │   ├── Payroll Config (New: Tax, SSO, Earnings)
+// │   └── Permission (Roles & Modules)
+// └── Reports (New)
+//     ├── Payslips
+//     └── Government Forms

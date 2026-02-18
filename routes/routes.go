@@ -32,6 +32,7 @@ func SetupRouter() *gin.Engine {
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
 	{
+		api.GET("/modules", handlers.GetAppModules)
 		// --- Employees Management (CRUD with specific permissions) ---
 		api.GET("/employees", middleware.CheckPermission("Employees", "VIEW"), handlers.GetEmployees)
 		api.POST("/employees", middleware.CheckPermission("Employees", "CREATE"), handlers.CreateEmployees)
@@ -62,6 +63,5 @@ func SetupRouter() *gin.Engine {
 		// routes/router.go
 		api.POST("/salaries", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateSalariesStructure)
 	}
-
 	return r
 }

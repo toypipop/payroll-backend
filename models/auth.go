@@ -6,54 +6,64 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
+type DataScope string
+
+const (
+	ScopeOwn        DataScope = "Own"
+	ScopeDepartment DataScope = "Department"
+	ScopeCompany    DataScope = "Company"
+	ScopeAll        DataScope = "All"
+)
+
+type ModuleKey string
+
+const (
+	ModuleDashboard  ModuleKey = "dashboard"
+	ModuleEmployees  ModuleKey = "employees"
+	ModuleAttendance ModuleKey = "attendance"
+	ModuleSettings   ModuleKey = "settings"
+)
+
 // Roles model with fixed size for Indexing (English Comment)
 type Roles struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	// Use Composite Unique Index with DeletedAt
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;default:0" json:"-"`
-
-	CompaniesID uint `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null" json:"companies_id"`
-	// Add size:255 to RolesName to support MySQL Index (English Comment)
-	RolesName    string `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;size:255" json:"roles_name"`
-	Description  string `json:"description"`
-	IsSuperAdmin bool   `gorm:"default:false" json:"is_super_admin"`
+	ID           uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt    time.Time             `json:"created_at"`
+	UpdatedAt    time.Time             `json:"updated_at"`
+	DeletedAt    soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;default:0" json:"-"`
+	CompaniesID  uint                  `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null" json:"companies_id"`
+	RolesName    string                `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;size:255" json:"roles_name"`
+	Description  string                `json:"description"`
+	IsSuperAdmin bool                  `gorm:"default:false" json:"is_super_admin"`
 }
 
 // AppModule model with fixed size for ModuleKey (English Comment)
 type AppModule struct {
-	ID        uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time             `json:"created_at"`
-	UpdatedAt time.Time             `json:"updated_at"`
-	DeletedAt soft_delete.DeletedAt `gorm:"index" json:"-"`
-
-	ModuleName string `gorm:"not null" json:"module_name"`
-	// Add size:100 for unique key specification (English Comment)
-	ModuleKey string `gorm:"unique;not null;size:100" json:"module_key"`
-	RoutePath string `json:"route_path"`
-	Icon      string `json:"icon"`
-	Order     int    `json:"order"`
-	ParentID  *uint  `json:"parent_id"`
-	IsActive  bool   `gorm:"default:true" json:"is_active"`
+	ID         uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt  time.Time             `json:"created_at"`
+	UpdatedAt  time.Time             `json:"updated_at"`
+	DeletedAt  soft_delete.DeletedAt `gorm:"index" json:"-"`
+	ModuleName string                `gorm:"not null" json:"module_name"`
+	ModuleKey  ModuleKey             `gorm:"unique;not null;size:100" json:"module_key" binding:"required"`
+	RoutePath  string                `json:"route_path"`
+	Icon       string                `json:"icon"`
+	Order      int                   `json:"order"`
+	ParentID   *uint                 `json:"parent_id"`
+	IsActive   bool                  `gorm:"default:true" json:"is_active"`
 }
 
 // RolesModuleAccess model with Composite Unique Index (English Comment)
 type RolesModuleAccess struct {
-	ID        uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time             `json:"created_at"`
-	UpdatedAt time.Time             `json:"updated_at"`
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_module_deleted;not null;default:0" json:"-"`
-
-	CompaniesID uint `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"companies_id"`
-	RolesID     uint `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"roles_id"`
-	ModuleID    uint `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"module_id"`
-
-	CanView   bool   `json:"can_view"`
-	CanCreate bool   `json:"can_create"`
-	CanEdit   bool   `json:"can_edit"`
-	CanDelete bool   `json:"can_delete"`
-	DataScope string `json:"data_scope"`
-
-	AppModule AppModule `gorm:"foreignKey:ModuleID" json:"app_module"`
+	ID          uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt   time.Time             `json:"created_at"`
+	UpdatedAt   time.Time             `json:"updated_at"`
+	DeletedAt   soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_module_deleted;not null;default:0" json:"-"`
+	CompaniesID uint                  `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"companies_id"`
+	RolesID     uint                  `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"roles_id"`
+	ModuleID    uint                  `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"module_id"`
+	CanView     bool                  `json:"can_view"`
+	CanCreate   bool                  `json:"can_create"`
+	CanEdit     bool                  `json:"can_edit"`
+	CanDelete   bool                  `json:"can_delete"`
+	DataScope   DataScope             `json:"data_scope" binding:"required,oneof=Own Department Company All"`
+	AppModule   AppModule             `gorm:"foreignKey:ModuleID" json:"app_module"`
 }
