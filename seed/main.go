@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"payroll-backend/config"
 	"payroll-backend/models"
@@ -11,7 +12,7 @@ import (
 func main() {
 	config.ConnectDatabase()
 
-	// 0. Auto Migrate Tables to ensure schema exists
+	// 0. Auto Migrate Tables
 	err := config.DB.AutoMigrate(
 		&models.Companies{},
 		&models.Roles{},
@@ -25,115 +26,127 @@ func main() {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	// 1. Create Initial Companies
-	companies := models.Companies{
-		Name:  "Default Corporation",
-		TaxID: "1234567890123",
-	}
-	config.DB.Where(models.Companies{TaxID: "1234567890123"}).FirstOrCreate(&companies)
+	// 1. Create Companies (Company A & Company B)
+	compA := models.Companies{Name: "Tech Corp", TaxID: "1111111111111"}
+	config.DB.Where(models.Companies{TaxID: "1111111111111"}).Assign(compA).FirstOrCreate(&compA)
 
-	// 2. Create Roles tied to Companies
-	adminRoles := models.Roles{
-		RolesName:    "SUPER_ADMIN",
-		Description:  "System administrator with full access",
-		IsSuperAdmin: true,
-		CompaniesID:  companies.ID,
-	}
-	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: companies.ID}).FirstOrCreate(&adminRoles)
+	compB := models.Companies{Name: "Biz Group", TaxID: "2222222222222"}
+	config.DB.Where(models.Companies{TaxID: "2222222222222"}).Assign(compB).FirstOrCreate(&compB)
 
-	userRoles := models.Roles{
-		RolesName:    "USER",
-		Description:  "Regular user with limited access",
-		IsSuperAdmin: false,
-		CompaniesID:  companies.ID,
-	}
-	config.DB.Where(models.Roles{RolesName: "USER", CompaniesID: companies.ID}).FirstOrCreate(&userRoles)
+	// 2. Create Roles for each Company
+	// Admin (System Level)
+	adminRoleA := models.Roles{RolesName: "SUPER_ADMIN", Description: "Admin Access", IsSuperAdmin: true, CompaniesID: compA.ID}
+	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: compA.ID}).Assign(adminRoleA).FirstOrCreate(&adminRoleA)
 
-	// 3. Create AppModule (Global System Level)
+	// Company A Roles
+	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Sees whole company", CompaniesID: compA.ID}
+	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compA.ID}).Assign(managerRoleA).FirstOrCreate(&managerRoleA)
+	staffRoleA := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compA.ID}
+	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compA.ID}).Assign(staffRoleA).FirstOrCreate(&staffRoleA)
+
+	// Company B Roles
+	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Sees whole company", CompaniesID: compB.ID}
+	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compB.ID}).Assign(managerRoleB).FirstOrCreate(&managerRoleB)
+	staffRoleB := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compB.ID}
+	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
+
+	// 3. Create AppModule
 	modules := []models.AppModule{
-		{
-			ModuleName: "Dashboard",
-			ModuleKey:  "DASHBOARD",
-			RoutePath:  "/dashboard",
-			Icon:       "Dashboard",
-			Order:      1,
-		},
-		{
-			ModuleName: "Employees",
-			ModuleKey:  "EMPLOYEES",
-			RoutePath:  "/employees",
-			Icon:       "Employees",
-			Order:      2,
-		},
-		{
-			ModuleName: "Attendance",
-			ModuleKey:  "ATTENDANCE",
-			RoutePath:  "/attendance",
-			Icon:       "Attendance",
-			Order:      3,
-		},
-		{
-			ModuleName: "Settings",
-			ModuleKey:  "SETTINGS",
-			RoutePath:  "/settings",
-			Icon:       "Settings",
-			Order:      4,
-		},
+		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1},
+		{ModuleName: "Employees", ModuleKey: "EMPLOYEES", RoutePath: "/employees", Icon: "Employees", Order: 2},
+		{ModuleName: "Attendance", ModuleKey: "ATTENDANCE", RoutePath: "/attendance", Icon: "Attendance", Order: 3},
+		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 4},
 	}
 
 	for _, m := range modules {
 		var existingModule models.AppModule
-		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).FirstOrCreate(&existingModule, m)
+		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
 
-		// 4. Assign Full Access to SUPER_ADMIN
-		access := models.RolesModuleAccess{
-			RolesID:     adminRoles.ID,
-			ModuleID:    existingModule.ID,
-			CompaniesID: companies.ID,
-			CanView:     true,
-			CanCreate:   true,
-			CanEdit:     true,
-			CanDelete:   true,
-			DataScope:   "ALL",
-		}
-		config.DB.Where(models.RolesModuleAccess{RolesID: adminRoles.ID, ModuleID: existingModule.ID}).FirstOrCreate(&access)
+		// Assign Access to Admin A (Scope All)
+		accAdmin := models.RolesModuleAccess{RolesID: adminRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: true, DataScope: models.ScopeAll}
+		config.DB.Where(models.RolesModuleAccess{RolesID: adminRoleA.ID, ModuleID: existingModule.ID}).Assign(accAdmin).FirstOrCreate(&accAdmin)
+
+		// Assign Access to Manager A & B (Scope Company)
+		accMgrA := models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: false, DataScope: models.ScopeCompany}
+		config.DB.Where(models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID}).Assign(accMgrA).FirstOrCreate(&accMgrA)
+
+		accMgrB := models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: false, DataScope: models.ScopeCompany}
+		config.DB.Where(models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID}).Assign(accMgrB).FirstOrCreate(&accMgrB)
+
+		// Assign Access to Staff A & B (Scope Department)
+		accStaffA := models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: false, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
+		config.DB.Where(models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID}).Assign(accStaffA).FirstOrCreate(&accStaffA)
+
+		accStaffB := models.RolesModuleAccess{RolesID: staffRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: false, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
+		config.DB.Where(models.RolesModuleAccess{RolesID: staffRoleB.ID, ModuleID: existingModule.ID}).Assign(accStaffB).FirstOrCreate(&accStaffB)
 	}
 
-	// 5. Master Data
-	dept := models.Department{DeptName: "IT Administration", CompaniesID: companies.ID}
-	config.DB.Where(models.Department{DeptName: "IT Administration", CompaniesID: companies.ID}).FirstOrCreate(&dept)
+	// 4. Create Departments
+	// Company A Depts (Engineering, HR)
+	deptEngA := models.Department{DeptName: "Engineering", CompaniesID: compA.ID}
+	config.DB.Where(models.Department{DeptName: "Engineering", CompaniesID: compA.ID}).Assign(deptEngA).FirstOrCreate(&deptEngA)
+	deptHrA := models.Department{DeptName: "HR", CompaniesID: compA.ID}
+	config.DB.Where(models.Department{DeptName: "HR", CompaniesID: compA.ID}).Assign(deptHrA).FirstOrCreate(&deptHrA)
 
-	pos := models.Position{PosName: "System Administrator", CompaniesID: companies.ID}
-	config.DB.Where(models.Position{PosName: "System Administrator", CompaniesID: companies.ID}).FirstOrCreate(&pos)
+	// Company B Depts (Sales, Marketing)
+	deptSalesB := models.Department{DeptName: "Sales", CompaniesID: compB.ID}
+	config.DB.Where(models.Department{DeptName: "Sales", CompaniesID: compB.ID}).Assign(deptSalesB).FirstOrCreate(&deptSalesB)
+	deptMktB := models.Department{DeptName: "Marketing", CompaniesID: compB.ID}
+	config.DB.Where(models.Department{DeptName: "Marketing", CompaniesID: compB.ID}).Assign(deptMktB).FirstOrCreate(&deptMktB)
 
-	// 6. Professional Seeding Style for Employees
-	adminPass := "admin@admin.com"
-	// Use cost 10 to match CreateEmployees logic
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(adminPass), 10)
+	// 5. Create Positions
+	// --- Company A Positions ---
+	posManagerA := models.Position{PosName: "Manager", CompaniesID: compA.ID}
+	config.DB.Where(models.Position{PosName: "Manager", CompaniesID: compA.ID}).Assign(posManagerA).FirstOrCreate(&posManagerA)
+	posStaffA := models.Position{PosName: "Staff", CompaniesID: compA.ID}
+	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compA.ID}).Assign(posStaffA).FirstOrCreate(&posStaffA)
 
-	admin := models.Employees{
-		Email: "admin@admin.com", // Unique identifier for seeding
-	}
+	// --- Company B Positions ---
+	posManagerB := models.Position{PosName: "Manager", CompaniesID: compB.ID}
+	config.DB.Where(models.Position{PosName: "Manager", CompaniesID: compB.ID}).Assign(posManagerB).FirstOrCreate(&posManagerB)
+	posStaffB := models.Position{PosName: "Staff", CompaniesID: compB.ID}
+	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compB.ID}).Assign(posStaffB).FirstOrCreate(&posStaffB)
 
-	// Use Unscoped to find soft-deleted records and Assign to force update fields
-	err = config.DB.Unscoped().Where(models.Employees{Email: admin.Email}).
+	// 6. Generate Default Password
+	defaultPass := "password123"
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(defaultPass), 10)
+	hashStr := string(hashedPassword)
+
+	// 7. Seed Admin
+	admin := models.Employees{Email: "admin@admin.com"}
+	config.DB.Unscoped().Where(models.Employees{Email: admin.Email}).
 		Assign(models.Employees{
-			CompaniesID:   companies.ID,
-			RolesID:       adminRoles.ID,
+			CompaniesID:   compA.ID,
+			RolesID:       adminRoleA.ID,
 			EmployeesCode: "ADM001",
 			FirstName:     "System",
 			LastName:      "Admin",
-			Password:      string(hashedPassword),
-			DeptID:        dept.ID,
-			PosID:         pos.ID,
-			IsActive:      true,
-		}).
-		FirstOrCreate(&admin).Error
+			Password:      hashStr,
+			DeptID:        deptEngA.ID,
+			PosID:         posManagerA.ID,
+		}).FirstOrCreate(&admin)
 
-	if err != nil {
-		log.Fatalf("Failed to seed admin: %v", err)
+	usersToSeed := []models.Employees{
+		{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "ManagerA", Email: "alice@techa.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "StaffEngA", Email: "bob@techa.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmployeesCode: "EMP-A-03", FirstName: "Charlie", LastName: "StaffHrA", Email: "charlie@techa.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmployeesCode: "EMP-A-04", FirstName: "Dave", LastName: "StaffHrA", Email: "dave@techa.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmployeesCode: "EMP-A-05", FirstName: "Eve", LastName: "StaffHrA", Email: "eve@techa.com", Password: hashStr, IsActive: true},
+
+		{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptSalesB.ID, PosID: posManagerB.ID, EmployeesCode: "EMP-B-01", FirstName: "Frank", LastName: "ManagerB", Email: "frank@bizb.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptSalesB.ID, PosID: posStaffB.ID, EmployeesCode: "EMP-B-02", FirstName: "Grace", LastName: "StaffSalesB", Email: "grace@bizb.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptMktB.ID, PosID: posStaffB.ID, EmployeesCode: "EMP-B-03", FirstName: "Heidi", LastName: "StaffMktB", Email: "heidi@bizb.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptMktB.ID, PosID: posStaffB.ID, EmployeesCode: "EMP-B-04", FirstName: "Ivan", LastName: "StaffMktB", Email: "ivan@bizb.com", Password: hashStr, IsActive: true},
+		{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptMktB.ID, PosID: posStaffB.ID, EmployeesCode: "EMP-B-05", FirstName: "Judy", LastName: "StaffMktB", Email: "judy@bizb.com", Password: hashStr, IsActive: true},
 	}
 
-	log.Println("Admin seeded/updated successfully using GORM logic!")
-	log.Println("Migration & Seed completed successfully!")
+	for _, u := range usersToSeed {
+		var existingEmp models.Employees
+		err := config.DB.Unscoped().Where(models.Employees{Email: u.Email}).Assign(u).FirstOrCreate(&existingEmp).Error
+		if err != nil {
+			fmt.Printf("Error seeding user %s: %v\n", u.Email, err)
+		}
+	}
+
+	log.Println("Migration & Setup completed! 10 Employees seeded successfully.")
 }

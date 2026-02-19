@@ -6,7 +6,6 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
-// Department represents organization units within a company
 type Department struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"created_at"`

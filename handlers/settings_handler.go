@@ -10,10 +10,31 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetRoles fetches all available roles excluding Super Admins (English Comment)
 func GetRoles(c *gin.Context) {
+	// 1. Get companies_id safely from middleware context (English Comment)
+	valID, exists := c.Get("companies_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Company context missing"})
+		return
+	}
+
+	var compID uint
+	switch v := valID.(type) {
+	case uint:
+		compID = v
+	case float64:
+		compID = uint(v)
+	case int:
+		compID = uint(v)
+	}
+
 	var roles []models.Roles
-	if err := config.DB.Where("is_super_admin = ?", false).Find(&roles).Error; err != nil {
+
+	// 2. Apply ScopeCompanies to filter roles by the current company (English Comment)
+	if err := config.DB.Scopes(repository.ScopeCompanies(compID)).
+		Where("is_super_admin = ?", false).
+		Find(&roles).Error; err != nil {
+
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
 		return
 	}

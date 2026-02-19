@@ -15,11 +15,32 @@ type TimeLogHandler struct {
 }
 
 func (h *TimeLogHandler) GetTimeLogs(c *gin.Context) {
-	var logs []models.TimeLog
-	compID := c.GetUint("companies_id")
+	userID := uint(c.GetFloat64("user_id"))
+	companiesID := uint(c.GetFloat64("companies_id"))
 
-	// Use your ScopeCompanies to filter by tenant
-	err := h.db.Scopes(repository.ScopeCompanies(compID)).Find(&logs).Error
+	valScope, exists := c.Get("data_scope")
+	if !exists {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission scope missing"})
+		return
+	}
+	dataScope := valScope.(models.DataScope)
+
+	currentUser := models.Employees{
+		ID:          userID,
+		CompaniesID: companiesID,
+	}
+
+	if dataScope == models.ScopeDepartment {
+		h.db.First(&currentUser, userID)
+	}
+
+	var logs []models.TimeLog
+
+	err := h.db.Scopes(
+		repository.ScopeCompanies(companiesID),
+		repository.ScopeDataAccess(currentUser, dataScope),
+	).Find(&logs).Error
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -37,7 +58,6 @@ func (h *TimeLogHandler) CreateTimeLog(c *gin.Context) {
 		return
 	}
 
-	// Force set company ID for security
 	input.CompaniesID = compID
 
 	if err := h.db.Create(&input).Error; err != nil {
