@@ -195,7 +195,7 @@ func DeletePosition(c *gin.Context) {
 }
 
 func GetCompanies(c *gin.Context) {
-	fmt.Println(">>>> GET_COMPANY_START <<<<") // พิมพ์ให้เห็นชัดๆ ใน Terminal
+	fmt.Println(">>>> GET_COMPANY_START <<<<")
 
 	val, exists := c.Get("companies_id")
 	if !exists {
@@ -209,7 +209,6 @@ func GetCompanies(c *gin.Context) {
 
 	var companies []models.Companies
 
-	// บังคับ Debug และเก็บ Result เพื่อเช็ค Error
 	dbResult := config.DB.Debug().Scopes(repository.ScopeCompanies(compID, "id")).Find(&companies)
 
 	if dbResult.Error != nil {

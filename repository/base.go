@@ -6,7 +6,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ScopeCompanies - กรองข้อมูลตามบริษัท
 func ScopeCompanies(companiesID uint, columnName ...string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		col := "companies_id"

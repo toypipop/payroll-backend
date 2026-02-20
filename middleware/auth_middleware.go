@@ -55,7 +55,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
-
 func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		valRoles, _ := c.Get("roles_id")
@@ -72,22 +71,21 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 
 		var access models.RolesModuleAccess
 
-		// DEBUG 1: Use Debug() to see the generated SQL in console (English Comment)
-		query := config.DB.Debug().InnerJoins("AppModule").
+		// Use struct for Where to avoid hardcoded table names (English Comment)
+		query := config.DB.Debug().
+			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
 			Where(&models.RolesModuleAccess{RolesID: rID}).
-			Where("`AppModule`.`module_key` = ?", moduleKey) // Use backticks for safety
+			Where("`AppModule`.`module_key` = ?", moduleKey)
 
 		err := query.First(&access).Error
 
 		if err != nil {
-			// DEBUG 2: Log details to find if it's 'Record Not Found' or 'SQL Error' (English Comment)
 			log.Printf("[DEBUG] ModuleKey: %s, RolesID: %d, Error: %v", moduleKey, rID, err)
 			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied", "debug_msg": err.Error()})
 			c.Abort()
 			return
 		}
 
-		// DEBUG 3: Log the loaded permissions (English Comment)
 		log.Printf("[DEBUG] Permissions Loaded: %+v", access)
 
 		permissions := map[string]bool{

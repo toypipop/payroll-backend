@@ -45,38 +45,58 @@ func GetRolesPermissions(c *gin.Context) {
 	})
 }
 
+type UpdatePermissionRequest struct {
+	ModuleID  uint             `json:"module_id" binding:"required"`
+	CanView   bool             `json:"can_view"`
+	CanCreate bool             `json:"can_create"`
+	CanEdit   bool             `json:"can_edit"`
+	CanDelete bool             `json:"can_delete"`
+	DataScope models.DataScope `json:"data_scope" binding:"required,oneof=Own Department Company All"`
+}
+
 // UpdateRolesPermissions updates or creates permissions for a roles
 func UpdateRolesPermissions(c *gin.Context) {
 	rolesID := c.Param("id")
 
-	// Get companies_id from middleware context (English Comment)
+	// Get companies_id from middleware context
 	valID, _ := c.Get("companies_id")
 	compID := valID.(uint)
 
-	var input []models.RolesModuleAccess
+	// Use DTO instead of Database Model for binding
+	var input []UpdatePermissionRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Use transaction to ensure data consistency (English Comment)
+	// Use transaction to ensure data consistency
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. Clear old permissions for this roles within the companies scope (English Comment)
+		// 1. Clear old permissions for this roles within the companies scope
 		if err := tx.Scopes(repository.ScopeCompanies(compID)).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err
 		}
 
-		// 2. Insert new permissions (English Comment)
+		// 2. Insert new permissions
 		if len(input) > 0 {
 			rID := parseUint(rolesID)
-			for i := range input {
-				// Ensure all records match current Roles and Companies (English Comment)
-				input[i].RolesID = rID
-				input[i].CompaniesID = compID
+			var newPermissions []models.RolesModuleAccess
+
+			for _, item := range input {
+				newPermissions = append(newPermissions, models.RolesModuleAccess{
+					RolesID:     rID,
+					CompaniesID: compID,
+					ModuleID:    item.ModuleID,
+					CanView:     item.CanView,
+					CanCreate:   item.CanCreate,
+					CanEdit:     item.CanEdit,
+					CanDelete:   item.CanDelete,
+					DataScope:   item.DataScope,
+				})
 			}
-			if err := tx.Create(&input).Error; err != nil {
+
+			if err := tx.Create(&newPermissions).Error; err != nil {
 				return err
 			}
 		}

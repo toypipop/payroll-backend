@@ -12,7 +12,6 @@ import (
 func main() {
 	config.ConnectDatabase()
 
-	// 0. Auto Migrate Tables
 	err := config.DB.AutoMigrate(
 		&models.Companies{},
 		&models.Roles{},
@@ -26,54 +25,75 @@ func main() {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	// 1. Create Companies (Company A & Company B)
+	sysComp := models.Companies{Name: "System Administration", TaxID: "0000000000000"}
+	config.DB.Where(models.Companies{TaxID: "0000000000000"}).Assign(sysComp).FirstOrCreate(&sysComp)
+
 	compA := models.Companies{Name: "Tech Corp", TaxID: "1111111111111"}
 	config.DB.Where(models.Companies{TaxID: "1111111111111"}).Assign(compA).FirstOrCreate(&compA)
 
 	compB := models.Companies{Name: "Biz Group", TaxID: "2222222222222"}
 	config.DB.Where(models.Companies{TaxID: "2222222222222"}).Assign(compB).FirstOrCreate(&compB)
 
-	// 2. Create Roles for each Company
-	// Admin (System Level)
-	adminRoleA := models.Roles{RolesName: "SUPER_ADMIN", Description: "Admin Access", IsSuperAdmin: true, CompaniesID: compA.ID}
-	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: compA.ID}).Assign(adminRoleA).FirstOrCreate(&adminRoleA)
+	sysRole := models.Roles{RolesName: "SUPER_ADMIN", Description: "System Admin Access", IsSuperAdmin: true, CompaniesID: sysComp.ID}
+	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: sysComp.ID}).Assign(sysRole).FirstOrCreate(&sysRole)
 
-	// Company A Roles
 	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Sees whole company", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compA.ID}).Assign(managerRoleA).FirstOrCreate(&managerRoleA)
 	staffRoleA := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compA.ID}).Assign(staffRoleA).FirstOrCreate(&staffRoleA)
 
-	// Company B Roles
 	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Sees whole company", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compB.ID}).Assign(managerRoleB).FirstOrCreate(&managerRoleB)
 	staffRoleB := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
 
-	// 3. Create AppModule
+	sysDept := models.Department{DeptName: "System IT", CompaniesID: sysComp.ID}
+	config.DB.Where(models.Department{DeptName: "System IT", CompaniesID: sysComp.ID}).Assign(sysDept).FirstOrCreate(&sysDept)
+
+	deptEngA := models.Department{DeptName: "Engineering", CompaniesID: compA.ID}
+	config.DB.Where(models.Department{DeptName: "Engineering", CompaniesID: compA.ID}).Assign(deptEngA).FirstOrCreate(&deptEngA)
+	deptHrA := models.Department{DeptName: "HR", CompaniesID: compA.ID}
+	config.DB.Where(models.Department{DeptName: "HR", CompaniesID: compA.ID}).Assign(deptHrA).FirstOrCreate(&deptHrA)
+
+	deptSalesB := models.Department{DeptName: "Sales", CompaniesID: compB.ID}
+	config.DB.Where(models.Department{DeptName: "Sales", CompaniesID: compB.ID}).Assign(deptSalesB).FirstOrCreate(&deptSalesB)
+	deptMktB := models.Department{DeptName: "Marketing", CompaniesID: compB.ID}
+	config.DB.Where(models.Department{DeptName: "Marketing", CompaniesID: compB.ID}).Assign(deptMktB).FirstOrCreate(&deptMktB)
+
+	sysPos := models.Position{PosName: "System Admin", CompaniesID: sysComp.ID}
+	config.DB.Where(models.Position{PosName: "System Admin", CompaniesID: sysComp.ID}).Assign(sysPos).FirstOrCreate(&sysPos)
+
+	posManagerA := models.Position{PosName: "Manager", CompaniesID: compA.ID}
+	config.DB.Where(models.Position{PosName: "Manager", CompaniesID: compA.ID}).Assign(posManagerA).FirstOrCreate(&posManagerA)
+	posStaffA := models.Position{PosName: "Staff", CompaniesID: compA.ID}
+	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compA.ID}).Assign(posStaffA).FirstOrCreate(&posStaffA)
+
+	posManagerB := models.Position{PosName: "Manager", CompaniesID: compB.ID}
+	config.DB.Where(models.Position{PosName: "Manager", CompaniesID: compB.ID}).Assign(posManagerB).FirstOrCreate(&posManagerB)
+	posStaffB := models.Position{PosName: "Staff", CompaniesID: compB.ID}
+	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compB.ID}).Assign(posStaffB).FirstOrCreate(&posStaffB)
+
 	modules := []models.AppModule{
 		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1},
 		{ModuleName: "Employees", ModuleKey: "EMPLOYEES", RoutePath: "/employees", Icon: "Employees", Order: 2},
 		{ModuleName: "Attendance", ModuleKey: "ATTENDANCE", RoutePath: "/attendance", Icon: "Attendance", Order: 3},
 		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 4},
+		{ModuleName: "Companies", ModuleKey: "COMPANIES", RoutePath: "/companies", Icon: "Companies", Order: 5},
 	}
 
 	for _, m := range modules {
 		var existingModule models.AppModule
 		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
 
-		// Assign Access to Admin A (Scope All)
-		accAdmin := models.RolesModuleAccess{RolesID: adminRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: true, DataScope: models.ScopeAll}
-		config.DB.Where(models.RolesModuleAccess{RolesID: adminRoleA.ID, ModuleID: existingModule.ID}).Assign(accAdmin).FirstOrCreate(&accAdmin)
+		accSys := models.RolesModuleAccess{RolesID: sysRole.ID, ModuleID: existingModule.ID, CompaniesID: sysComp.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: true, DataScope: models.ScopeAll}
+		config.DB.Where(models.RolesModuleAccess{RolesID: sysRole.ID, ModuleID: existingModule.ID}).Assign(accSys).FirstOrCreate(&accSys)
 
-		// Assign Access to Manager A & B (Scope Company)
 		accMgrA := models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: false, DataScope: models.ScopeCompany}
 		config.DB.Where(models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID}).Assign(accMgrA).FirstOrCreate(&accMgrA)
 
 		accMgrB := models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: false, DataScope: models.ScopeCompany}
 		config.DB.Where(models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID}).Assign(accMgrB).FirstOrCreate(&accMgrB)
 
-		// Assign Access to Staff A & B (Scope Department)
 		accStaffA := models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: false, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
 		config.DB.Where(models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID}).Assign(accStaffA).FirstOrCreate(&accStaffA)
 
@@ -81,49 +101,21 @@ func main() {
 		config.DB.Where(models.RolesModuleAccess{RolesID: staffRoleB.ID, ModuleID: existingModule.ID}).Assign(accStaffB).FirstOrCreate(&accStaffB)
 	}
 
-	// 4. Create Departments
-	// Company A Depts (Engineering, HR)
-	deptEngA := models.Department{DeptName: "Engineering", CompaniesID: compA.ID}
-	config.DB.Where(models.Department{DeptName: "Engineering", CompaniesID: compA.ID}).Assign(deptEngA).FirstOrCreate(&deptEngA)
-	deptHrA := models.Department{DeptName: "HR", CompaniesID: compA.ID}
-	config.DB.Where(models.Department{DeptName: "HR", CompaniesID: compA.ID}).Assign(deptHrA).FirstOrCreate(&deptHrA)
-
-	// Company B Depts (Sales, Marketing)
-	deptSalesB := models.Department{DeptName: "Sales", CompaniesID: compB.ID}
-	config.DB.Where(models.Department{DeptName: "Sales", CompaniesID: compB.ID}).Assign(deptSalesB).FirstOrCreate(&deptSalesB)
-	deptMktB := models.Department{DeptName: "Marketing", CompaniesID: compB.ID}
-	config.DB.Where(models.Department{DeptName: "Marketing", CompaniesID: compB.ID}).Assign(deptMktB).FirstOrCreate(&deptMktB)
-
-	// 5. Create Positions
-	// --- Company A Positions ---
-	posManagerA := models.Position{PosName: "Manager", CompaniesID: compA.ID}
-	config.DB.Where(models.Position{PosName: "Manager", CompaniesID: compA.ID}).Assign(posManagerA).FirstOrCreate(&posManagerA)
-	posStaffA := models.Position{PosName: "Staff", CompaniesID: compA.ID}
-	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compA.ID}).Assign(posStaffA).FirstOrCreate(&posStaffA)
-
-	// --- Company B Positions ---
-	posManagerB := models.Position{PosName: "Manager", CompaniesID: compB.ID}
-	config.DB.Where(models.Position{PosName: "Manager", CompaniesID: compB.ID}).Assign(posManagerB).FirstOrCreate(&posManagerB)
-	posStaffB := models.Position{PosName: "Staff", CompaniesID: compB.ID}
-	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compB.ID}).Assign(posStaffB).FirstOrCreate(&posStaffB)
-
-	// 6. Generate Default Password
 	defaultPass := "password123"
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(defaultPass), 10)
 	hashStr := string(hashedPassword)
 
-	// 7. Seed Admin
 	admin := models.Employees{Email: "admin@admin.com"}
 	config.DB.Unscoped().Where(models.Employees{Email: admin.Email}).
 		Assign(models.Employees{
-			CompaniesID:   compA.ID,
-			RolesID:       adminRoleA.ID,
-			EmployeesCode: "ADM001",
+			CompaniesID:   sysComp.ID,
+			RolesID:       sysRole.ID,
+			EmployeesCode: "SYS-001",
 			FirstName:     "System",
 			LastName:      "Admin",
 			Password:      hashStr,
-			DeptID:        deptEngA.ID,
-			PosID:         posManagerA.ID,
+			DeptID:        sysDept.ID,
+			PosID:         sysPos.ID,
 		}).FirstOrCreate(&admin)
 
 	usersToSeed := []models.Employees{
@@ -148,5 +140,5 @@ func main() {
 		}
 	}
 
-	log.Println("Migration & Setup completed! 10 Employees seeded successfully.")
+	log.Println("Migration & Setup completed! System Admin and 10 Employees seeded successfully.")
 }
