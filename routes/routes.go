@@ -39,6 +39,9 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/employees/:id", middleware.CheckPermission("EMPLOYEES", "EDIT"), handlers.UpdateEmployees)
 		api.DELETE("/employees/:id", middleware.CheckPermission("EMPLOYEES", "DELETE"), handlers.DeleteEmployees)
 
+		// routes/router.go
+		api.POST("/salaries", middleware.CheckPermission("EMPLOYEES", "EDIT"), handlers.UpdateSalariesStructure)
+
 		// --- Master Data (Department & Position Management) ---
 		api.GET("/departments", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetDepartments)
 		api.POST("/departments", middleware.CheckPermission("SETTINGS", "CREATE"), handlers.CreateDepartment)
@@ -60,8 +63,12 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/companies/:id", middleware.CheckPermission("COMPANIES", "EDIT"), handlers.UpdateCompanies)
 		api.DELETE("/companies/:id", middleware.CheckPermission("COMPANIES", "DELETE"), handlers.DeleteCompanies)
 
-		// routes/router.go
-		api.POST("/salaries", middleware.CheckPermission("EMPLOYEES", "EDIT"), handlers.UpdateSalariesStructure)
+		// --- Time Logs Management (Attendance & Work hours) ---
+		api.GET("/timelogs", middleware.CheckPermission("TIMELOGS", "VIEW"), handlers.GetTimeLogs)
+		api.POST("/timelogs", middleware.CheckPermission("TIMELOGS", "CREATE"), handlers.CreateTimeLog)
+		api.PUT("/timelogs/:id", middleware.CheckPermission("TIMELOGS", "EDIT"), handlers.UpdateTimeLog)
+		api.DELETE("/timelogs/:id", middleware.CheckPermission("TIMELOGS", "DELETE"), handlers.DeleteTimeLog)
+
 	}
 	return r
 }

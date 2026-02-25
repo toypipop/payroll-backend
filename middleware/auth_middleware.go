@@ -55,6 +55,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		valRoles, _ := c.Get("roles_id")

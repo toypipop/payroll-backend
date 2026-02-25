@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"payroll-backend/config"
 	"payroll-backend/models"
-	"payroll-backend/repository" // Import your repository package
+	"payroll-backend/repository"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -16,29 +16,30 @@ func parseUint(s string) uint {
 	return uint(val)
 }
 
-// GetRolesPermissions fetches all modules and current access for a specific roles
 func GetRolesPermissions(c *gin.Context) {
 	rolesID := c.Param("id")
 
-	// Get companies_id from middleware context (English Comment)
-	valID, _ := c.Get("companies_id")
-	compID := valID.(uint)
+	// Use GetContextAuth to retrieve userID and dataScope
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// 1. Get all modules first (AppModules are typically global/master data) (English Comment)
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
 	var modules []models.AppModule
 	config.DB.Order("`order` asc").Find(&modules)
 
-	// 2. Get existing access for this roles filtered by companies (English Comment)
-	// Even if we search by rolesID, ScopeCompanies ensures the roles belongs to the companies.
 	var access []models.RolesModuleAccess
-	if err := config.DB.Scopes(repository.ScopeCompanies(compID)).
+	// Apply composite scopes for tenant and data access
+	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_access.companies_id", "roles_module_access.created_by")).
 		Where("roles_id = ?", rolesID).
 		Find(&access).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch access"})
 		return
 	}
 
-	// 3. Map access for easier frontend consumption (English Comment)
 	c.JSON(http.StatusOK, gin.H{
 		"modules": modules,
 		"access":  access,
@@ -51,34 +52,35 @@ type UpdatePermissionRequest struct {
 	CanCreate bool             `json:"can_create"`
 	CanEdit   bool             `json:"can_edit"`
 	CanDelete bool             `json:"can_delete"`
-	DataScope models.DataScope `json:"data_scope" binding:"required,oneof=Own Department Company All"`
+	DataScope models.DataScope `json:"data_scope" binding:"required,oneof=Own Department Companies All"`
 }
 
-// UpdateRolesPermissions updates or creates permissions for a roles
 func UpdateRolesPermissions(c *gin.Context) {
 	rolesID := c.Param("id")
 
-	// Get companies_id from middleware context
-	valID, _ := c.Get("companies_id")
-	compID := valID.(uint)
+	// Use GetContextAuth to retrieve core info
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// Use DTO instead of Database Model for binding
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
 	var input []UpdatePermissionRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Use transaction to ensure data consistency
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// 1. Clear old permissions for this roles within the companies scope
-		if err := tx.Scopes(repository.ScopeCompanies(compID)).
+		// Apply Scopes to ensure the user only deletes permissions within their authorized companies/access
+		if err := tx.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_access.companies_id", "roles_module_access.created_by")).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err
 		}
 
-		// 2. Insert new permissions
 		if len(input) > 0 {
 			rID := parseUint(rolesID)
 			var newPermissions []models.RolesModuleAccess
@@ -86,7 +88,7 @@ func UpdateRolesPermissions(c *gin.Context) {
 			for _, item := range input {
 				newPermissions = append(newPermissions, models.RolesModuleAccess{
 					RolesID:     rID,
-					CompaniesID: compID,
+					CompaniesID: currentUser.CompaniesID, // Use Companies ID from validated currentUser
 					ModuleID:    item.ModuleID,
 					CanView:     item.CanView,
 					CanCreate:   item.CanCreate,

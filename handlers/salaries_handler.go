@@ -13,9 +13,9 @@ import (
 )
 
 func UpdateSalariesStructure(c *gin.Context) {
-	companiesID, _ := c.Get("companies_id")
+	// 1. Get Auth Context (English Comment)
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// Input struct uses string for date to prevent parsing error from React (English Comment)
 	var input struct {
 		EmployeesID   uint    `json:"Employees_id" binding:"required"`
 		BaseSalaries  float64 `json:"base_salaries"`
@@ -28,22 +28,29 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
-	// Parse date string to time.Time for database compatibility (English Comment)
 	parsedDate, err := time.Parse("2006-01-02", input.EffectiveDate)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Expected YYYY-MM-DD"})
 		return
 	}
 
-	// 1. Validation: Ensure the Employees belongs to the user's company (English Comment)
-	var emp models.Employees
-	if err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).
-		Where("id = ?", input.EmployeesID).First(&emp).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or unauthorized"})
+	// 2. Retrieve currentUser for scoping (English Comment)
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
 		return
 	}
 
-	// 2. Prepare Salaries record using your specific model name (English Comment)
+	// 3. Validation: Use ApplyScopes to ensure the target Employee is within allowed access (English Comment)
+	var emp models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).Where("id = ?", input.EmployeesID).First(&emp).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
+		return
+	}
+
+	// 4. Prepare Salaries record (English Comment)
 	salaries := models.SalariesStructure{
 		EmployeesID:   input.EmployeesID,
 		BaseSalaries:  input.BaseSalaries,
@@ -51,7 +58,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 		IsEnabled:     input.IsEnabled,
 	}
 
-	// 3. Upsert: Update if exists using the singular/plural columns you defined (English Comment)
+	// 5. Upsert operation (English Comment)
 	err = config.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "employees_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{

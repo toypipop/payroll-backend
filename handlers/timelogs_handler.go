@@ -2,43 +2,25 @@ package handlers
 
 import (
 	"net/http"
-
+	"payroll-backend/config" // นำเข้า config เพื่อใช้ DB
 	"payroll-backend/models"
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-type TimeLogHandler struct {
-	db *gorm.DB
-}
+func GetTimeLogs(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
 
-func (h *TimeLogHandler) GetTimeLogs(c *gin.Context) {
-	userID := uint(c.GetFloat64("user_id"))
-	companiesID := uint(c.GetFloat64("companies_id"))
-
-	valScope, exists := c.Get("data_scope")
-	if !exists {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Permission scope missing"})
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
 		return
-	}
-	dataScope := valScope.(models.DataScope)
-
-	currentUser := models.Employees{
-		ID:          userID,
-		CompaniesID: companiesID,
-	}
-
-	if dataScope == models.ScopeDepartment {
-		h.db.First(&currentUser, userID)
 	}
 
 	var logs []models.TimeLog
-
-	err := h.db.Scopes(
-		repository.ScopeCompanies(companiesID),
-		repository.ScopeDataAccess(currentUser, dataScope),
+	err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "time_logs.companies_id", "time_logs.employees_id"),
 	).Find(&logs).Error
 
 	if err != nil {
@@ -49,18 +31,20 @@ func (h *TimeLogHandler) GetTimeLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, logs)
 }
 
-func (h *TimeLogHandler) CreateTimeLog(c *gin.Context) {
+func CreateTimeLog(c *gin.Context) {
 	var input models.TimeLog
-	compID := c.GetUint("companies_id")
-
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	input.CompaniesID = compID
+	userID, _ := repository.GetContextAuth(c)
+	var currentUser models.Employees
+	config.DB.Select("companies_id").First(&currentUser, userID)
 
-	if err := h.db.Create(&input).Error; err != nil {
+	input.CompaniesID = currentUser.CompaniesID
+
+	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -68,15 +52,18 @@ func (h *TimeLogHandler) CreateTimeLog(c *gin.Context) {
 	c.JSON(http.StatusCreated, input)
 }
 
-func (h *TimeLogHandler) UpdateTimeLog(c *gin.Context) {
+func UpdateTimeLog(c *gin.Context) {
 	id := c.Param("id")
-	compID := c.GetUint("companies_id")
-	var log models.TimeLog
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// Ensure the record belongs to the user's company before updating
-	result := h.db.Scopes(repository.ScopeCompanies(compID)).First(&log, id)
-	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+	var currentUser models.Employees
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+
+	var log models.TimeLog
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "time_logs.companies_id", "time_logs.employees_id"),
+	).First(&log, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
 
@@ -85,16 +72,22 @@ func (h *TimeLogHandler) UpdateTimeLog(c *gin.Context) {
 		return
 	}
 
-	h.db.Save(&log)
+	log.CompaniesID = currentUser.CompaniesID
+	config.DB.Save(&log)
 	c.JSON(http.StatusOK, log)
 }
 
-func (h *TimeLogHandler) DeleteTimeLog(c *gin.Context) {
+func DeleteTimeLog(c *gin.Context) {
 	id := c.Param("id")
-	compID := c.GetUint("companies_id")
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// Scoped delete to prevent cross-tenant deletion
-	result := h.db.Scopes(repository.ScopeCompanies(compID)).Delete(&models.TimeLog{}, id)
+	var currentUser models.Employees
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+
+	result := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "time_logs.companies_id", "time_logs.employees_id"),
+	).Where("id = ?", id).Delete(&models.TimeLog{})
+
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return

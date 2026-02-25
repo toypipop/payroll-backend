@@ -3,6 +3,7 @@ package repository
 import (
 	"payroll-backend/models"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -36,7 +37,7 @@ func ScopeDataAccess(user models.Employees, scope models.DataScope, tableCol ...
 
 			return db.Where(col+" IN (?)", subQuery)
 
-		case models.ScopeCompany:
+		case models.ScopeCompanies:
 			return db
 
 		case models.ScopeAll:
@@ -45,5 +46,33 @@ func ScopeDataAccess(user models.Employees, scope models.DataScope, tableCol ...
 		default:
 			return db.Where(col+" = ?", user.ID)
 		}
+	}
+}
+
+func GetContextAuth(c *gin.Context) (uint, models.DataScope) {
+	valUser, _ := c.Get("user_id")
+	var userID uint
+	switch v := valUser.(type) {
+	case uint:
+		userID = v
+	case float64:
+		userID = uint(v)
+	case int:
+		userID = uint(v)
+	}
+
+	valScope, _ := c.Get("data_scope")
+	scope, _ := valScope.(models.DataScope)
+
+	return userID, scope
+}
+
+func ApplyScopes(user models.Employees, scope models.DataScope, companiesCol string, accessCol string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		query := db.Scopes(ScopeDataAccess(user, scope, accessCol))
+		if scope != models.ScopeAll {
+			query = query.Scopes(ScopeCompanies(user.CompaniesID, companiesCol))
+		}
+		return query
 	}
 }

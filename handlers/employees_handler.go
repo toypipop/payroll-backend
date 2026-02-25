@@ -10,16 +10,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// handlers/employees_handler.go
 func GetEmployees(c *gin.Context) {
-	companiesID, _ := c.Get("companies_id")
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
 	var employees []models.Employees
-
-	query := config.DB.Debug()
-
-	// 1. Join with roles table to access is_super_admin column (English Comment)
-	// 2. Filter out super admins (English Comment)
-	if err := query.Scopes(repository.ScopeCompanies(companiesID.(uint), "employees.companies_id")).
+	if err := config.DB.Debug().Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).
 		Joins("JOIN roles ON roles.id = employees.roles_id").
 		Where("roles.is_super_admin = ?", false).
 		Preload("Department").
@@ -33,7 +36,6 @@ func GetEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, employees)
 }
 
-// CreateEmployees - Create record with roles validation (English Comment)
 func CreateEmployees(c *gin.Context) {
 	var input models.Employees
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -41,7 +43,6 @@ func CreateEmployees(c *gin.Context) {
 		return
 	}
 
-	// Guard: Prevent assigning Super Admin roles (English Comment)
 	var roles models.Roles
 	if err := config.DB.First(&roles, input.RolesID).Error; err == nil && roles.IsSuperAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized roles selection"})
@@ -53,8 +54,13 @@ func CreateEmployees(c *gin.Context) {
 		input.Password = string(hashedPassword)
 	}
 
-	companiesID, _ := c.Get("companies_id")
-	input.CompaniesID = companiesID.(uint)
+	userID, _ := repository.GetContextAuth(c)
+	var currentUser models.Employees
+	if err := config.DB.Select("companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Companies context not found"})
+		return
+	}
+	input.CompaniesID = currentUser.CompaniesID
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -64,15 +70,21 @@ func CreateEmployees(c *gin.Context) {
 	c.JSON(http.StatusCreated, input)
 }
 
-// UpdateEmployees - Standard update with roles guard (English Comment)
 func UpdateEmployees(c *gin.Context) {
 	id := c.Param("id")
-	companiesID, _ := c.Get("companies_id")
-	var emp models.Employees
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// If ID belongs to Super Admin, this query will naturally fail due to Scope (English Comment)
-	if err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).First(&emp, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found"})
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	var emp models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).First(&emp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
 		return
 	}
 
@@ -82,7 +94,6 @@ func UpdateEmployees(c *gin.Context) {
 		return
 	}
 
-	// Guard: Prevent promoting to Super Admin roles (English Comment)
 	if rolesID, ok := data["roles_id"].(float64); ok {
 		var newRoles models.Roles
 		if err := config.DB.First(&newRoles, uint(rolesID)).Error; err == nil && newRoles.IsSuperAdmin {
@@ -92,11 +103,9 @@ func UpdateEmployees(c *gin.Context) {
 	}
 
 	if pwd, ok := data["password"].(string); ok && pwd != "" {
-		// If password is provided, hash it (English Comment)
 		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(pwd), 10)
 		data["password"] = string(hashedPassword)
 	} else {
-		// If password is blank or not provided, remove it from map to keep existing password (English Comment)
 		delete(data, "password")
 	}
 
@@ -109,15 +118,21 @@ func UpdateEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, emp)
 }
 
-// DeleteEmployees - Simple delete with ownership validation (English Comment)
 func DeleteEmployees(c *gin.Context) {
 	id := c.Param("id")
-	companiesID, _ := c.Get("companies_id")
-	var employees models.Employees
+	userID, dataScope := repository.GetContextAuth(c)
 
-	// ScopeCompanies ensures the user can only delete their own company's employees (English Comment)
-	if err := config.DB.Scopes(repository.ScopeCompanies(companiesID.(uint))).First(&employees, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found"})
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	var employees models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).First(&employees, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
 

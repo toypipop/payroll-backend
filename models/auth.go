@@ -11,7 +11,7 @@ type DataScope string
 const (
 	ScopeOwn        DataScope = "Own"
 	ScopeDepartment DataScope = "Department"
-	ScopeCompany    DataScope = "Company"
+	ScopeCompanies  DataScope = "Companies"
 	ScopeAll        DataScope = "All"
 )
 
@@ -29,11 +29,12 @@ type Roles struct {
 	ID           uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt    time.Time             `json:"created_at"`
 	UpdatedAt    time.Time             `json:"updated_at"`
-	DeletedAt    soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;default:0" json:"-"`
-	CompaniesID  uint                  `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null" json:"companies_id"`
-	RolesName    string                `gorm:"uniqueIndex:idx_roles_name_company_deleted;not null;size:255" json:"roles_name"`
+	DeletedAt    soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null;default:0" json:"-"`
+	CompaniesID  uint                  `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null" json:"companies_id"`
+	RolesName    string                `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null;size:255" json:"roles_name"`
 	Description  string                `json:"description"`
 	IsSuperAdmin bool                  `gorm:"default:false" json:"is_super_admin"`
+	Companies    Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 // AppModule model with fixed size for ModuleKey (English Comment)
@@ -64,6 +65,6 @@ type RolesModuleAccess struct {
 	CanCreate   bool                  `json:"can_create"`
 	CanEdit     bool                  `json:"can_edit"`
 	CanDelete   bool                  `json:"can_delete"`
-	DataScope   DataScope             `json:"data_scope" binding:"required,oneof=Own Department Company All"`
+	DataScope   DataScope             `json:"data_scope" binding:"required,oneof=Own Department Companies All"`
 	AppModule   AppModule             `gorm:"foreignKey:ModuleID" json:"app_module"`
 }

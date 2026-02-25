@@ -37,12 +37,12 @@ func main() {
 	sysRole := models.Roles{RolesName: "SUPER_ADMIN", Description: "System Admin Access", IsSuperAdmin: true, CompaniesID: sysComp.ID}
 	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: sysComp.ID}).Assign(sysRole).FirstOrCreate(&sysRole)
 
-	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Sees whole company", CompaniesID: compA.ID}
+	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Sees whole companies", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compA.ID}).Assign(managerRoleA).FirstOrCreate(&managerRoleA)
 	staffRoleA := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compA.ID}).Assign(staffRoleA).FirstOrCreate(&staffRoleA)
 
-	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Sees whole company", CompaniesID: compB.ID}
+	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Sees whole companies", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compB.ID}).Assign(managerRoleB).FirstOrCreate(&managerRoleB)
 	staffRoleB := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
@@ -76,9 +76,10 @@ func main() {
 	modules := []models.AppModule{
 		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1},
 		{ModuleName: "Employees", ModuleKey: "EMPLOYEES", RoutePath: "/employees", Icon: "Employees", Order: 2},
-		{ModuleName: "Attendance", ModuleKey: "ATTENDANCE", RoutePath: "/attendance", Icon: "Attendance", Order: 3},
-		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 4},
-		{ModuleName: "Companies", ModuleKey: "COMPANIES", RoutePath: "/companies", Icon: "Companies", Order: 5},
+		{ModuleName: "Time Logs", ModuleKey: "TIMELOGS", RoutePath: "/timelogs", Icon: "Timelog", Order: 3},
+		{ModuleName: "Attendance", ModuleKey: "ATTENDANCE", RoutePath: "/attendance", Icon: "Attendance", Order: 4},
+		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 5},
+		{ModuleName: "Companies", ModuleKey: "COMPANIES", RoutePath: "/companies", Icon: "Companies", Order: 6},
 	}
 
 	for _, m := range modules {
@@ -88,16 +89,16 @@ func main() {
 		accSys := models.RolesModuleAccess{RolesID: sysRole.ID, ModuleID: existingModule.ID, CompaniesID: sysComp.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: true, DataScope: models.ScopeAll}
 		config.DB.Where(models.RolesModuleAccess{RolesID: sysRole.ID, ModuleID: existingModule.ID}).Assign(accSys).FirstOrCreate(&accSys)
 
-		accMgrA := models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: false, DataScope: models.ScopeCompany}
+		accMgrA := models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: true, DataScope: models.ScopeCompanies}
 		config.DB.Where(models.RolesModuleAccess{RolesID: managerRoleA.ID, ModuleID: existingModule.ID}).Assign(accMgrA).FirstOrCreate(&accMgrA)
 
-		accMgrB := models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: false, DataScope: models.ScopeCompany}
+		accMgrB := models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: true, CanEdit: true, CanDelete: true, DataScope: models.ScopeCompanies}
 		config.DB.Where(models.RolesModuleAccess{RolesID: managerRoleB.ID, ModuleID: existingModule.ID}).Assign(accMgrB).FirstOrCreate(&accMgrB)
 
-		accStaffA := models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: false, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
+		accStaffA := models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID, CompaniesID: compA.ID, CanView: true, CanCreate: true, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
 		config.DB.Where(models.RolesModuleAccess{RolesID: staffRoleA.ID, ModuleID: existingModule.ID}).Assign(accStaffA).FirstOrCreate(&accStaffA)
 
-		accStaffB := models.RolesModuleAccess{RolesID: staffRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: false, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
+		accStaffB := models.RolesModuleAccess{RolesID: staffRoleB.ID, ModuleID: existingModule.ID, CompaniesID: compB.ID, CanView: true, CanCreate: true, CanEdit: false, CanDelete: false, DataScope: models.ScopeDepartment}
 		config.DB.Where(models.RolesModuleAccess{RolesID: staffRoleB.ID, ModuleID: existingModule.ID}).Assign(accStaffB).FirstOrCreate(&accStaffB)
 	}
 
