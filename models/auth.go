@@ -49,6 +49,7 @@ type AppModule struct {
 	Icon       string                `json:"icon"`
 	Order      int                   `json:"order"`
 	ParentID   *uint                 `json:"parent_id"`
+	IsCategory bool                  `gorm:"default:false" json:"is_category"`
 	IsActive   bool                  `gorm:"default:true" json:"is_active"`
 }
 

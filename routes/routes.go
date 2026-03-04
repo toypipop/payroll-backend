@@ -33,42 +33,48 @@ func SetupRouter() *gin.Engine {
 	api.Use(middleware.AuthMiddleware())
 	{
 		api.GET("/modules", handlers.GetAppModules)
-		// --- Employees Management (CRUD with specific permissions) ---
-		api.GET("/employees", middleware.CheckPermission("EMPLOYEES", "VIEW"), handlers.GetEmployees)
-		api.POST("/employees", middleware.CheckPermission("EMPLOYEES", "CREATE"), handlers.CreateEmployees)
-		api.PUT("/employees/:id", middleware.CheckPermission("EMPLOYEES", "EDIT"), handlers.UpdateEmployees)
-		api.DELETE("/employees/:id", middleware.CheckPermission("EMPLOYEES", "DELETE"), handlers.DeleteEmployees)
 
-		// routes/router.go
-		api.POST("/salaries", middleware.CheckPermission("EMPLOYEES", "EDIT"), handlers.UpdateSalariesStructure)
+		// --- Employees Management ---
+		// Use ModuleEmployees or EmployeesListPage depending on your permission logic
+		api.GET("/employees", middleware.CheckPermission("ModuleEmployees", "VIEW"), handlers.GetEmployees)
+		api.POST("/employees", middleware.CheckPermission("ModuleEmployees", "CREATE"), handlers.CreateEmployees)
+		api.PUT("/employees/:id", middleware.CheckPermission("ModuleEmployees", "EDIT"), handlers.UpdateEmployees)
+		api.DELETE("/employees/:id", middleware.CheckPermission("ModuleEmployees", "DELETE"), handlers.DeleteEmployees)
 
-		// --- Master Data (Department & Position Management) ---
-		api.GET("/departments", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetDepartments)
-		api.POST("/departments", middleware.CheckPermission("SETTINGS", "CREATE"), handlers.CreateDepartment)
-		api.PUT("/departments/:id", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateDepartment)
-		api.DELETE("/departments/:id", middleware.CheckPermission("SETTINGS", "DELETE"), handlers.DeleteDepartment)
+		// Salaries usually falls under Employee Management permissions
+		api.POST("/salaries", middleware.CheckPermission("ModuleEmployees", "EDIT"), handlers.UpdateSalariesStructure)
 
-		api.GET("/positions", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetPositions)
-		// api.POST("/positions", middleware.CheckPermission("POSITION", "CREATE"), handlers.CreatePosition)
+		// --- Master Data (Department & Position) ---
+		// Use ModuleSettings as the parent key for all setting-related sub-menus
+		api.GET("/departments", middleware.CheckPermission("ModuleSettings", "VIEW"), handlers.GetDepartments)
+		api.POST("/departments", middleware.CheckPermission("ModuleSettings", "CREATE"), handlers.CreateDepartment)
+		api.PUT("/departments/:id", middleware.CheckPermission("ModuleSettings", "EDIT"), handlers.UpdateDepartment)
+		api.DELETE("/departments/:id", middleware.CheckPermission("ModuleSettings", "DELETE"), handlers.DeleteDepartment)
 
-		// --- Roles & Permission Management (High security area) ---
-		api.GET("/roles", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRoles)
-		api.GET("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "VIEW"), handlers.GetRolesPermissions)
-		api.POST("/roles/:id/permissions", middleware.CheckPermission("SETTINGS", "EDIT"), handlers.UpdateRolesPermissions)
+		api.GET("/positions", middleware.CheckPermission("ModuleSettings", "VIEW"), handlers.GetPositions)
+		api.POST("/positions", middleware.CheckPermission("ModuleSettings", "CREATE"), handlers.CreatePosition)
+		api.PUT("/positions/:id", middleware.CheckPermission("ModuleSettings", "EDIT"), handlers.UpdatePosition)
+		api.DELETE("/positions/:id", middleware.CheckPermission("ModuleSettings", "DELETE"), handlers.DeletePosition)
+
+		// --- Roles & Permission Management ---
+		api.GET("/roles", middleware.CheckPermission("ModuleSettings", "VIEW"), handlers.GetRoles)
+		api.GET("/roles/:id/permissions", middleware.CheckPermission("ModuleSettings", "VIEW"), handlers.GetRolesPermissions)
+		api.POST("/roles/:id/permissions", middleware.CheckPermission("ModuleSettings", "EDIT"), handlers.UpdateRolesPermissions)
 
 		// --- Companies Profile Management ---
-		api.GET("/companies/all", middleware.CheckPermission("COMPANIES", "VIEW"), handlers.GetAllCompanies)
-		api.GET("/companies/options", middleware.CheckPermission("COMPANIES", "VIEW"), handlers.GetCompanies)
-		api.POST("/companies", middleware.CheckPermission("COMPANIES", "CREATE"), handlers.CreateCompanies)
-		api.PUT("/companies/:id", middleware.CheckPermission("COMPANIES", "EDIT"), handlers.UpdateCompanies)
-		api.DELETE("/companies/:id", middleware.CheckPermission("COMPANIES", "DELETE"), handlers.DeleteCompanies)
+		// Using CompaniesPage or a dedicated ModuleKey if defined
+		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), handlers.GetAllCompanies)
+		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), handlers.GetCompanies)
+		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), handlers.CreateCompanies)
+		api.PUT("/companies/:id", middleware.CheckPermission("CompaniesPage", "EDIT"), handlers.UpdateCompanies)
+		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), handlers.DeleteCompanies)
 
-		// --- Time Logs Management (Attendance & Work hours) ---
-		api.GET("/timelogs", middleware.CheckPermission("TIMELOGS", "VIEW"), handlers.GetTimeLogs)
-		api.POST("/timelogs", middleware.CheckPermission("TIMELOGS", "CREATE"), handlers.CreateTimeLog)
-		api.PUT("/timelogs/:id", middleware.CheckPermission("TIMELOGS", "EDIT"), handlers.UpdateTimeLog)
-		api.DELETE("/timelogs/:id", middleware.CheckPermission("TIMELOGS", "DELETE"), handlers.DeleteTimeLog)
-
+		// --- Time Logs Management ---
+		// Use ModuleAttendance as defined in your Level 1 categories
+		api.GET("/timelogs", middleware.CheckPermission("ModuleAttendance", "VIEW"), handlers.GetTimeLogs)
+		api.POST("/timelogs", middleware.CheckPermission("ModuleAttendance", "CREATE"), handlers.CreateTimeLog)
+		api.PUT("/timelogs/:id", middleware.CheckPermission("ModuleAttendance", "EDIT"), handlers.UpdateTimeLog)
+		api.DELETE("/timelogs/:id", middleware.CheckPermission("ModuleAttendance", "DELETE"), handlers.DeleteTimeLog)
 	}
 	return r
 }

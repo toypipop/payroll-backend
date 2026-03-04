@@ -41,12 +41,12 @@ type TimeLog struct {
 	DeletedAt   soft_delete.DeletedAt `gorm:"index" json:"-"`
 	CompaniesID uint                  `gorm:"not null;index" json:"companies_id"`
 	EmployeesID uint                  `gorm:"not null;index" json:"employees_id"`
-	WorkDate    time.Time             `gorm:"not null;type:date" json:"work_date"`
 	CheckIn     *time.Time            `json:"check_in"`
 	CheckOut    *time.Time            `json:"check_out"`
 	Status      AttendanceStatus      `gorm:"size:50;not null" json:"status" binding:"required,oneof=on_time late absent leave holiday"`
 	LocationIn  string                `gorm:"size:255" json:"location_in"`
 	Remark      string                `gorm:"size:255" json:"remark"`
+	Employees   Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
 }
 
 type LeaveRequest struct {

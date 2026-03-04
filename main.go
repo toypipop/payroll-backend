@@ -26,6 +26,9 @@ func main() {
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
 		&models.Companies{},
+		&models.TimeLog{},
+		&models.LeaveRequest{},
+		&models.LeaveBalance{},
 	)
 
 	if err != nil {
@@ -51,6 +54,7 @@ func main() {
 // ├── Time Attendance (New)
 // │   ├── Time Logs
 // │   └── Leave Requests
+// │   └── Leave Approved
 // ├── Payroll Processing (New)
 // │   ├── Payroll Cycles
 // │   ├── Run Payroll (Calculation)

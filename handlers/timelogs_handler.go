@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"payroll-backend/config" // นำเข้า config เพื่อใช้ DB
+	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 
@@ -21,7 +21,7 @@ func GetTimeLogs(c *gin.Context) {
 	var logs []models.TimeLog
 	err := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "time_logs.companies_id", "time_logs.employees_id"),
-	).Find(&logs).Error
+	).Joins("Employees").Find(&logs).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

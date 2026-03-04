@@ -9,6 +9,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func ptr(u uint) *uint {
+	return &u
+}
+
 func main() {
 	config.ConnectDatabase()
 
@@ -74,12 +78,24 @@ func main() {
 	config.DB.Where(models.Position{PosName: "Staff", CompaniesID: compB.ID}).Assign(posStaffB).FirstOrCreate(&posStaffB)
 
 	modules := []models.AppModule{
-		{ModuleName: "Dashboard", ModuleKey: "DASHBOARD", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1},
-		{ModuleName: "Employees", ModuleKey: "EMPLOYEES", RoutePath: "/employees", Icon: "Employees", Order: 2},
-		{ModuleName: "Time Logs", ModuleKey: "TIMELOGS", RoutePath: "/timelogs", Icon: "Timelog", Order: 3},
-		{ModuleName: "Attendance", ModuleKey: "ATTENDANCE", RoutePath: "/attendance", Icon: "Attendance", Order: 4},
-		{ModuleName: "Settings", ModuleKey: "SETTINGS", RoutePath: "/settings", Icon: "Settings", Order: 5},
-		{ModuleName: "Companies", ModuleKey: "COMPANIES", RoutePath: "/companies", Icon: "Companies", Order: 6},
+		// --- Level 1: Main Categories ---
+		{ID: 1, ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, IsCategory: false},
+		{ID: 2, ModuleName: "Employees", ModuleKey: "ModuleEmployees", RoutePath: "", Icon: "People", Order: 2, IsCategory: true},
+		{ID: 3, ModuleName: "Attendance", ModuleKey: "ModuleAttendance", RoutePath: "", Icon: "Event", Order: 3, IsCategory: true},
+		{ID: 4, ModuleName: "Settings", ModuleKey: "ModuleSettings", RoutePath: "", Icon: "Settings", Order: 4, IsCategory: true},
+
+		// --- Level 2: Sub-Menus under Employees ---
+		{ModuleName: "Employee List", ModuleKey: "EmployeesListPage", RoutePath: "/employees", Icon: "Badge", Order: 1, ParentID: ptr(uint(2))},
+		{ModuleName: "Salaries", ModuleKey: "SalariesStructurePage", RoutePath: "/salaries", Icon: "Payments", Order: 2, ParentID: ptr(uint(2))},
+
+		// --- Level 2: Sub-Menus under Attendance ---
+		{ModuleName: "Timelogs", ModuleKey: "TimelogsListPage", RoutePath: "/timelogs", Icon: "Schedule", Order: 1, ParentID: ptr(uint(3))},
+
+		// --- Level 2: Sub-Menus under Settings ---
+		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 1, ParentID: ptr(uint(4))},
+		{ModuleName: "Position", ModuleKey: "PositionSettings", RoutePath: "/positions", Icon: "WorkOutline", Order: 2, ParentID: ptr(uint(4))},
+		{ModuleName: "Permission", ModuleKey: "PermissionSettings", RoutePath: "/permissions", Icon: "LockPerson", Order: 3, ParentID: ptr(uint(4))},
+		{ModuleName: "Companies", ModuleKey: "CompaniesPage", RoutePath: "/companies", Icon: "Business", Order: 4, ParentID: ptr(uint(4))},
 	}
 
 	for _, m := range modules {
