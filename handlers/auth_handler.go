@@ -70,6 +70,7 @@ func Login(c *gin.Context) {
 	// 4. Send Response (English Comment)
 	c.JSON(http.StatusOK, models.LoginResponse{
 		Token:    tokenString,
+		ID:       Employees.ID,
 		FullName: Employees.FirstName + " " + Employees.LastName,
 		Roles:    Employees.Roles.RolesName, // Return actual roles name to frontend
 	})

@@ -38,12 +38,26 @@ func CreateTimeLog(c *gin.Context) {
 		return
 	}
 
+	// 1. Validate CheckIn and CheckOut sequence (English Comment)
+	if input.CheckIn != nil && input.CheckOut != nil {
+		if input.CheckOut.Before(*input.CheckIn) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Check-out time cannot be earlier than check-in time"})
+			return
+		}
+	}
+
+	// 2. Get Context and Security (English Comment)
 	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
+	if err := config.DB.Select("companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User context invalid"})
+		return
+	}
 
+	// 3. Force Companie ID for security (English Comment)
 	input.CompaniesID = currentUser.CompaniesID
 
+	// 4. Save to Database (English Comment)
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

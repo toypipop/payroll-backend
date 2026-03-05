@@ -29,6 +29,9 @@ func main() {
 		&models.TimeLog{},
 		&models.LeaveRequest{},
 		&models.LeaveBalance{},
+		&models.PayrollConfig{},
+		&models.EarningType{},
+		&models.DeductionType{},
 	)
 
 	if err != nil {
@@ -63,8 +66,11 @@ func main() {
 // │   ├── Companies
 // │   ├── Department
 // │   ├── Position
-// │   ├── Payroll Config (New: Tax, SSO, Earnings)
 // │   └── Permission (Roles & Modules)
+// └── Payroll Config
+//     ├── : Global Settings (SSO, Tax)
+//     └── : Earning Types
+// 	   └── : Deduction Types
 // └── Reports (New)
 //     ├── Payslips
 //     └── Government Forms

@@ -9,6 +9,7 @@ type LoginRequest struct {
 // LoginResponse represents the data sent back to the client
 type LoginResponse struct {
 	Token    string `json:"token"`
+	ID       uint   `json:"id"`
 	FullName string `json:"full_name"`
-	Roles     string `json:"roles"`
+	Roles    string `json:"roles"`
 }

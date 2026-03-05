@@ -61,8 +61,10 @@ type LeaveRequest struct {
 	EndDate     time.Time             `gorm:"not null" json:"end_date"`
 	TotalDays   float64               `gorm:"type:decimal(5,2)" json:"total_days"`
 	Reason      string                `gorm:"size:500" json:"reason"`
-	Status      LeaveStatus           `gorm:"default:'Pending';size:50" json:"status" binding:"oneof=Pending Approved Rejected Cancelled"`
+	Status      LeaveStatus           `gorm:"default:'Pending';size:50" json:"status" binding:"omitempty,oneof=Pending Approved Rejected Cancelled"`
 	ApprovedBy  *uint                 `json:"approved_by"`
+	Employees   Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
+	Approver    *Employees            `gorm:"foreignKey:ApprovedBy" json:"approver"`
 }
 
 type LeaveBalance struct {
