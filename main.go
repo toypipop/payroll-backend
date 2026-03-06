@@ -66,6 +66,7 @@ func main() {
 // │   ├── Companies
 // │   ├── Department
 // │   ├── Position
+// │   ├── Roles
 // │   └── Permission (Roles & Modules)
 // └── Payroll Config
 //     ├── : Global Settings (SSO, Tax)

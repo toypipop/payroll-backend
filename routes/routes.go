@@ -27,26 +27,21 @@ func SetupRouter() *gin.Engine {
 	{
 		auth.POST("/login", handlers.Login)
 	}
-
+	r.GET("/api/v1/modules", handlers.GetAppModules)
 	// 3. Protected Routes (English Comment)
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
 	{
-		api.GET("/modules", handlers.GetAppModules)
-
 		// --- Employees Management ---
-		// Use ModuleEmployees or EmployeesListPage depending on your permission logic
 		api.GET("/employees", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployees)
 		api.POST("/employees", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployees)
 		api.PUT("/employees/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpdateEmployees)
 		api.DELETE("/employees/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployees)
 
-		// Salaries usually falls under Employee Management permissions
 		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), handlers.GetEmployees)
 		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "EDIT"), handlers.UpdateSalariesStructure)
 
 		// --- Master Data (Department & Position) ---
-		// Use ModuleSettings as the parent key for all setting-related sub-menus
 		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), handlers.GetDepartments)
 		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), handlers.CreateDepartment)
 		api.PUT("/departments/:id", middleware.CheckPermission("DepartmentSettings", "EDIT"), handlers.UpdateDepartment)
@@ -57,13 +52,17 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/positions/:id", middleware.CheckPermission("PositionSettings", "EDIT"), handlers.UpdatePosition)
 		api.DELETE("/positions/:id", middleware.CheckPermission("PositionSettings", "DELETE"), handlers.DeletePosition)
 
-		// --- Roles & Permission Management ---
-		api.GET("/roles", middleware.CheckPermission("PermissionSettings", "VIEW"), handlers.GetRoles)
-		api.GET("/roles/:id/permissions", middleware.CheckPermission("PermissionSettings", "VIEW"), handlers.GetRolesPermissions)
-		api.POST("/roles/:id/permissions", middleware.CheckPermission("PermissionSettings", "EDIT"), handlers.UpdateRolesPermissions)
+		// --- Roles Management ---
+		api.GET("/roles", middleware.CheckPermission("RolesPage", "VIEW"), handlers.GetRoles)
+		api.POST("/roles", middleware.CheckPermission("RolesPage", "EDIT"), handlers.CreateRole)
+		api.PUT("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), handlers.UpdateRole)
+		api.DELETE("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), handlers.DeleteRole)
+
+		// --- Permission Management ---
+		api.GET("/permissions/:id", middleware.CheckPermission("PermissionSettings", "VIEW"), handlers.GetRolesPermissions)
+		api.POST("/permissions/:id", middleware.CheckPermission("PermissionSettings", "EDIT"), handlers.UpdateRolesPermissions)
 
 		// --- Companies Profile Management ---
-		// Using CompaniesPage or a dedicated ModuleKey if defined
 		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), handlers.GetAllCompanies)
 		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), handlers.GetCompanies)
 		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), handlers.CreateCompanies)
@@ -71,13 +70,11 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), handlers.DeleteCompanies)
 
 		// --- Time Logs Management ---
-		// Use ModuleAttendance as defined in your Level 1 categories
 		api.GET("/timelogs", middleware.CheckPermission("TimelogsListPage", "VIEW"), handlers.GetTimeLogs)
 		api.POST("/timelogs", middleware.CheckPermission("TimelogsListPage", "CREATE"), handlers.CreateTimeLog)
 		api.PUT("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "EDIT"), handlers.UpdateTimeLog)
 		api.DELETE("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "DELETE"), handlers.DeleteTimeLog)
 
-		// Use ModuleAttendance key for unified attendance-related permissions (English Comment)
 		api.GET("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "VIEW"), handlers.GetLeaveRequests)
 		api.POST("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "CREATE"), handlers.CreateLeaveRequest)
 		api.PUT("/leaves/requests/:id", middleware.CheckPermission("LeaveRequestsPage", "EDIT"), handlers.UpdateLeaveRequest)
@@ -86,9 +83,21 @@ func SetupRouter() *gin.Engine {
 		api.GET("/leaves/approved", middleware.CheckPermission("LeaveApprovedPage", "VIEW"), handlers.GetPendingLeaveRequests)
 		api.PUT("/leaves/approve/:id", middleware.CheckPermission("LeaveApprovedPage", "EDIT"), handlers.ApproveLeaveRequest)
 
+		// --- Payroll Global Config ---
 		api.GET("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "VIEW"), handlers.GetPayrollConfigs)
 		api.POST("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "EDIT"), handlers.UpdatePayrollConfig)
 
+		// --- Earning Types CRUD (English Comment) ---
+		api.GET("/earning-types", middleware.CheckPermission("EarningTypesPage", "VIEW"), handlers.GetEarningTypes)
+		api.POST("/earning-types", middleware.CheckPermission("EarningTypesPage", "CREATE"), handlers.CreateEarningType)
+		api.PUT("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), handlers.UpdateEarningType)
+		api.DELETE("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), handlers.DeleteEarningType)
+
+		// --- Deduction Types CRUD (English Comment) ---
+		api.GET("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "VIEW"), handlers.GetDeductionTypes)
+		api.POST("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.CreateDeductionType)
+		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.UpdateDeductionType)
+		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.DeleteDeductionType)
 	}
 	return r
 }
