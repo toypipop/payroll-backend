@@ -41,17 +41,14 @@ type Employees struct {
 
 // SalariesStructure defines the base pay for each Employees
 type SalariesStructure struct {
-	// Standard Timestamps
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	// Composite Primary Key often doesn't use soft delete,
-	// but we add it to track salaries history/changes (English Comment)
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_salaries_deleted;not null;default:0" json:"-"`
-
-	EmployeesID   uint      `gorm:"primaryKey;uniqueIndex:idx_emp_salaries_deleted" json:"Employees_id"`
-	BaseSalaries  float64   `gorm:"type:decimal(15,2)" json:"base_salaries"`
-	EffectiveDate time.Time `json:"effective_date"`
-	IsEnabled     bool      `json:"is_enabled" gorm:"default:true"`
+	ID            uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	DeletedAt     soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_sal_eff_deleted;not null;default:0" json:"-"`
+	EmployeesID   uint                  `gorm:"not null;index;uniqueIndex:idx_emp_sal_eff_deleted" json:"employees_id"`
+	BaseSalaries  float64               `gorm:"type:decimal(15,2)" json:"base_salaries"`
+	EffectiveDate time.Time             `gorm:"not null;uniqueIndex:idx_emp_sal_eff_deleted" json:"effective_date"`
+	IsEnabled     bool                  `json:"is_enabled" gorm:"default:true"`
 }
 
 // PayrollCycle manages the time periods for salaries processing
@@ -72,14 +69,32 @@ type PayrollCycle struct {
 
 // PayrollTransaction records the actual payout for an Employees
 type PayrollTransaction struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time `json:"created_at"` // Date of transaction
-	UpdatedAt time.Time `json:"updated_at"`
-	// Transactions usually use soft delete for audit purposes (English Comment)
-	DeletedAt soft_delete.DeletedAt `gorm:"index" json:"-"`
+	ID             uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
+	DeletedAt      soft_delete.DeletedAt `gorm:"index" json:"-"`
+	CycleID        uint                  `gorm:"not null" json:"cycle_id"`
+	EmployeesID    uint                  `gorm:"not null" json:"employees_id"`
+	SalariesAtTime float64               `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
+	TotalEarning   float64               `gorm:"type:decimal(15,2)" json:"total_earning"`
+	TotalDeduction float64               `gorm:"type:decimal(15,2)" json:"total_deduction"`
+	SsoAmount      float64               `gorm:"type:decimal(15,2)" json:"sso_amount"`
+	TaxAmount      float64               `gorm:"type:decimal(15,2)" json:"tax_amount"`
+	NetPay         float64               `gorm:"type:decimal(15,2)" json:"net_pay"`
+	// Relations (English Comment)
+	Details   []PayrollTransactionDetail `gorm:"foreignKey:TransactionID" json:"details"`
+	Employees Employees                  `gorm:"foreignKey:EmployeesID" json:"employees"`
+}
 
-	CycleID        uint    `gorm:"not null" json:"cycle_id"`
-	EmployeesID    uint    `gorm:"not null" json:"Employees_id"`
-	SalariesAtTime float64 `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
-	NetPay         float64 `gorm:"type:decimal(15,2)" json:"net_pay"`
+type PayrollTransactionDetail struct {
+	ID            uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt     time.Time             `json:"created_at"`
+	DeletedAt     soft_delete.DeletedAt `gorm:"index" json:"-"`
+	TransactionID uint                  `gorm:"not null;index" json:"transaction_id"`
+	ItemName      string                `gorm:"size:255" json:"item_name"` // e.g., "Overtime", "SSO", "Tax"
+	Amount        float64               `gorm:"type:decimal(15,2)" json:"amount"`
+	Type          string                `gorm:"size:20" json:"type"` // "earning" or "deduction"
+	// Reference to master data if applicable (English Comment)
+	EarningTypeID   *uint `json:"earning_type_id"`
+	DeductionTypeID *uint `json:"deduction_type_id"`
 }

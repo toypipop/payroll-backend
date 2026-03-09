@@ -39,7 +39,7 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/employees/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployees)
 
 		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), handlers.GetEmployees)
-		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "EDIT"), handlers.UpdateSalariesStructure)
+		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "CREATE"), handlers.UpdateSalariesStructure)
 
 		// --- Master Data (Department & Position) ---
 		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), handlers.GetDepartments)

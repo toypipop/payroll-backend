@@ -5,9 +5,11 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func GetEmployees(c *gin.Context) {
@@ -20,6 +22,10 @@ func GetEmployees(c *gin.Context) {
 	}
 
 	var employees []models.Employees
+
+	// Define current time for filtering effective date
+	now := time.Now()
+
 	if err := config.DB.Debug().Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).
@@ -27,7 +33,11 @@ func GetEmployees(c *gin.Context) {
 		Where("roles.is_super_admin = ?", false).
 		Preload("Department").
 		Preload("Position").
-		Preload("SalariesStructure").
+		// Filter only valid salary records that are already effective (English Comment)
+		Preload("SalariesStructure", func(db *gorm.DB) *gorm.DB {
+			return db.Where("effective_date <= ? AND is_enabled = ?", now, true).
+				Order("effective_date DESC, created_at DESC")
+		}).
 		Find(&employees).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

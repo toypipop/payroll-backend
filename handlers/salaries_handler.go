@@ -9,15 +9,13 @@ import (
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm/clause"
 )
 
 func UpdateSalariesStructure(c *gin.Context) {
-	// 1. Get Auth Context (English Comment)
 	userID, dataScope := repository.GetContextAuth(c)
 
 	var input struct {
-		EmployeesID   uint    `json:"Employees_id" binding:"required"`
+		EmployeesID   uint    `json:"employees_id" binding:"required"`
 		BaseSalaries  float64 `json:"base_salaries"`
 		EffectiveDate string  `json:"effective_date" binding:"required"`
 		IsEnabled     bool    `json:"is_enabled"`
@@ -34,14 +32,12 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
-	// 2. Retrieve currentUser for scoping (English Comment)
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
 		return
 	}
 
-	// 3. Validation: Use ApplyScopes to ensure the target Employee is within allowed access (English Comment)
 	var emp models.Employees
 	if err := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
@@ -50,7 +46,6 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
-	// 4. Prepare Salaries record (English Comment)
 	salaries := models.SalariesStructure{
 		EmployeesID:   input.EmployeesID,
 		BaseSalaries:  input.BaseSalaries,
@@ -58,19 +53,8 @@ func UpdateSalariesStructure(c *gin.Context) {
 		IsEnabled:     input.IsEnabled,
 	}
 
-	// 5. Upsert operation (English Comment)
-	err = config.DB.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "employees_id"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
-			"base_salaries":  salaries.BaseSalaries,
-			"effective_date": salaries.EffectiveDate,
-			"is_enabled":     salaries.IsEnabled,
-			"updated_at":     time.Now(),
-		}),
-	}).Create(&salaries).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update salaries information"})
+	if err := config.DB.Create(&salaries).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create salaries record"})
 		return
 	}
 
