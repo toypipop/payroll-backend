@@ -12,14 +12,14 @@ import (
 )
 
 type AttendanceSummaryRow struct {
-	EmployeesID  uint    `json:"employees_id"`
-	EmployeesCode string `json:"employees_code"`
-	FullName     string  `json:"full_name"`
-	TotalLateMin float64 `json:"total_late_minutes"`
-	TotalAbsent  int     `json:"total_absent_days"`
-	LateAmount   float64 `json:"late_amount"`
-	AbsentAmount float64 `json:"absent_amount"`
-	TotalAmount  float64 `json:"total_amount"`
+	EmployeesID   uint    `json:"employees_id"`
+	EmployeesCode string  `json:"employees_code"`
+	FullName      string  `json:"full_name"`
+	TotalLateMin  float64 `json:"total_late_minutes"`
+	TotalAbsent   int     `json:"total_absent_days"`
+	LateAmount    float64 `json:"late_amount"`
+	AbsentAmount  float64 `json:"absent_amount"`
+	TotalAmount   float64 `json:"total_amount"`
 }
 
 func GetAttendanceSummary(c *gin.Context) {
@@ -74,7 +74,7 @@ func GetAttendanceSummary(c *gin.Context) {
 	// Fetch employees within scope
 	var employees []models.Employees
 	config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employees.id", "employees.dept_id"),
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).Find(&employees)
 
 	if len(employees) == 0 {

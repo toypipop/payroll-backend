@@ -18,11 +18,11 @@ func GetPositions(c *gin.Context) {
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var positions []models.Position
-	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
-	).
-		Preload("Companies").
-		Find(&positions).Error; err != nil {
+	dbQuery := config.DB
+	if dataScope != models.ScopeAll {
+		dbQuery = dbQuery.Where("companies_id = ?", currentUser.CompaniesID)
+	}
+	if err := dbQuery.Preload("Companies").Find(&positions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
 		return
 	}
@@ -58,7 +58,7 @@ func UpdatePosition(c *gin.Context) {
 
 	var pos models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyScopes(currentUser, dataScope, "positions.companies_id", "positions.id"),
 	).Where("id = ?", id).First(&pos).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
 		return
@@ -82,7 +82,7 @@ func DeletePosition(c *gin.Context) {
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyScopes(currentUser, dataScope, "positions.companies_id", "positions.id"),
 	).Where("id = ?", id).Delete(&models.Position{})
 
 	if result.RowsAffected == 0 {
