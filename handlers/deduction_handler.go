@@ -21,7 +21,7 @@ func GetDeductionTypes(c *gin.Context) {
 
 	var deductions []models.DeductionType
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
 	).Find(&deductions).Error
 
 	if err != nil {
@@ -71,7 +71,7 @@ func UpdateDeductionType(c *gin.Context) {
 	var deduction models.DeductionType
 	// Apply scope to verify record ownership before update (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
 	).First(&deduction, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -107,7 +107,7 @@ func DeleteDeductionType(c *gin.Context) {
 
 	// Use Scopes and Where to ensure only authorized records are deleted (English Comment)
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
 	).Where("id = ?", id).Delete(&models.DeductionType{})
 
 	if result.RowsAffected == 0 {

@@ -21,7 +21,7 @@ func GetEarningTypes(c *gin.Context) {
 
 	var earnings []models.EarningType
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "earning_types.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "earning_type.companies_id", "unused"),
 	).Find(&earnings).Error
 
 	if err != nil {
@@ -71,7 +71,7 @@ func UpdateEarningType(c *gin.Context) {
 	var earning models.EarningType
 	// Apply scope to ensure user can only find records they are authorized to edit (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "earning_types.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "earning_type.companies_id", "unused"),
 	).First(&earning, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -109,7 +109,7 @@ func DeleteEarningType(c *gin.Context) {
 
 	// Ensure the delete operation only affects authorized records (English Comment)
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "earning_types.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "earning_type.companies_id", "unused"),
 	).Where("id = ?", id).Delete(&models.EarningType{})
 
 	if result.RowsAffected == 0 {

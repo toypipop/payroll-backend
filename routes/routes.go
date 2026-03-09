@@ -98,6 +98,39 @@ func SetupRouter() *gin.Engine {
 		api.POST("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.CreateDeductionType)
 		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.UpdateDeductionType)
 		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.DeleteDeductionType)
+
+		// --- Payroll Cycle Variable Earnings ---
+		api.GET("/cycle-earnings", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetCycleEarnings)
+		api.POST("/cycle-earnings", middleware.CheckPermission("RunPayrollPage", "CREATE"), handlers.CreateCycleEarning)
+		api.PUT("/cycle-earnings/:id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.UpdateCycleEarning)
+		api.DELETE("/cycle-earnings/:id", middleware.CheckPermission("RunPayrollPage", "DELETE"), handlers.DeleteCycleEarning)
+
+		// --- Employee Earning Assignments ---
+		api.GET("/employee-earnings", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployeeEarnings)
+		api.POST("/employee-earnings", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployeeEarning)
+		api.PUT("/employee-earnings/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpdateEmployeeEarning)
+		api.DELETE("/employee-earnings/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployeeEarning)
+
+		// --- Employee Deduction Assignments ---
+		api.GET("/employee-deductions", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployeeDeductions)
+		api.POST("/employee-deductions", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployeeDeduction)
+		api.PUT("/employee-deductions/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpdateEmployeeDeduction)
+		api.DELETE("/employee-deductions/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployeeDeduction)
+
+		// --- Attendance Config ---
+		api.GET("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "VIEW"), handlers.GetAttendanceConfigs)
+		api.POST("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "EDIT"), handlers.UpdateAttendanceConfig)
+
+		// --- Attendance Summary ---
+		api.GET("/attendance/summary", middleware.CheckPermission("AttendanceSummaryPage", "VIEW"), handlers.GetAttendanceSummary)
+
+		// --- Payroll Core Engine ---
+		api.GET("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "VIEW"), handlers.GetPayrollCycles)
+		api.POST("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "CREATE"), handlers.CreatePayrollCycle)
+		api.PATCH("/payroll/cycles/:id/close", middleware.CheckPermission("PayrollCyclesPage", "EDIT"), handlers.ClosePayrollCycle)
+		api.POST("/payroll/calculate/:cycle_id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.CalculatePayroll)
+		api.GET("/payroll/transactions/:cycle_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetPayrollTransactions)
+		api.GET("/payroll/slip/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), handlers.GetPayrollSlip)
 	}
 	return r
 }

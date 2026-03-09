@@ -25,6 +25,7 @@ func main() {
 		&models.SalariesStructure{},
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
+		&models.PayrollTransactionDetail{},
 		&models.Companies{},
 		&models.TimeLog{},
 		&models.LeaveRequest{},
@@ -32,6 +33,10 @@ func main() {
 		&models.PayrollConfig{},
 		&models.EarningType{},
 		&models.DeductionType{},
+		&models.EmployeeEarning{},
+		&models.EmployeeDeduction{},
+		&models.PayrollCycleEarning{},
+		&models.AttendanceConfig{},
 	)
 
 	if err != nil {
@@ -54,11 +59,11 @@ func main() {
 // ├── Employee Management
 // │   ├── Employees
 // │   └── Salaries Structure
-// ├── Time Attendance (New)
+// ├── Time Attendance
 // │   ├── Time Logs
 // │   └── Leave Requests
 // │   └── Leave Approved
-// ├── Payroll Processing (New)
+// ├── Payroll Processing
 // │   ├── Payroll Cycles
 // │   ├── Run Payroll (Calculation)
 // │   └── Transactions
@@ -72,6 +77,6 @@ func main() {
 //     ├── : Global Settings (SSO, Tax)
 //     └── : Earning Types
 // 	   └── : Deduction Types
-// └── Reports (New)
+// └── Reports
 //     ├── Payslips
 //     └── Government Forms

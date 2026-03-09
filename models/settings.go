@@ -45,5 +45,6 @@ type Companies struct {
 	TaxID         string                `gorm:"uniqueIndex:idx_taxid_deleted;not null;size:50" json:"tax_id"`
 	Address       string                `json:"address"`
 	Phone         string                `json:"phone"`
-	PayrollConfig *PayrollConfig        `gorm:"foreignKey:CompaniesID" json:"payroll_config"`
+	PayrollConfig    *PayrollConfig    `gorm:"foreignKey:CompaniesID" json:"payroll_config"`
+	AttendanceConfig *AttendanceConfig `gorm:"foreignKey:CompaniesID" json:"attendance_config"`
 }

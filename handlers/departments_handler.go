@@ -63,7 +63,7 @@ func UpdateDepartment(c *gin.Context) {
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),
+		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
@@ -87,7 +87,7 @@ func DeleteDepartment(c *gin.Context) {
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),
+		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).Delete(&models.Department{})
 
 	if result.RowsAffected == 0 {

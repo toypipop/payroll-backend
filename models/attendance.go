@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"gorm.io/gorm"
 	"gorm.io/plugin/soft_delete"
 )
 
@@ -47,6 +48,20 @@ type TimeLog struct {
 	LocationIn  string                `gorm:"size:255" json:"location_in"`
 	Remark      string                `gorm:"size:255" json:"remark"`
 	Employees   Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
+}
+
+// AttendanceConfig holds per-company late/absent deduction rates
+type AttendanceConfig struct {
+	ID                uint           `gorm:"primaryKey" json:"id"`
+	CompaniesID       uint           `gorm:"not null;uniqueIndex" json:"companies_id"`
+	LateRatePerMinute float64        `gorm:"type:decimal(10,2);default:0" json:"late_rate_per_minute"`
+	AbsentRatePerDay  float64        `gorm:"type:decimal(10,2);default:0" json:"absent_rate_per_day"`
+	WorkStartHour     int            `gorm:"default:9" json:"work_start_hour"`
+	WorkStartMin      int            `gorm:"default:0" json:"work_start_min"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
+	Companies         Companies      `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 type LeaveRequest struct {
