@@ -69,11 +69,16 @@ func UpdateDepartment(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&dept); err != nil {
+	var input struct {
+		DeptName string `json:"dept_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// Department name is non-calculation metadata and can be updated even if used.
+	dept.DeptName = input.DeptName
 	dept.CompaniesID = currentUser.CompaniesID
 	config.DB.Save(&dept)
 	c.JSON(http.StatusOK, dept)
@@ -85,6 +90,24 @@ func DeleteDepartment(c *gin.Context) {
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+
+	var dept models.Department
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),
+	).Where("id = ?", id).First(&dept).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
+		return
+	}
+
+	isLocked, err := repository.IsRecordLocked("department", dept.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isLocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+		return
+	}
 
 	result := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),

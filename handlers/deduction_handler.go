@@ -34,14 +34,14 @@ func GetDeductionTypes(c *gin.Context) {
 // POST: Create a new deduction type (English Comment)
 func CreateDeductionType(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
+	var currentUser models.Employees
+	config.DB.Select("id, companies_id").First(&currentUser, userID)
+
 	var input models.DeductionType
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	// Validate if the user has permission to create for the target company (English Comment)
 	var targetCompany models.Companies
@@ -77,9 +77,31 @@ func UpdateDeductionType(c *gin.Context) {
 		return
 	}
 
+	isLocked, err := repository.IsRecordLocked("deduction_type", deduction.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input models.DeductionType
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if isLocked {
+		// Locked records may only update non-calculation fields.
+		if input.IsTaxDeductible != deduction.IsTaxDeductible || input.IsSsoDeductible != deduction.IsSsoDeductible {
+			c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+			return
+		}
+		if err := config.DB.Model(&deduction).Updates(map[string]interface{}{
+			"name": input.Name,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+			return
+		}
+		c.JSON(http.StatusOK, deduction)
 		return
 	}
 
@@ -106,6 +128,24 @@ func DeleteDeductionType(c *gin.Context) {
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	// Use Scopes and Where to ensure only authorized records are deleted (English Comment)
+	var deduction models.DeductionType
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
+	).Where("id = ?", id).First(&deduction).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+		return
+	}
+
+	isLocked, err := repository.IsRecordLocked("deduction_type", deduction.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isLocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+		return
+	}
+
 	result := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
 	).Where("id = ?", id).Delete(&models.DeductionType{})

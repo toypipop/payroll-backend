@@ -123,7 +123,8 @@ func GetPayrollTransactions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"cycle": cycle, "transactions": transactions})
 }
 
-// GetPayrollSlip returns transaction + all detail lines for a single employee payslip
+// GetPayrollSlip returns transaction + all detail lines for a single employee payslip.
+// Strict rule: only closed payroll cycles are accessible.
 func GetPayrollSlip(c *gin.Context) {
 	userID, _ := repository.GetContextAuth(c)
 
@@ -154,5 +155,15 @@ func GetPayrollSlip(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"cycle": cycle, "slip": transaction})
+	// Strict rule: payslips are only available for closed cycles (immutable audit records)
+	if !cycle.IsClosed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Payslips are only available for closed payroll cycles"})
+		return
+	}
+
+	// Load company profile for payslip header
+	var company models.Companies
+	config.DB.First(&company, currentUser.CompaniesID)
+
+	c.JSON(http.StatusOK, gin.H{"cycle": cycle, "slip": transaction, "company": company})
 }

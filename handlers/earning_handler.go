@@ -34,14 +34,14 @@ func GetEarningTypes(c *gin.Context) {
 // POST: Create a new earning type (English Comment)
 func CreateEarningType(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
+	var currentUser models.Employees
+	config.DB.Select("id, companies_id").First(&currentUser, userID)
+
 	var input models.EarningType
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	// Validate if the user has permission to create for the target company (English Comment)
 	var targetCompany models.Companies
@@ -77,9 +77,31 @@ func UpdateEarningType(c *gin.Context) {
 		return
 	}
 
+	isLocked, err := repository.IsRecordLocked("earning_type", earning.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input models.EarningType
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if isLocked {
+		// Locked records may only update non-calculation fields.
+		if input.IsTaxable != earning.IsTaxable || input.IsSso != earning.IsSso || input.IsPermanent != earning.IsPermanent {
+			c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+			return
+		}
+		if err := config.DB.Model(&earning).Updates(map[string]interface{}{
+			"name": input.Name,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+			return
+		}
+		c.JSON(http.StatusOK, earning)
 		return
 	}
 
@@ -108,6 +130,24 @@ func DeleteEarningType(c *gin.Context) {
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	// Ensure the delete operation only affects authorized records (English Comment)
+	var earning models.EarningType
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "earning_type.companies_id", "unused"),
+	).Where("id = ?", id).First(&earning).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+		return
+	}
+
+	isLocked, err := repository.IsRecordLocked("earning_type", earning.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isLocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+		return
+	}
+
 	result := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "earning_type.companies_id", "unused"),
 	).Where("id = ?", id).Delete(&models.EarningType{})

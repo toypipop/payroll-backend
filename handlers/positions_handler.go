@@ -64,11 +64,16 @@ func UpdatePosition(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&pos); err != nil {
+	var input struct {
+		PosName string `json:"pos_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	// Position name is non-calculation metadata and can be updated even if used.
+	pos.PosName = input.PosName
 	pos.CompaniesID = currentUser.CompaniesID
 	config.DB.Save(&pos)
 	c.JSON(http.StatusOK, pos)
@@ -80,6 +85,24 @@ func DeletePosition(c *gin.Context) {
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+
+	var pos models.Position
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "positions.companies_id", "positions.id"),
+	).Where("id = ?", id).First(&pos).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
+		return
+	}
+
+	isLocked, err := repository.IsRecordLocked("position", pos.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isLocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+		return
+	}
 
 	result := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "positions.companies_id", "positions.id"),

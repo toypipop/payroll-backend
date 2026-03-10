@@ -60,6 +60,16 @@ func UpdatePayrollConfig(c *gin.Context) {
 		return
 	}
 
+	isClosedLocked, lockErr := repository.HasClosedCycleForCompany(input.CompaniesID)
+	if lockErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": lockErr.Error()})
+		return
+	}
+	if isClosedLocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+		return
+	}
+
 	// Upsert: One Companie has only one config (English Comment)
 	err := config.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "companies_id"}},

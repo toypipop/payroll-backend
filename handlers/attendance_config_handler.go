@@ -56,6 +56,19 @@ func UpdateAttendanceConfig(c *gin.Context) {
 		return
 	}
 
+	var existing models.AttendanceConfig
+	if err := config.DB.Where("companies_id = ?", input.CompaniesID).First(&existing).Error; err == nil {
+		isLocked, lockErr := repository.IsRecordLocked("attendance_config", existing.ID)
+		if lockErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": lockErr.Error()})
+			return
+		}
+		if isLocked {
+			c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+			return
+		}
+	}
+
 	err := config.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "companies_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{

@@ -204,6 +204,7 @@ func main() {
 		{ModuleName: "Run Payroll", ModuleKey: "RunPayrollPage", RoutePath: "/run-payroll", Icon: "PlayCircle", Order: 2, ParentID: ptr(4)},
 		{ModuleName: "Cycle Earnings", ModuleKey: "CycleEarningsPage", RoutePath: "/cycle-earnings", Icon: "AddCard", Order: 3, ParentID: ptr(4)},
 		{ModuleName: "Cycle Deductions", ModuleKey: "CycleDeductionsPage", RoutePath: "/cycle-deductions", Icon: "PriceCheck", Order: 4, ParentID: ptr(4)},
+		{ModuleName: "Transaction", ModuleKey: "TransactionsPage", RoutePath: "/transactions", Icon: "ReceiptLong", Order: 5, ParentID: ptr(4)},
 
 		// Level 2: Sub-Menus under Payroll Config
 		{ModuleName: "Global Settings", ModuleKey: "PayrollGlobalSettingsPage", RoutePath: "/payroll-global", Icon: "SettingsSuggest", Order: 1, ParentID: ptr(5)},
@@ -562,6 +563,150 @@ func main() {
 		}
 		config.DB.Where(models.PayrollCycleEarning{CycleID: s.cycleID, EmployeesID: s.emp.ID, EarningTypeID: s.earningTypeID}).
 			Assign(ce).FirstOrCreate(&ce)
+	}
+
+	// --- Mock PayrollTransactions for January 2026 (closed cycles) ---
+	// Provides realistic seed data for testing the Payslips report without running the payroll engine.
+	// Values are pre-computed based on the standard Thai SSO / Progressive Tax rules.
+
+	// Re-fetch Jan 2026 cycles
+	var cycleSysJan models.PayrollCycle
+	config.DB.Where("companies_id = ? AND cycle_name = ?", sysComp.ID, "January 2026").First(&cycleSysJan)
+
+	// Re-fetch earning / deduction type IDs for detail cross-references
+	var etPosA2, etPosB2, etBonusA2, etBonusB2 models.EarningType
+	var dtPfA2, dtPfB2, dtPfSys2, dtLoanA2, dtLoanB2 models.DeductionType
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Position Allowance").First(&etPosA2)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Position Allowance").First(&etPosB2)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Bonus").First(&etBonusA2)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Bonus").First(&etBonusB2)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Provident Fund").First(&dtPfA2)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Provident Fund").First(&dtPfB2)
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Provident Fund").First(&dtPfSys2)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Loan Repayment").First(&dtLoanA2)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Loan Repayment").First(&dtLoanB2)
+
+	type txSeed struct {
+		cycleID        uint
+		emp            models.Employees
+		salaries       float64
+		totalEarning   float64
+		totalDeduction float64 // non-SSO, non-Tax deductions only
+		ssoAmount      float64
+		taxAmount      float64
+		netPay         float64
+		details        []models.PayrollTransactionDetail
+	}
+
+	uid := func(id uint) *uint { return &id }
+
+	mockTxSeeds := []txSeed{
+		// ── Tech Corp — January 2026 ─────────────────────────────────────
+		{
+			cycleID: cycleAJan.ID, emp: alice,
+			salaries: 45000, totalEarning: 60000, totalDeduction: 1800,
+			ssoAmount: 750, taxAmount: 2741.67, netPay: 54708.33,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Position Allowance", Amount: 5000, Type: "earning", EarningTypeID: uid(etPosA2.ID)},
+				{ItemName: "Bonus", Amount: 10000, Type: "earning", EarningTypeID: uid(etBonusA2.ID)},
+				{ItemName: "Provident Fund", Amount: 1800, Type: "deduction", DeductionTypeID: uid(dtPfA2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 2741.67, Type: "deduction"},
+			},
+		},
+		{
+			cycleID: cycleAJan.ID, emp: bob,
+			salaries: 30000, totalEarning: 35000, totalDeduction: 4200,
+			ssoAmount: 750, taxAmount: 398.33, netPay: 29651.67,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Bonus", Amount: 5000, Type: "earning", EarningTypeID: uid(etBonusA2.ID)},
+				{ItemName: "Provident Fund", Amount: 1200, Type: "deduction", DeductionTypeID: uid(dtPfA2.ID)},
+				{ItemName: "Loan Repayment", Amount: 3000, Type: "deduction", DeductionTypeID: uid(dtLoanA2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 398.33, Type: "deduction"},
+			},
+		},
+		{
+			cycleID: cycleAJan.ID, emp: carol,
+			salaries: 28000, totalEarning: 33000, totalDeduction: 1120,
+			ssoAmount: 750, taxAmount: 302.33, netPay: 30827.67,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Bonus", Amount: 5000, Type: "earning", EarningTypeID: uid(etBonusA2.ID)},
+				{ItemName: "Provident Fund", Amount: 1120, Type: "deduction", DeductionTypeID: uid(dtPfA2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 302.33, Type: "deduction"},
+			},
+		},
+		// ── Biz Group — January 2026 ─────────────────────────────────────
+		{
+			cycleID: cycleBJan.ID, emp: david,
+			salaries: 50000, totalEarning: 68000, totalDeduction: 2000,
+			ssoAmount: 750, taxAmount: 3941.67, netPay: 61308.33,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Position Allowance", Amount: 6000, Type: "earning", EarningTypeID: uid(etPosB2.ID)},
+				{ItemName: "Bonus", Amount: 12000, Type: "earning", EarningTypeID: uid(etBonusB2.ID)},
+				{ItemName: "Provident Fund", Amount: 2000, Type: "deduction", DeductionTypeID: uid(dtPfB2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 3941.67, Type: "deduction"},
+			},
+		},
+		{
+			cycleID: cycleBJan.ID, emp: eve,
+			salaries: 32000, totalEarning: 38000, totalDeduction: 3280,
+			ssoAmount: 750, taxAmount: 544.33, netPay: 33425.67,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Bonus", Amount: 6000, Type: "earning", EarningTypeID: uid(etBonusB2.ID)},
+				{ItemName: "Provident Fund", Amount: 1280, Type: "deduction", DeductionTypeID: uid(dtPfB2.ID)},
+				{ItemName: "Loan Repayment", Amount: 2000, Type: "deduction", DeductionTypeID: uid(dtLoanB2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 544.33, Type: "deduction"},
+			},
+		},
+		// ── System Company — January 2026 ────────────────────────────────
+		{
+			cycleID: cycleSysJan.ID, emp: staff,
+			salaries: 40000, totalEarning: 40000, totalDeduction: 1600,
+			ssoAmount: 750, taxAmount: 631.67, netPay: 37018.33,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Provident Fund", Amount: 1600, Type: "deduction", DeductionTypeID: uid(dtPfSys2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 631.67, Type: "deduction"},
+			},
+		},
+	}
+
+	for _, s := range mockTxSeeds {
+		if s.cycleID == 0 || s.emp.ID == 0 {
+			continue
+		}
+		var tx models.PayrollTransaction
+		result := config.DB.Where("cycle_id = ? AND employees_id = ?", s.cycleID, s.emp.ID).First(&tx)
+		if result.Error != nil {
+			// Create the transaction
+			tx = models.PayrollTransaction{
+				CycleID:        s.cycleID,
+				EmployeesID:    s.emp.ID,
+				SalariesAtTime: s.salaries,
+				TotalEarning:   s.totalEarning,
+				TotalDeduction: s.totalDeduction,
+				SsoAmount:      s.ssoAmount,
+				TaxAmount:      s.taxAmount,
+				NetPay:         s.netPay,
+			}
+			if err := config.DB.Create(&tx).Error; err != nil {
+				log.Printf("Failed to create mock transaction for emp %d: %v", s.emp.ID, err)
+				continue
+			}
+		}
+		// Seed details only when none exist yet
+		var detailCount int64
+		config.DB.Model(&models.PayrollTransactionDetail{}).Where("transaction_id = ?", tx.ID).Count(&detailCount)
+		if detailCount == 0 {
+			for i := range s.details {
+				s.details[i].TransactionID = tx.ID
+			}
+			config.DB.Create(&s.details)
+		}
 	}
 
 	log.Println("Migration & Setup completed with Payroll Configs!")
