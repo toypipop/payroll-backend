@@ -58,28 +58,32 @@ func main() {
 
 // All Modules:
 // ├── Dashboard
-// ├── Employee Management
-// │   ├── Employees
-// │   └── Salaries Structure
-// ├── Time Attendance
-// │   ├── Time Logs
+// ├── Employees
+// │   ├── Employee List
+// │   ├── Salaries
+// │   ├── Employee Earnings
+// │   └── Employee Deductions
+// ├── Attendance
+// │   ├── Timelogs
 // │   ├── Leave Requests
-// │   └── Leave Approved
+// │   ├── Leave Approved
+// │   └── Attendance Summary
 // ├── Payroll Processing
 // │   ├── Payroll Cycles
-// │   ├── Run Payroll (Calculation)
-// │   └── Transactions
+// │   ├── Run Payroll
+// │   ├── Cycle Earnings
+// │   └── Cycle Deductions
+// ├── Payroll Config
+// │   ├── Global Settings
+// │   ├── Earning Types
+// │   └── Deduction Types
 // ├── Settings
-// │   ├── Companies
 // │   ├── Department
 // │   ├── Position
 // │   ├── Roles
-// │   ├── Permission (Roles & Modules)
-// │   └── Attendance Settings (Late/Absent On-Off)
-// ├── Payroll Config
-// │   ├── Global Settings (SSO, Tax)
-// │   ├── Earning Types
-// │   └── Deduction Types
+// │   ├── Permission
+// │   ├── Companies
+// │   └── Attendance Settings
 // └── Reports
 //     ├── Payslips
 //     └── Government Forms

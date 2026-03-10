@@ -58,14 +58,16 @@ func CreateCycleEarning(c *gin.Context) {
 	}
 
 	// Validate cycle belongs to company
-	var cycle models.PayrollCycle
-	if err := config.DB.Where("id = ? AND companies_id = ?", input.CycleID, currentUser.CompaniesID).
-		First(&cycle).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
-		return
-	}
-	if cycle.IsClosed {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot add earnings to a closed cycle"})
+	if err := repository.EnsurePayrollCycleEditable(input.CycleID, currentUser.CompaniesID); err != nil {
+		if err == repository.ErrPayrollCycleNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
+			return
+		}
+		if err == repository.ErrPayrollCycleClosed {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot add earnings to a closed cycle"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -90,6 +92,18 @@ func UpdateCycleEarning(c *gin.Context) {
 	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
 		First(&item).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
+		return
+	}
+	if err := repository.EnsurePayrollCycleEditable(item.CycleID, currentUser.CompaniesID); err != nil {
+		if err == repository.ErrPayrollCycleClosed {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot update earnings in a closed cycle"})
+			return
+		}
+		if err == repository.ErrPayrollCycleNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -118,6 +132,31 @@ func DeleteCycleEarning(c *gin.Context) {
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	result := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
+		First(&models.PayrollCycleEarning{})
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
+		return
+	}
+
+	var item models.PayrollCycleEarning
+	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).First(&item).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
+		return
+	}
+	if err := repository.EnsurePayrollCycleEditable(item.CycleID, currentUser.CompaniesID); err != nil {
+		if err == repository.ErrPayrollCycleClosed {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete earnings in a closed cycle"})
+			return
+		}
+		if err == repository.ErrPayrollCycleNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	result = config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
 		Delete(&models.PayrollCycleEarning{})
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
