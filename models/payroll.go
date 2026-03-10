@@ -87,3 +87,19 @@ type EmployeeDeduction struct {
 	DeductionType   DeductionType         `gorm:"foreignKey:DeductionTypeID" json:"deduction_type"`
 	Employees       Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
 }
+
+// PayrollCycleDeduction holds one-time variable deductions for a specific payroll cycle.
+type PayrollCycleDeduction struct {
+	ID              uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	CompaniesID     uint           `gorm:"not null;index" json:"companies_id"`
+	CycleID         uint           `gorm:"not null;index" json:"cycle_id"`
+	EmployeesID     uint           `gorm:"not null;index" json:"employees_id"`
+	DeductionTypeID uint           `gorm:"not null" json:"deduction_type_id"`
+	Amount          float64        `gorm:"type:decimal(15,2);not null" json:"amount"`
+	DeductionType   DeductionType  `gorm:"foreignKey:DeductionTypeID" json:"deduction_type"`
+	Employees       Employees      `gorm:"foreignKey:EmployeesID" json:"employees"`
+	PayrollCycle    PayrollCycle   `gorm:"foreignKey:CycleID" json:"payroll_cycle"`
+}

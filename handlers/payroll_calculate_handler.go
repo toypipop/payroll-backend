@@ -6,6 +6,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -88,6 +89,13 @@ func CalculatePayroll(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employees"})
 		return
 	}
+
+	// 3a. Attendance deduction config (late/absent)
+	attendanceConfig := models.AttendanceConfig{
+		IsLateDeductionEnabled:   true,
+		IsAbsentDeductionEnabled: true,
+	}
+	config.DB.Where("companies_id = ?", currentUser.CompaniesID).First(&attendanceConfig)
 
 	processedCount := 0
 	skippedCount := 0
@@ -205,6 +213,23 @@ func CalculatePayroll(c *gin.Context) {
 			})
 		}
 
+		// 4d2. Variable deductions from PayrollCycleDeduction - per-cycle only
+		var cycleDeductions []models.PayrollCycleDeduction
+		config.DB.Preload("DeductionType").
+			Where("employees_id = ? AND cycle_id = ?", emp.ID, cycle.ID).
+			Find(&cycleDeductions)
+
+		for _, cd := range cycleDeductions {
+			additionalDeduction += cd.Amount
+			if cd.DeductionType.IsTaxDeductible {
+				taxDeductible += cd.Amount
+			}
+			dtID := cd.DeductionTypeID
+			deductionItems = append(deductionItems, deductionItem{
+				name: cd.DeductionType.Name, amount: cd.Amount, deductionTypeID: &dtID,
+			})
+		}
+
 		// 4e. Unpaid leave deduction — only Approved Unpaid leaves overlapping cycle
 		var unpaidLeaves []models.LeaveRequest
 		config.DB.Where(
@@ -217,6 +242,47 @@ func CalculatePayroll(c *gin.Context) {
 			totalUnpaidDays += leave.TotalDays
 		}
 		unpaidLeaveDeduction := math.Round(totalUnpaidDays*(baseSalary/30)*100) / 100
+
+		// 4e2. Attendance deductions (late/absent) based on Attendance Settings toggles
+		var attendanceLogs []models.TimeLog
+		config.DB.Where(
+			"employees_id = ? AND ((check_in >= ? AND check_in <= ?) OR (status = ? AND check_in IS NULL AND created_at >= ? AND created_at <= ?))",
+			emp.ID, cycle.StartDate, cycle.EndDate, models.StatusAbsent, cycle.StartDate, cycle.EndDate,
+		).Find(&attendanceLogs)
+
+		totalLateMins := 0.0
+		totalAbsentDays := 0
+		workStartHour := attendanceConfig.WorkStartHour
+		workStartMin := attendanceConfig.WorkStartMin
+		if workStartHour == 0 && workStartMin == 0 {
+			workStartHour = 9
+		}
+
+		for _, log := range attendanceLogs {
+			switch log.Status {
+			case models.StatusAbsent:
+				totalAbsentDays++
+			case models.StatusLate:
+				if log.CheckIn != nil {
+					scheduled := time.Date(
+						log.CheckIn.Year(), log.CheckIn.Month(), log.CheckIn.Day(),
+						workStartHour, workStartMin, 0, 0, log.CheckIn.Location(),
+					)
+					if log.CheckIn.After(scheduled) {
+						totalLateMins += log.CheckIn.Sub(scheduled).Minutes()
+					}
+				}
+			}
+		}
+
+		lateDeduction := 0.0
+		absentDeduction := 0.0
+		if attendanceConfig.IsLateDeductionEnabled {
+			lateDeduction = math.Round(totalLateMins*attendanceConfig.LateRatePerMinute*100) / 100
+		}
+		if attendanceConfig.IsAbsentDeductionEnabled {
+			absentDeduction = math.Round(float64(totalAbsentDays)*attendanceConfig.AbsentRatePerDay*100) / 100
+		}
 
 		// 4f. SSO — based on all SSO-eligible earnings, capped at max amount
 		ssoAmount := 0.0
@@ -237,7 +303,7 @@ func CalculatePayroll(c *gin.Context) {
 
 		// 4h. Aggregate totals
 		totalEarning := math.Round((baseSalary+additionalEarning+otAmount)*100) / 100
-		totalDeduction := math.Round((unpaidLeaveDeduction+additionalDeduction)*100) / 100
+		totalDeduction := math.Round((unpaidLeaveDeduction+additionalDeduction+lateDeduction+absentDeduction)*100) / 100
 		netPay := math.Round((totalEarning-totalDeduction-ssoAmount-monthlyTax)*100) / 100
 
 		// 4h. Upsert PayrollTransaction within a DB transaction
@@ -321,6 +387,18 @@ func CalculatePayroll(c *gin.Context) {
 			details = append(details, models.PayrollTransactionDetail{
 				TransactionID: transaction.ID, ItemName: "Unpaid Leave",
 				Amount: unpaidLeaveDeduction, Type: "deduction",
+			})
+		}
+		if lateDeduction > 0 {
+			details = append(details, models.PayrollTransactionDetail{
+				TransactionID: transaction.ID, ItemName: "Late Amount",
+				Amount: lateDeduction, Type: "deduction",
+			})
+		}
+		if absentDeduction > 0 {
+			details = append(details, models.PayrollTransactionDetail{
+				TransactionID: transaction.ID, ItemName: "Absent Amount",
+				Amount: absentDeduction, Type: "deduction",
 			})
 		}
 		// SSO

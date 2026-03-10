@@ -59,11 +59,13 @@ func UpdateAttendanceConfig(c *gin.Context) {
 	err := config.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "companies_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"late_rate_per_minute": input.LateRatePerMinute,
-			"absent_rate_per_day":  input.AbsentRatePerDay,
-			"work_start_hour":      input.WorkStartHour,
-			"work_start_min":       input.WorkStartMin,
-			"updated_at":           time.Now(),
+			"late_rate_per_minute":        input.LateRatePerMinute,
+			"absent_rate_per_day":         input.AbsentRatePerDay,
+			"is_late_deduction_enabled":   input.IsLateDeductionEnabled,
+			"is_absent_deduction_enabled": input.IsAbsentDeductionEnabled,
+			"work_start_hour":             input.WorkStartHour,
+			"work_start_min":              input.WorkStartMin,
+			"updated_at":                  time.Now(),
 		}),
 	}).Create(&input).Error
 

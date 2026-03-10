@@ -56,6 +56,8 @@ type AttendanceConfig struct {
 	CompaniesID       uint           `gorm:"not null;uniqueIndex" json:"companies_id"`
 	LateRatePerMinute float64        `gorm:"type:decimal(10,2);default:0" json:"late_rate_per_minute"`
 	AbsentRatePerDay  float64        `gorm:"type:decimal(10,2);default:0" json:"absent_rate_per_day"`
+	IsLateDeductionEnabled   bool    `gorm:"default:true" json:"is_late_deduction_enabled"`
+	IsAbsentDeductionEnabled bool    `gorm:"default:true" json:"is_absent_deduction_enabled"`
 	WorkStartHour     int            `gorm:"default:9" json:"work_start_hour"`
 	WorkStartMin      int            `gorm:"default:0" json:"work_start_min"`
 	CreatedAt         time.Time      `json:"created_at"`

@@ -36,6 +36,7 @@ func main() {
 		&models.EmployeeEarning{},
 		&models.EmployeeDeduction{},
 		&models.PayrollCycleEarning{},
+		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
 	)
 
@@ -55,13 +56,14 @@ func main() {
 	}
 }
 
+// All Modules:
 // ├── Dashboard
 // ├── Employee Management
 // │   ├── Employees
 // │   └── Salaries Structure
 // ├── Time Attendance
 // │   ├── Time Logs
-// │   └── Leave Requests
+// │   ├── Leave Requests
 // │   └── Leave Approved
 // ├── Payroll Processing
 // │   ├── Payroll Cycles
@@ -72,11 +74,12 @@ func main() {
 // │   ├── Department
 // │   ├── Position
 // │   ├── Roles
-// │   └── Permission (Roles & Modules)
-// └── Payroll Config
-//     ├── : Global Settings (SSO, Tax)
-//     └── : Earning Types
-// 	   └── : Deduction Types
+// │   ├── Permission (Roles & Modules)
+// │   └── Attendance Settings (Late/Absent On-Off)
+// ├── Payroll Config
+// │   ├── Global Settings (SSO, Tax)
+// │   ├── Earning Types
+// │   └── Deduction Types
 // └── Reports
 //     ├── Payslips
 //     └── Government Forms

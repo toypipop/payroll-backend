@@ -105,6 +105,12 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/cycle-earnings/:id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.UpdateCycleEarning)
 		api.DELETE("/cycle-earnings/:id", middleware.CheckPermission("RunPayrollPage", "DELETE"), handlers.DeleteCycleEarning)
 
+		// --- Payroll Cycle Variable Deductions ---
+		api.GET("/cycle-deductions", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetCycleDeductions)
+		api.POST("/cycle-deductions", middleware.CheckPermission("RunPayrollPage", "CREATE"), handlers.CreateCycleDeduction)
+		api.PUT("/cycle-deductions/:id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.UpdateCycleDeduction)
+		api.DELETE("/cycle-deductions/:id", middleware.CheckPermission("RunPayrollPage", "DELETE"), handlers.DeleteCycleDeduction)
+
 		// --- Employee Earning Assignments ---
 		api.GET("/employee-earnings", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployeeEarnings)
 		api.POST("/employee-earnings", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployeeEarning)
