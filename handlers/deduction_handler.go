@@ -21,8 +21,8 @@ func GetDeductionTypes(c *gin.Context) {
 
 	var deductions []models.DeductionType
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
-	).Find(&deductions).Error
+		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
+	).Preload("Companies").Find(&deductions).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -71,7 +71,7 @@ func UpdateDeductionType(c *gin.Context) {
 	var deduction models.DeductionType
 	// Apply scope to verify record ownership before update (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
 	).First(&deduction, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -130,7 +130,7 @@ func DeleteDeductionType(c *gin.Context) {
 	// Use Scopes and Where to ensure only authorized records are deleted (English Comment)
 	var deduction models.DeductionType
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
 	).Where("id = ?", id).First(&deduction).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
 		return
@@ -147,7 +147,7 @@ func DeleteDeductionType(c *gin.Context) {
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
 	).Where("id = ?", id).Delete(&models.DeductionType{})
 
 	if result.RowsAffected == 0 {

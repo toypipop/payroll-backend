@@ -29,6 +29,7 @@ func GetCycleDeductions(c *gin.Context) {
 	).
 		Preload("DeductionType").
 		Preload("Employees").
+		Preload("Employees.Companies").
 		Where("cycle_id = ?", cycleID).
 		Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

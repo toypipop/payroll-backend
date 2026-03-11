@@ -33,6 +33,7 @@ type Employees struct {
 	IsActive bool `gorm:"default:true" json:"is_active"`
 
 	// Relations
+	Companies         Companies         `gorm:"foreignKey:CompaniesID" json:"companies"`
 	Department        Department        `gorm:"foreignKey:DeptID" json:"department"`
 	Position          Position          `gorm:"foreignKey:PosID" json:"position"`
 	Roles             Roles             `gorm:"foreignKey:RolesID" json:"roles"`
@@ -65,6 +66,8 @@ type PayrollCycle struct {
 	StartDate time.Time `json:"start_date"`
 	EndDate   time.Time `json:"end_date"`
 	IsClosed  bool      `gorm:"default:false" json:"is_closed"`
+
+	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 // PayrollTransaction records the actual payout for an Employees

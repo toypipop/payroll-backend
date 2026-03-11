@@ -15,6 +15,7 @@ type AttendanceSummaryRow struct {
 	EmployeesID   uint    `json:"employees_id"`
 	EmployeesCode string  `json:"employees_code"`
 	FullName      string  `json:"full_name"`
+	CompanyName   string  `json:"company_name"`
 	TotalLateMin  float64 `json:"total_late_minutes"`
 	TotalAbsent   int     `json:"total_absent_days"`
 	LateAmount    float64 `json:"late_amount"`
@@ -75,7 +76,7 @@ func GetAttendanceSummary(c *gin.Context) {
 	var employees []models.Employees
 	config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Find(&employees)
+	).Preload("Companies").Find(&employees)
 
 	if len(employees) == 0 {
 		c.JSON(http.StatusOK, gin.H{
@@ -137,6 +138,7 @@ func GetAttendanceSummary(c *gin.Context) {
 			EmployeesID:   emp.ID,
 			EmployeesCode: emp.EmployeesCode,
 			FullName:      emp.FirstName + " " + emp.LastName,
+			CompanyName:   emp.Companies.Name,
 			TotalLateMin:  math.Round(s.lateMins*100) / 100,
 			TotalAbsent:   s.absentDays,
 			LateAmount:    lateAmt,

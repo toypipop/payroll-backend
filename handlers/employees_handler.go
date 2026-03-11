@@ -33,6 +33,7 @@ func GetEmployees(c *gin.Context) {
 		Where("roles.is_super_admin = ?", false).
 		Preload("Department").
 		Preload("Position").
+		Preload("Companies").
 		// Filter only valid salary records that are already effective (English Comment)
 		Preload("SalariesStructure", func(db *gorm.DB) *gorm.DB {
 			return db.Where("effective_date <= ? AND is_enabled = ?", now, true).

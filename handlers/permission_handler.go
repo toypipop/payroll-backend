@@ -33,7 +33,7 @@ func GetRolesPermissions(c *gin.Context) {
 
 	var access []models.RolesModuleAccess
 	// Apply composite scopes for tenant and data access
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_access.companies_id", "roles_module_access.created_by")).
+	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_accesses.companies_id", "unused")).
 		Where("roles_id = ?", rolesID).
 		Find(&access).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch access"})
@@ -75,7 +75,7 @@ func UpdateRolesPermissions(c *gin.Context) {
 
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
 		// Apply Scopes to ensure the user only deletes permissions within their authorized companies/access
-		if err := tx.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_access.companies_id", "roles_module_access.created_by")).
+		if err := tx.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_accesses.companies_id", "unused")).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err

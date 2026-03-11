@@ -23,6 +23,7 @@ func GetEmployeeEarnings(c *gin.Context) {
 	).
 		Preload("EarningType").
 		Preload("Employees").
+		Preload("Employees.Companies").
 		Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

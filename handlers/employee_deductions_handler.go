@@ -23,6 +23,7 @@ func GetEmployeeDeductions(c *gin.Context) {
 	).
 		Preload("DeductionType").
 		Preload("Employees").
+		Preload("Employees.Companies").
 		Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

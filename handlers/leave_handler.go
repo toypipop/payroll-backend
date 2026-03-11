@@ -23,8 +23,8 @@ func GetLeaveRequests(c *gin.Context) {
 	var leaves []models.LeaveRequest
 	// Apply data scope to ensure users see only what they are allowed to (English Comment)
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
-	).Preload("Employees").Preload("Approver").Find(&leaves).Error
+		repository.ApplyScopes(currentUser, dataScope, "leave_requests.companies_id", "leave_requests.employees_id"),
+	).Preload("Employees").Preload("Employees.Companies").Preload("Approver").Find(&leaves).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -89,7 +89,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 	var leave models.LeaveRequest
 	// Check access rights before updating (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyScopes(currentUser, dataScope, "leave_requests.companies_id", "leave_requests.employees_id"),
 	).First(&leave, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
@@ -120,7 +120,7 @@ func DeleteLeaveRequest(c *gin.Context) {
 
 	// Ensure user has permission to delete this specific record (English Comment)
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyScopes(currentUser, dataScope, "leave_requests.companies_id", "leave_requests.employees_id"),
 	).Where("id = ?", id).Where("status = ?", models.LeaveStatusPending).Delete(&models.LeaveRequest{})
 
 	if result.RowsAffected == 0 {
@@ -139,8 +139,8 @@ func GetPendingLeaveRequests(c *gin.Context) {
 	var leaves []models.LeaveRequest
 	// filter only 'Pending' status for approval page (English Comment)
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
-	).Joins("Employees").Where("status = ?", models.LeaveStatusPending).Find(&leaves).Error
+		repository.ApplyScopes(currentUser, dataScope, "leave_requests.companies_id", "leave_requests.employees_id"),
+	).Preload("Employees").Preload("Employees.Companies").Where("status = ?", models.LeaveStatusPending).Find(&leaves).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

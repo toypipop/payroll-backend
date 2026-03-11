@@ -42,6 +42,7 @@ type DeductionType struct {
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	Companies       Companies      `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 // EmployeeEarning assigns an additional earning type + fixed monthly amount to an employee

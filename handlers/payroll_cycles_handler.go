@@ -21,6 +21,7 @@ func GetPayrollCycles(c *gin.Context) {
 
 	var cycles []models.PayrollCycle
 	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycles.companies_id", "unused")).
+		Preload("Companies").
 		Order("created_at DESC").Find(&cycles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
