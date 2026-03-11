@@ -47,7 +47,7 @@ func calculateThaiProgressiveTax(annualNetIncome float64) float64 {
 
 // CalculatePayroll runs the core payroll engine for all active employees in a given cycle
 func CalculatePayroll(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -59,7 +59,7 @@ func CalculatePayroll(c *gin.Context) {
 
 	// 1. Fetch & validate cycle - must belong to user's company and not be closed
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ScopeCompanies(currentUser.CompaniesID)).
+	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycles.companies_id", "unused")).
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found"})
 		return
@@ -92,7 +92,7 @@ func CalculatePayroll(c *gin.Context) {
 
 // GetPayrollTransactions returns a summary table of all transactions for a given cycle
 func GetPayrollTransactions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -104,7 +104,7 @@ func GetPayrollTransactions(c *gin.Context) {
 
 	// Verify the cycle belongs to the user's company
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ScopeCompanies(currentUser.CompaniesID)).
+	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycles.companies_id", "unused")).
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Cycle not found"})
 		return
@@ -126,7 +126,7 @@ func GetPayrollTransactions(c *gin.Context) {
 // GetPayrollSlip returns transaction + all detail lines for a single employee payslip.
 // Strict rule: only closed payroll cycles are accessible.
 func GetPayrollSlip(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -149,7 +149,7 @@ func GetPayrollSlip(c *gin.Context) {
 
 	// Verify the transaction's cycle belongs to the user's company (authorization check)
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ScopeCompanies(currentUser.CompaniesID)).
+	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycles.companies_id", "unused")).
 		First(&cycle, transaction.CycleID).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return

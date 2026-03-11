@@ -10,18 +10,19 @@ import (
 )
 
 func GetEmployeeDeductions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
 	var items []models.EmployeeDeduction
-	if err := config.DB.
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employee_deductions.companies_id", "employee_deductions.employees_id"),
+	).
 		Preload("DeductionType").
 		Preload("Employees").
-		Where("companies_id = ?", currentUser.CompaniesID).
 		Find(&items).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

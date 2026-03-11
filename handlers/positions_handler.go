@@ -18,11 +18,9 @@ func GetPositions(c *gin.Context) {
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var positions []models.Position
-	dbQuery := config.DB
-	if dataScope != models.ScopeAll {
-		dbQuery = dbQuery.Where("companies_id = ?", currentUser.CompaniesID)
-	}
-	if err := dbQuery.Preload("Companies").Find(&positions).Error; err != nil {
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "positions.companies_id", "unused"),
+	).Preload("Companies").Find(&positions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
 		return
 	}

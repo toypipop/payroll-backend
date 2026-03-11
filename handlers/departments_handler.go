@@ -20,11 +20,9 @@ func GetDepartments(c *gin.Context) {
 	}
 
 	var departments []models.Department
-	dbQuery := config.DB
-	if dataScope != models.ScopeAll {
-		dbQuery = dbQuery.Where("companies_id = ?", currentUser.CompaniesID)
-	}
-	if err := dbQuery.Preload("Companies").Find(&departments).Error; err != nil {
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "unused"),
+	).Preload("Companies").Find(&departments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
 		return
 	}
