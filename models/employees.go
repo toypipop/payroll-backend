@@ -40,6 +40,21 @@ type Employees struct {
 	SalariesStructure SalariesStructure `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
 }
 
+// EmployeeBankAccount stores the bank transfer details for each Employee
+type EmployeeBankAccount struct {
+	ID          uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt   time.Time             `json:"created_at"`
+	UpdatedAt   time.Time             `json:"updated_at"`
+	DeletedAt   soft_delete.DeletedAt `gorm:"uniqueIndex:idx_bank_emp_deleted;not null;default:0" json:"-"`
+	CompaniesID uint                  `gorm:"not null;index" json:"companies_id"`
+	EmployeesID uint                  `gorm:"uniqueIndex:idx_bank_emp_deleted;not null" json:"employees_id"`
+	BankName    string                `gorm:"not null;size:100" json:"bank_name"`
+	AccountName string                `gorm:"not null;size:200" json:"account_name"`
+	AccountNo   string                `gorm:"not null;size:50" json:"account_no"`
+	Companies   Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Employees   Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
+}
+
 // SalariesStructure defines the base pay for each Employees
 type SalariesStructure struct {
 	ID            uint                  `gorm:"primaryKey" json:"id"`

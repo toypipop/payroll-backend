@@ -138,8 +138,21 @@ func SetupRouter() *gin.Engine {
 		api.GET("/payroll/transactions/:cycle_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetPayrollTransactions)
 		api.GET("/payroll/slip/:transaction_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetPayrollSlip)
 
+		// --- Reports Module ---
+		// Payslips (canonical route used by PayslipsReportPage)
+		api.GET("/payslips/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), handlers.GetPayslipReport)
+		// Bank Transfer Report
+		api.GET("/reports/bank-transfer/:cycle_id", middleware.CheckPermission("BankTransferReportPage", "VIEW"), handlers.GetBankTransferReport)
+		// Tax Forms: PND.1 monthly summary & 50 Tawi individual certificate
+		api.GET("/reports/tax-forms/pnd1/:cycle_id", middleware.CheckPermission("TaxFormsReportPage", "VIEW"), handlers.GetTaxFormsPND1)
+		api.GET("/reports/tax-forms/50tawi/:transaction_id", middleware.CheckPermission("TaxFormsReportPage", "VIEW"), handlers.GetTax50Tawi)
+		// Social Security (SSO Form 1-10)
+		api.GET("/reports/sso/:cycle_id", middleware.CheckPermission("SSOReportPage", "VIEW"), handlers.GetSSOReport)
+		// Payroll Analysis Register + Journal
+		api.GET("/reports/payroll-analysis/:cycle_id", middleware.CheckPermission("PayrollAnalysisPage", "VIEW"), handlers.GetPayrollAnalysis)
+
 		// --- Reports ---
-		api.GET("/payslips/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), handlers.GetPayrollSlip)
+		// api.GET("/payslips/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), handlers.GetPayrollSlip)
 	}
 	return r
 }

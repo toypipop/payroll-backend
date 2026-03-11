@@ -39,6 +39,7 @@ func main() {
 		&models.PayrollCycleEarning{},
 		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
+		&models.EmployeeBankAccount{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -221,6 +222,10 @@ func main() {
 
 		// Level 2: Sub-Menus under Reports
 		{ModuleName: "Payslips", ModuleKey: "PayslipsReportPage", RoutePath: "/payslips", Icon: "Description", Order: 1, ParentID: ptr(7)},
+		{ModuleName: "Bank Transfer", ModuleKey: "BankTransferReportPage", RoutePath: "/reports/bank-transfer", Icon: "AccountBalance", Order: 2, ParentID: ptr(7)},
+		{ModuleName: "Tax Forms", ModuleKey: "TaxFormsReportPage", RoutePath: "/reports/tax-forms", Icon: "Receipt", Order: 3, ParentID: ptr(7)},
+		{ModuleName: "Social Security (SSO)", ModuleKey: "SSOReportPage", RoutePath: "/reports/sso", Icon: "HealthAndSafety", Order: 4, ParentID: ptr(7)},
+		{ModuleName: "Payroll Analysis", ModuleKey: "PayrollAnalysisPage", RoutePath: "/reports/payroll-analysis", Icon: "Analytics", Order: 5, ParentID: ptr(7)},
 	}
 
 	for _, m := range modules {
@@ -707,6 +712,38 @@ func main() {
 			}
 			config.DB.Create(&s.details)
 		}
+	}
+
+	// --- Employee Bank Accounts ---
+	// Fetch employees for bank account seeding (may already be fetched above, re-fetch to be safe)
+	var aliceB, bobB, carolB, davidB, eveB, staffB models.Employees
+	config.DB.Unscoped().Where("email = ?", "alice@techa.com").First(&aliceB)
+	config.DB.Unscoped().Where("email = ?", "bob@techa.com").First(&bobB)
+	config.DB.Unscoped().Where("email = ?", "carol@techa.com").First(&carolB)
+	config.DB.Unscoped().Where("email = ?", "david@bizgroup.com").First(&davidB)
+	config.DB.Unscoped().Where("email = ?", "eve@bizgroup.com").First(&eveB)
+	config.DB.Unscoped().Where("email = ?", "staff@admin.com").First(&staffB)
+
+	type bankSeed struct {
+		emp  models.Employees
+		comp models.Companies
+		bank models.EmployeeBankAccount
+	}
+	bankSeeds := []bankSeed{
+		{aliceB, compA, models.EmployeeBankAccount{BankName: "KBANK", AccountNo: "123-4-56789-0", AccountName: "Alice Johnson"}},
+		{bobB, compA, models.EmployeeBankAccount{BankName: "SCB", AccountNo: "234-5-67890-1", AccountName: "Bob Smith"}},
+		{carolB, compA, models.EmployeeBankAccount{BankName: "BBL", AccountNo: "345-6-78901-2", AccountName: "Carol Davis"}},
+		{davidB, compB, models.EmployeeBankAccount{BankName: "KTB", AccountNo: "456-7-89012-3", AccountName: "David Wilson"}},
+		{eveB, compB, models.EmployeeBankAccount{BankName: "BAY", AccountNo: "567-8-90123-4", AccountName: "Eve Brown"}},
+		{staffB, sysComp, models.EmployeeBankAccount{BankName: "TTB", AccountNo: "678-9-01234-5", AccountName: "Test Staff"}},
+	}
+	for _, s := range bankSeeds {
+		if s.emp.ID == 0 {
+			continue
+		}
+		s.bank.CompaniesID = s.comp.ID
+		s.bank.EmployeesID = s.emp.ID
+		config.DB.Where(models.EmployeeBankAccount{EmployeesID: s.emp.ID}).Assign(s.bank).FirstOrCreate(&s.bank)
 	}
 
 	log.Println("Migration & Setup completed with Payroll Configs!")
