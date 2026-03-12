@@ -151,6 +151,14 @@ func GetPendingLeaveRequests(c *gin.Context) {
 
 func ApproveLeaveRequest(c *gin.Context) {
 	id := c.Param("id")
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var approver models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&approver, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
 	var input struct {
 		Status     string `json:"status" binding:"required,oneof=Approved Rejected"`
 		ApprovedBy uint   `json:"approved_by"`
@@ -162,8 +170,10 @@ func ApproveLeaveRequest(c *gin.Context) {
 	}
 
 	var leave models.LeaveRequest
-	if err := config.DB.First(&leave, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Leave request not found"})
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(approver, dataScope, "leave_requests.companies_id", "leave_requests.employees_id"),
+	).First(&leave, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Leave request not found or access denied"})
 		return
 	}
 

@@ -24,6 +24,11 @@ func ScopeDataAccess(user models.Employees, scope models.DataScope, tableCol ...
 			col = tableCol[0]
 		}
 
+		// "unused" means company-level reference data — skip per-employee filtering
+		if col == "unused" {
+			return db
+		}
+
 		switch scope {
 		case models.ScopeOwn:
 			return db.Where(col+" = ?", user.ID)

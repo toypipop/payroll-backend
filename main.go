@@ -38,6 +38,15 @@ func main() {
 		&models.PayrollCycleEarning{},
 		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
+		&models.EmployeeBankAccount{},
+		// Master Data tables
+		&models.Bank{},
+		&models.EmploymentType{},
+		&models.Holiday{},
+		&models.WorkLocation{},
+		&models.LeaveTypeSetting{},
+		&models.EarningCategory{},
+		&models.DeductionCategory{},
 	)
 
 	if err != nil {

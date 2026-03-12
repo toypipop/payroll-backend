@@ -65,13 +65,17 @@ func CreateEmployees(c *gin.Context) {
 		input.Password = string(hashedPassword)
 	}
 
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	if err := config.DB.Select("companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Companies context not found"})
 		return
 	}
-	input.CompaniesID = currentUser.CompaniesID
+
+	// ScopeAll (SUPER_ADMIN) can create employees for any company if companies_id is specified
+	if dataScope != models.ScopeAll || input.CompaniesID == 0 {
+		input.CompaniesID = currentUser.CompaniesID
+	}
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -153,4 +157,85 @@ func DeleteEmployees(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
+}
+
+// GetEmployeeBankAccount returns the bank account info for a single employee.
+func GetEmployeeBankAccount(c *gin.Context) {
+	id := c.Param("id")
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	var emp models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).First(&emp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found or access denied"})
+		return
+	}
+
+	var bank models.EmployeeBankAccount
+	if err := config.DB.Where("employees_id = ? AND companies_id = ?", emp.ID, emp.CompaniesID).First(&bank).Error; err != nil {
+		// Return an empty record so the frontend knows there is no bank account yet
+		c.JSON(http.StatusOK, models.EmployeeBankAccount{EmployeesID: emp.ID, CompaniesID: emp.CompaniesID})
+		return
+	}
+	c.JSON(http.StatusOK, bank)
+}
+
+// UpsertEmployeeBankAccount creates or updates the bank account for a single employee.
+func UpsertEmployeeBankAccount(c *gin.Context) {
+	id := c.Param("id")
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	var emp models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).First(&emp, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found or access denied"})
+		return
+	}
+
+	var input struct {
+		BankName    string `json:"bank_name" binding:"required"`
+		AccountName string `json:"account_name" binding:"required"`
+		AccountNo   string `json:"account_no" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var bank models.EmployeeBankAccount
+	result := config.DB.Where("employees_id = ? AND companies_id = ?", emp.ID, emp.CompaniesID).First(&bank)
+
+	bank.EmployeesID = emp.ID
+	bank.CompaniesID = emp.CompaniesID
+	bank.BankName = input.BankName
+	bank.AccountName = input.AccountName
+	bank.AccountNo = input.AccountNo
+
+	if result.Error != nil {
+		if err := config.DB.Create(&bank).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save bank account"})
+			return
+		}
+	} else {
+		if err := config.DB.Save(&bank).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bank account"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, bank)
 }

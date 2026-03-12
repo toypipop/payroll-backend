@@ -21,7 +21,7 @@ func GetDepartments(c *gin.Context) {
 
 	var departments []models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "unused"),
+		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "unused"),
 	).Preload("Companies").Find(&departments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
 		return
@@ -61,7 +61,7 @@ func UpdateDepartment(c *gin.Context) {
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),
+		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
@@ -91,7 +91,7 @@ func DeleteDepartment(c *gin.Context) {
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),
+		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
@@ -108,7 +108,7 @@ func DeleteDepartment(c *gin.Context) {
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "departments.companies_id", "departments.id"),
+		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).Delete(&models.Department{})
 
 	if result.RowsAffected == 0 {

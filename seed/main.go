@@ -40,6 +40,14 @@ func main() {
 		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
 		&models.EmployeeBankAccount{},
+		// Master Data tables
+		&models.Bank{},
+		&models.EmploymentType{},
+		&models.Holiday{},
+		&models.WorkLocation{},
+		&models.LeaveTypeSetting{},
+		&models.EarningCategory{},
+		&models.DeductionCategory{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -110,6 +118,108 @@ func main() {
 		WorkStartMin:      0,
 	}
 	config.DB.Where(models.AttendanceConfig{CompaniesID: compB.ID}).Assign(attConfigB).FirstOrCreate(&attConfigB)
+
+	// --- Banks (Global) ---
+	banks := []models.Bank{
+		{BankCode: "BBL", BankName: "Bangkok Bank", SwiftCode: "BKKBTHBK"},
+		{BankCode: "KBANK", BankName: "Kasikorn Bank", SwiftCode: "KASITHBK"},
+		{BankCode: "SCB", BankName: "Siam Commercial Bank", SwiftCode: "SICOTHBK"},
+		{BankCode: "KTB", BankName: "Krungthai Bank", SwiftCode: "KRTHTHBK"},
+		{BankCode: "BAY", BankName: "Bank of Ayudhya (Krungsri)", SwiftCode: "AYUDTHBK"},
+		{BankCode: "TTB", BankName: "TTB Bank", SwiftCode: "TMBKTHBK"},
+		{BankCode: "TISCO", BankName: "TISCO Bank", SwiftCode: "TFPCTHB1"},
+		{BankCode: "UOB", BankName: "UOB Thailand", SwiftCode: "UOVBTHBK"},
+		{BankCode: "GSB", BankName: "Government Savings Bank", SwiftCode: "GOSABANK"},
+		{BankCode: "BAAC", BankName: "Bank for Agriculture & Agricultural Cooperatives", SwiftCode: "BAABTHBK"},
+		{BankCode: "KKP", BankName: "Kiatnakin Phatra Bank", SwiftCode: "KKPBTHBK"},
+		{BankCode: "CIMB", BankName: "CIMB Thai Bank", SwiftCode: "UBOBTHBK"},
+		{BankCode: "LHB", BankName: "Land and Houses Bank", SwiftCode: "LAHRTHB1"},
+	}
+	for _, b := range banks {
+		config.DB.Where(models.Bank{BankCode: b.BankCode}).Assign(b).FirstOrCreate(&b)
+	}
+
+	// --- Employment Types (Global) ---
+	empTypes := []models.EmploymentType{
+		{Name: "Full-time", Description: "Permanent full-time employee"},
+		{Name: "Part-time", Description: "Part-time employee working reduced hours"},
+		{Name: "Contract", Description: "Fixed-term contract employee"},
+		{Name: "Probation", Description: "Employee on probation period"},
+		{Name: "Intern", Description: "Internship / trainee position"},
+	}
+	for _, et := range empTypes {
+		config.DB.Where(models.EmploymentType{Name: et.Name}).Assign(et).FirstOrCreate(&et)
+	}
+
+	// --- Earning Categories (Global) ---
+	earningCats := []models.EarningCategory{
+		{Name: "Regular Pay"},
+		{Name: "Allowance"},
+		{Name: "Bonus"},
+		{Name: "Overtime"},
+		{Name: "Reimbursement"},
+	}
+	for _, ec := range earningCats {
+		config.DB.Where(models.EarningCategory{Name: ec.Name}).Assign(ec).FirstOrCreate(&ec)
+	}
+
+	// --- Deduction Categories (Global) ---
+	deductionCats := []models.DeductionCategory{
+		{Name: "Statutory"},
+		{Name: "Voluntary"},
+		{Name: "Loan"},
+	}
+	for _, dc := range deductionCats {
+		config.DB.Where(models.DeductionCategory{Name: dc.Name}).Assign(dc).FirstOrCreate(&dc)
+	}
+
+	// --- Per-Company Master Data ---
+	for _, comp := range []models.Companies{sysComp, compA, compB} {
+		// Work Locations
+		locations := []models.WorkLocation{
+			{CompaniesID: comp.ID, Name: "Office (HQ)"},
+			{CompaniesID: comp.ID, Name: "Work From Home"},
+			{CompaniesID: comp.ID, Name: "Client Site"},
+		}
+		for _, loc := range locations {
+			config.DB.Where(models.WorkLocation{CompaniesID: comp.ID, Name: loc.Name}).Assign(loc).FirstOrCreate(&loc)
+		}
+
+		// Leave Types
+		leaveTypes := []models.LeaveTypeSetting{
+			{CompaniesID: comp.ID, Name: "Annual Leave", IsPaid: true, MaxDaysPerYear: 15},
+			{CompaniesID: comp.ID, Name: "Sick Leave", IsPaid: true, MaxDaysPerYear: 30},
+			{CompaniesID: comp.ID, Name: "Personal Leave", IsPaid: true, MaxDaysPerYear: 3},
+			{CompaniesID: comp.ID, Name: "Unpaid Leave", IsPaid: false, MaxDaysPerYear: 0},
+			{CompaniesID: comp.ID, Name: "Maternity Leave", IsPaid: true, MaxDaysPerYear: 98},
+		}
+		for _, lt := range leaveTypes {
+			config.DB.Where(models.LeaveTypeSetting{CompaniesID: comp.ID, Name: lt.Name}).Assign(lt).FirstOrCreate(&lt)
+		}
+
+		// Holidays (Thai Public Holidays 2026)
+		holidays := []models.Holiday{
+			{CompaniesID: comp.ID, Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Name: "New Year's Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC), Name: "Makha Bucha Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC), Name: "Chakri Memorial Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 14, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), Name: "Labour Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), Name: "Coronation Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC), Name: "Visakha Bucha Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC), Name: "King's Birthday", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC), Name: "Queen Mother's Birthday", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC), Name: "King Rama IX Memorial Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC), Name: "Chulalongkorn Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC), Name: "King Rama IX Birthday", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 10, 0, 0, 0, 0, time.UTC), Name: "Constitution Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC), Name: "New Year's Eve", IsPaid: true},
+		}
+		for _, h := range holidays {
+			config.DB.Where(models.Holiday{CompaniesID: comp.ID, Date: h.Date}).Assign(h).FirstOrCreate(&h)
+		}
+	}
 
 	// --- Earning Types ---
 	// Base Salary is NOT listed here — it is managed via the Salaries module (SalariesStructure)
@@ -211,6 +321,8 @@ func main() {
 		{ModuleName: "Global Settings", ModuleKey: "PayrollGlobalSettingsPage", RoutePath: "/payroll-global", Icon: "SettingsSuggest", Order: 1, ParentID: ptr(5)},
 		{ModuleName: "Earning Types", ModuleKey: "EarningTypesPage", RoutePath: "/earning-types", Icon: "AddCard", Order: 2, ParentID: ptr(5)},
 		{ModuleName: "Deduction Types", ModuleKey: "DeductionTypesPage", RoutePath: "/deduction-types", Icon: "PriceCheck", Order: 3, ParentID: ptr(5)},
+		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 4, ParentID: ptr(5)},
+		{ModuleName: "Earning Categories", ModuleKey: "EarningCategoryPage", RoutePath: "/earning-categories", Icon: "Category", Order: 5, ParentID: ptr(5)},
 
 		// Level 2: Sub-Menus under Settings
 		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 1, ParentID: ptr(6)},
@@ -219,6 +331,10 @@ func main() {
 		{ModuleName: "Permission", ModuleKey: "PermissionSettings", RoutePath: "/permissions", Icon: "LockPerson", Order: 4, ParentID: ptr(6)},
 		{ModuleName: "Companies", ModuleKey: "CompaniesPage", RoutePath: "/companies", Icon: "Business", Order: 5, ParentID: ptr(6)},
 		{ModuleName: "Attendance Settings", ModuleKey: "AttendanceSettingsPage", RoutePath: "/attendance-settings", Icon: "Tune", Order: 6, ParentID: ptr(6)},
+		{ModuleName: "Bank Master", ModuleKey: "MasterBankPage", RoutePath: "/master-banks", Icon: "AccountBalance", Order: 7, ParentID: ptr(6)},
+		{ModuleName: "Holiday Calendar", ModuleKey: "HolidayCalendarPage", RoutePath: "/holidays", Icon: "CalendarMonth", Order: 8, ParentID: ptr(6)},
+		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 9, ParentID: ptr(6)},
+		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 10, ParentID: ptr(6)},
 
 		// Level 2: Sub-Menus under Reports
 		{ModuleName: "Payslips", ModuleKey: "PayslipsReportPage", RoutePath: "/payslips", Icon: "Description", Order: 1, ParentID: ptr(7)},
