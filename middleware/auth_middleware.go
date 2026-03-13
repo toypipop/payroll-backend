@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"payroll-backend/config"
-	"payroll-backend/handlers"
+	authhandler "payroll-backend/handlers/auth"
 	"payroll-backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -33,11 +33,11 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims := &handlers.TokenClaims{}
+		claims := &authhandler.TokenClaims{}
 
 		// 3. Parse and Validate Token (English Comment)
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return handlers.GetJWTSecret(), nil // getter jwtSecret
+			return authhandler.GetJWTSecret(), nil // getter jwtSecret
 		})
 
 		if err != nil || !token.Valid {

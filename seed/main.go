@@ -40,7 +40,6 @@ func main() {
 		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
 		&models.EmployeeBankAccount{},
-		// Master Data tables
 		&models.Bank{},
 		&models.EmploymentType{},
 		&models.Holiday{},
@@ -217,7 +216,8 @@ func main() {
 			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC), Name: "New Year's Eve", IsPaid: true},
 		}
 		for _, h := range holidays {
-			config.DB.Where(models.Holiday{CompaniesID: comp.ID, Date: h.Date}).Assign(h).FirstOrCreate(&h)
+			dateStr := h.Date.Format("2006-01-02")
+			config.DB.Where("companies_id = ? AND date = ?", comp.ID, dateStr).Assign(h).FirstOrCreate(&h)
 		}
 	}
 

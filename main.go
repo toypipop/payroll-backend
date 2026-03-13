@@ -39,7 +39,6 @@ func main() {
 		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
 		&models.EmployeeBankAccount{},
-		// Master Data tables
 		&models.Bank{},
 		&models.EmploymentType{},
 		&models.Holiday{},

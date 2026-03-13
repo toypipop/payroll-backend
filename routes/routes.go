@@ -1,7 +1,13 @@
 package routes
 
 import (
-	"payroll-backend/handlers"
+	atthandler "payroll-backend/handlers/attendance"
+	authhandler "payroll-backend/handlers/auth"
+	emphandler "payroll-backend/handlers/employees"
+	payhandler "payroll-backend/handlers/payroll"
+	cfghandler "payroll-backend/handlers/payrollconfig"
+	rephandler "payroll-backend/handlers/reports"
+	sethandler "payroll-backend/handlers/settings"
 	"payroll-backend/middleware"
 	"time"
 
@@ -12,7 +18,6 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// 1. CORS Configuration (English Comment)
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -22,178 +27,156 @@ func SetupRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// 2. Public Routes (English Comment)
-	auth := r.Group("/api/v1/auth")
+	// Public Routes
+	authGroup := r.Group("/api/v1/auth")
 	{
-		auth.POST("/login", handlers.Login)
+		authGroup.POST("/login", authhandler.Login)
 	}
-	r.GET("/api/v1/modules", handlers.GetAppModules)
-	// 3. Protected Routes (English Comment)
+	r.GET("/api/v1/modules", authhandler.GetAppModules)
+
+	// Protected Routes
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
 	{
-		// --- Employees Management ---
-		api.GET("/employees", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployees)
-		api.POST("/employees", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployees)
-		api.PUT("/employees/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpdateEmployees)
-		api.DELETE("/employees/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployees)
-		api.GET("/employees/:id/bank-account", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployeeBankAccount)
-		api.PUT("/employees/:id/bank-account", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpsertEmployeeBankAccount)
+		// --- Employees ---
+		api.GET("/employees", middleware.CheckPermission("EmployeesListPage", "VIEW"), emphandler.GetEmployees)
+		api.POST("/employees", middleware.CheckPermission("EmployeesListPage", "CREATE"), emphandler.CreateEmployees)
+		api.PUT("/employees/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), emphandler.UpdateEmployees)
+		api.DELETE("/employees/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), emphandler.DeleteEmployees)
+		api.GET("/employees/:id/bank-account", middleware.CheckPermission("EmployeesListPage", "VIEW"), emphandler.GetEmployeeBankAccount)
+		api.PUT("/employees/:id/bank-account", middleware.CheckPermission("EmployeesListPage", "EDIT"), emphandler.UpsertEmployeeBankAccount)
 
-		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), handlers.GetEmployees)
-		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "CREATE"), handlers.UpdateSalariesStructure)
+		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), emphandler.GetEmployees)
+		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "CREATE"), emphandler.UpdateSalariesStructure)
 
-		// --- Master Data (Department & Position) ---
-		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), handlers.GetDepartments)
-		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), handlers.CreateDepartment)
-		api.PUT("/departments/:id", middleware.CheckPermission("DepartmentSettings", "EDIT"), handlers.UpdateDepartment)
-		api.DELETE("/departments/:id", middleware.CheckPermission("DepartmentSettings", "DELETE"), handlers.DeleteDepartment)
+		api.GET("/employee-earnings", middleware.CheckPermission("EmployeeEarningsPage", "VIEW"), emphandler.GetEmployeeEarnings)
+		api.POST("/employee-earnings", middleware.CheckPermission("EmployeeEarningsPage", "CREATE"), emphandler.CreateEmployeeEarning)
+		api.PUT("/employee-earnings/:id", middleware.CheckPermission("EmployeeEarningsPage", "EDIT"), emphandler.UpdateEmployeeEarning)
+		api.DELETE("/employee-earnings/:id", middleware.CheckPermission("EmployeeEarningsPage", "DELETE"), emphandler.DeleteEmployeeEarning)
 
-		api.GET("/positions", middleware.CheckPermission("PositionSettings", "VIEW"), handlers.GetPositions)
-		api.POST("/positions", middleware.CheckPermission("PositionSettings", "CREATE"), handlers.CreatePosition)
-		api.PUT("/positions/:id", middleware.CheckPermission("PositionSettings", "EDIT"), handlers.UpdatePosition)
-		api.DELETE("/positions/:id", middleware.CheckPermission("PositionSettings", "DELETE"), handlers.DeletePosition)
+		api.GET("/employee-deductions", middleware.CheckPermission("EmployeeDeductionsPage", "VIEW"), emphandler.GetEmployeeDeductions)
+		api.POST("/employee-deductions", middleware.CheckPermission("EmployeeDeductionsPage", "CREATE"), emphandler.CreateEmployeeDeduction)
+		api.PUT("/employee-deductions/:id", middleware.CheckPermission("EmployeeDeductionsPage", "EDIT"), emphandler.UpdateEmployeeDeduction)
+		api.DELETE("/employee-deductions/:id", middleware.CheckPermission("EmployeeDeductionsPage", "DELETE"), emphandler.DeleteEmployeeDeduction)
 
-		// --- Roles Management ---
-		api.GET("/roles", middleware.CheckPermission("RolesPage", "VIEW"), handlers.GetRoles)
-		api.POST("/roles", middleware.CheckPermission("RolesPage", "EDIT"), handlers.CreateRole)
-		api.PUT("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), handlers.UpdateRole)
-		api.DELETE("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), handlers.DeleteRole)
+		// --- Attendance ---
+		api.GET("/timelogs", middleware.CheckPermission("TimelogsListPage", "VIEW"), atthandler.GetTimeLogs)
+		api.POST("/timelogs", middleware.CheckPermission("TimelogsListPage", "CREATE"), atthandler.CreateTimeLog)
+		api.PUT("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "EDIT"), atthandler.UpdateTimeLog)
+		api.DELETE("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "DELETE"), atthandler.DeleteTimeLog)
 
-		// --- Permission Management ---
-		api.GET("/permissions/:id", middleware.CheckPermission("PermissionSettings", "VIEW"), handlers.GetRolesPermissions)
-		api.POST("/permissions/:id", middleware.CheckPermission("PermissionSettings", "EDIT"), handlers.UpdateRolesPermissions)
+		api.GET("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "VIEW"), atthandler.GetLeaveRequests)
+		api.POST("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "CREATE"), atthandler.CreateLeaveRequest)
+		api.PUT("/leaves/requests/:id", middleware.CheckPermission("LeaveRequestsPage", "EDIT"), atthandler.UpdateLeaveRequest)
+		api.DELETE("/leaves/requests/:id", middleware.CheckPermission("LeaveRequestsPage", "DELETE"), atthandler.DeleteLeaveRequest)
 
-		// --- Companies Profile Management ---
-		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), handlers.GetAllCompanies)
-		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), handlers.GetCompanies)
-		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), handlers.CreateCompanies)
-		api.PUT("/companies/:id", middleware.CheckPermission("CompaniesPage", "EDIT"), handlers.UpdateCompanies)
-		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), handlers.DeleteCompanies)
+		api.GET("/leaves/approved", middleware.CheckPermission("LeaveApprovedPage", "VIEW"), atthandler.GetPendingLeaveRequests)
+		api.PUT("/leaves/approve/:id", middleware.CheckPermission("LeaveApprovedPage", "EDIT"), atthandler.ApproveLeaveRequest)
 
-		// --- Time Logs Management ---
-		api.GET("/timelogs", middleware.CheckPermission("TimelogsListPage", "VIEW"), handlers.GetTimeLogs)
-		api.POST("/timelogs", middleware.CheckPermission("TimelogsListPage", "CREATE"), handlers.CreateTimeLog)
-		api.PUT("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "EDIT"), handlers.UpdateTimeLog)
-		api.DELETE("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "DELETE"), handlers.DeleteTimeLog)
+		api.GET("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "VIEW"), atthandler.GetAttendanceConfigs)
+		api.POST("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "EDIT"), atthandler.UpdateAttendanceConfig)
 
-		api.GET("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "VIEW"), handlers.GetLeaveRequests)
-		api.POST("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "CREATE"), handlers.CreateLeaveRequest)
-		api.PUT("/leaves/requests/:id", middleware.CheckPermission("LeaveRequestsPage", "EDIT"), handlers.UpdateLeaveRequest)
-		api.DELETE("/leaves/requests/:id", middleware.CheckPermission("LeaveRequestsPage", "DELETE"), handlers.DeleteLeaveRequest)
+		api.GET("/attendance/summary", middleware.CheckPermission("AttendanceSummaryPage", "VIEW"), atthandler.GetAttendanceSummary)
 
-		api.GET("/leaves/approved", middleware.CheckPermission("LeaveApprovedPage", "VIEW"), handlers.GetPendingLeaveRequests)
-		api.PUT("/leaves/approve/:id", middleware.CheckPermission("LeaveApprovedPage", "EDIT"), handlers.ApproveLeaveRequest)
+		// --- Payroll Processing ---
+		api.GET("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "VIEW"), payhandler.GetPayrollCycles)
+		api.POST("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "CREATE"), payhandler.CreatePayrollCycle)
+		api.PATCH("/payroll/cycles/:id/close", middleware.CheckPermission("PayrollCyclesPage", "EDIT"), payhandler.ClosePayrollCycle)
+		api.POST("/payroll/calculate/:cycle_id", middleware.CheckPermission("RunPayrollPage", "EDIT"), payhandler.CalculatePayroll)
+		api.GET("/payroll/transactions/:cycle_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), payhandler.GetPayrollTransactions)
+		api.GET("/payroll/slip/:transaction_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), payhandler.GetPayrollSlip)
 
-		// --- Payroll Global Config ---
-		api.GET("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "VIEW"), handlers.GetPayrollConfigs)
-		api.POST("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "EDIT"), handlers.UpdatePayrollConfig)
+		api.GET("/cycle-earnings", middleware.CheckPermission("CycleEarningsPage", "VIEW"), payhandler.GetCycleEarnings)
+		api.POST("/cycle-earnings", middleware.CheckPermission("CycleEarningsPage", "CREATE"), payhandler.CreateCycleEarning)
+		api.PUT("/cycle-earnings/:id", middleware.CheckPermission("CycleEarningsPage", "EDIT"), payhandler.UpdateCycleEarning)
+		api.DELETE("/cycle-earnings/:id", middleware.CheckPermission("CycleEarningsPage", "DELETE"), payhandler.DeleteCycleEarning)
 
-		// --- Earning Types CRUD (English Comment) ---
-		api.GET("/earning-types", middleware.CheckPermission("EarningTypesPage", "VIEW"), handlers.GetEarningTypes)
-		api.POST("/earning-types", middleware.CheckPermission("EarningTypesPage", "CREATE"), handlers.CreateEarningType)
-		api.PUT("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), handlers.UpdateEarningType)
-		api.DELETE("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), handlers.DeleteEarningType)
+		api.GET("/cycle-deductions", middleware.CheckPermission("CycleDeductionsPage", "VIEW"), payhandler.GetCycleDeductions)
+		api.POST("/cycle-deductions", middleware.CheckPermission("CycleDeductionsPage", "CREATE"), payhandler.CreateCycleDeduction)
+		api.PUT("/cycle-deductions/:id", middleware.CheckPermission("CycleDeductionsPage", "EDIT"), payhandler.UpdateCycleDeduction)
+		api.DELETE("/cycle-deductions/:id", middleware.CheckPermission("CycleDeductionsPage", "DELETE"), payhandler.DeleteCycleDeduction)
 
-		// --- Deduction Types CRUD (English Comment) ---
-		api.GET("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "VIEW"), handlers.GetDeductionTypes)
-		api.POST("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.CreateDeductionType)
-		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.UpdateDeductionType)
-		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), handlers.DeleteDeductionType)
+		// --- Payroll Config ---
+		api.GET("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "VIEW"), payhandler.GetPayrollConfigs)
+		api.POST("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "EDIT"), payhandler.UpdatePayrollConfig)
 
-		// --- Payroll Cycle Variable Earnings ---
-		api.GET("/cycle-earnings", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetCycleEarnings)
-		api.POST("/cycle-earnings", middleware.CheckPermission("RunPayrollPage", "CREATE"), handlers.CreateCycleEarning)
-		api.PUT("/cycle-earnings/:id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.UpdateCycleEarning)
-		api.DELETE("/cycle-earnings/:id", middleware.CheckPermission("RunPayrollPage", "DELETE"), handlers.DeleteCycleEarning)
+		api.GET("/earning-types", middleware.CheckPermission("EarningTypesPage", "VIEW"), cfghandler.GetEarningTypes)
+		api.POST("/earning-types", middleware.CheckPermission("EarningTypesPage", "CREATE"), cfghandler.CreateEarningType)
+		api.PUT("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), cfghandler.UpdateEarningType)
+		api.DELETE("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), cfghandler.DeleteEarningType)
 
-		// --- Payroll Cycle Variable Deductions ---
-		api.GET("/cycle-deductions", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetCycleDeductions)
-		api.POST("/cycle-deductions", middleware.CheckPermission("RunPayrollPage", "CREATE"), handlers.CreateCycleDeduction)
-		api.PUT("/cycle-deductions/:id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.UpdateCycleDeduction)
-		api.DELETE("/cycle-deductions/:id", middleware.CheckPermission("RunPayrollPage", "DELETE"), handlers.DeleteCycleDeduction)
+		api.GET("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "VIEW"), cfghandler.GetDeductionTypes)
+		api.POST("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.CreateDeductionType)
+		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.UpdateDeductionType)
+		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.DeleteDeductionType)
 
-		// --- Employee Earning Assignments ---
-		api.GET("/employee-earnings", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployeeEarnings)
-		api.POST("/employee-earnings", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployeeEarning)
-		api.PUT("/employee-earnings/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpdateEmployeeEarning)
-		api.DELETE("/employee-earnings/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployeeEarning)
+		api.GET("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "VIEW"), cfghandler.GetEmploymentTypes)
+		api.POST("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "CREATE"), cfghandler.CreateEmploymentType)
+		api.PUT("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "EDIT"), cfghandler.UpdateEmploymentType)
+		api.DELETE("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "DELETE"), cfghandler.DeleteEmploymentType)
 
-		// --- Employee Deduction Assignments ---
-		api.GET("/employee-deductions", middleware.CheckPermission("EmployeesListPage", "VIEW"), handlers.GetEmployeeDeductions)
-		api.POST("/employee-deductions", middleware.CheckPermission("EmployeesListPage", "CREATE"), handlers.CreateEmployeeDeduction)
-		api.PUT("/employee-deductions/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), handlers.UpdateEmployeeDeduction)
-		api.DELETE("/employee-deductions/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), handlers.DeleteEmployeeDeduction)
+		api.GET("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), cfghandler.GetEarningCategories)
+		api.POST("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), cfghandler.CreateEarningCategory)
+		api.PUT("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), cfghandler.UpdateEarningCategory)
+		api.DELETE("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), cfghandler.DeleteEarningCategory)
 
-		// --- Attendance Config ---
-		api.GET("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "VIEW"), handlers.GetAttendanceConfigs)
-		api.POST("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "EDIT"), handlers.UpdateAttendanceConfig)
+		api.GET("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), cfghandler.GetDeductionCategories)
+		api.POST("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), cfghandler.CreateDeductionCategory)
+		api.PUT("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), cfghandler.UpdateDeductionCategory)
+		api.DELETE("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), cfghandler.DeleteDeductionCategory)
 
-		// --- Attendance Summary ---
-		api.GET("/attendance/summary", middleware.CheckPermission("AttendanceSummaryPage", "VIEW"), handlers.GetAttendanceSummary)
+		// --- Settings ---
+		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), sethandler.GetDepartments)
+		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartment)
+		api.PUT("/departments/:id", middleware.CheckPermission("DepartmentSettings", "EDIT"), sethandler.UpdateDepartment)
+		api.DELETE("/departments/:id", middleware.CheckPermission("DepartmentSettings", "DELETE"), sethandler.DeleteDepartment)
 
-		// --- Payroll Core Engine ---
-		api.GET("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "VIEW"), handlers.GetPayrollCycles)
-		api.POST("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "CREATE"), handlers.CreatePayrollCycle)
-		api.PATCH("/payroll/cycles/:id/close", middleware.CheckPermission("PayrollCyclesPage", "EDIT"), handlers.ClosePayrollCycle)
-		api.POST("/payroll/calculate/:cycle_id", middleware.CheckPermission("RunPayrollPage", "EDIT"), handlers.CalculatePayroll)
-		api.GET("/payroll/transactions/:cycle_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetPayrollTransactions)
-		api.GET("/payroll/slip/:transaction_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), handlers.GetPayrollSlip)
+		api.GET("/positions", middleware.CheckPermission("PositionSettings", "VIEW"), sethandler.GetPositions)
+		api.POST("/positions", middleware.CheckPermission("PositionSettings", "CREATE"), sethandler.CreatePosition)
+		api.PUT("/positions/:id", middleware.CheckPermission("PositionSettings", "EDIT"), sethandler.UpdatePosition)
+		api.DELETE("/positions/:id", middleware.CheckPermission("PositionSettings", "DELETE"), sethandler.DeletePosition)
 
-		// --- Reports Module ---
-		// Payslips (canonical route used by PayslipsReportPage)
-		api.GET("/payslips/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), handlers.GetPayslipReport)
-		// Bank Transfer Report
-		api.GET("/reports/bank-transfer/:cycle_id", middleware.CheckPermission("BankTransferReportPage", "VIEW"), handlers.GetBankTransferReport)
-		// Tax Forms: PND.1 monthly summary & 50 Tawi individual certificate
-		api.GET("/reports/tax-forms/pnd1/:cycle_id", middleware.CheckPermission("TaxFormsReportPage", "VIEW"), handlers.GetTaxFormsPND1)
-		api.GET("/reports/tax-forms/50tawi/:transaction_id", middleware.CheckPermission("TaxFormsReportPage", "VIEW"), handlers.GetTax50Tawi)
-		// Social Security (SSO Form 1-10)
-		api.GET("/reports/sso/:cycle_id", middleware.CheckPermission("SSOReportPage", "VIEW"), handlers.GetSSOReport)
-		// Payroll Analysis Register + Journal
-		api.GET("/reports/payroll-analysis/:cycle_id", middleware.CheckPermission("PayrollAnalysisPage", "VIEW"), handlers.GetPayrollAnalysis)
+		api.GET("/roles", middleware.CheckPermission("RolesPage", "VIEW"), sethandler.GetRoles)
+		api.POST("/roles", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.CreateRole)
+		api.PUT("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.UpdateRole)
+		api.DELETE("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.DeleteRole)
 
-		// --- Banks (Global) ---
-		api.GET("/master/banks", middleware.CheckPermission("MasterBankPage", "VIEW"), handlers.GetBanks)
-		api.POST("/master/banks", middleware.CheckPermission("MasterBankPage", "CREATE"), handlers.CreateBank)
-		api.PUT("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "EDIT"), handlers.UpdateBank)
-		api.DELETE("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "DELETE"), handlers.DeleteBank)
+		api.GET("/permissions/:id", middleware.CheckPermission("PermissionSettings", "VIEW"), sethandler.GetRolesPermissions)
+		api.POST("/permissions/:id", middleware.CheckPermission("PermissionSettings", "EDIT"), sethandler.UpdateRolesPermissions)
 
-		// --- Employment Types (Global) ---
-		api.GET("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "VIEW"), handlers.GetEmploymentTypes)
-		api.POST("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "CREATE"), handlers.CreateEmploymentType)
-		api.PUT("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "EDIT"), handlers.UpdateEmploymentType)
-		api.DELETE("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "DELETE"), handlers.DeleteEmploymentType)
+		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetAllCompanies)
+		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetCompanies)
+		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), sethandler.CreateCompanies)
+		api.PUT("/companies/:id", middleware.CheckPermission("CompaniesPage", "EDIT"), sethandler.UpdateCompanies)
+		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), sethandler.DeleteCompanies)
 
-		// --- Holiday Calendar (Per-Company) ---
-		api.GET("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "VIEW"), handlers.GetHolidays)
-		api.POST("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "CREATE"), handlers.CreateHoliday)
-		api.PUT("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "EDIT"), handlers.UpdateHoliday)
-		api.DELETE("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "DELETE"), handlers.DeleteHoliday)
+		api.GET("/master/banks", middleware.CheckPermission("MasterBankPage", "VIEW"), sethandler.GetBanks)
+		api.POST("/master/banks", middleware.CheckPermission("MasterBankPage", "CREATE"), sethandler.CreateBank)
+		api.PUT("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "EDIT"), sethandler.UpdateBank)
+		api.DELETE("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "DELETE"), sethandler.DeleteBank)
 
-		// --- Work Locations (Per-Company) ---
-		api.GET("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "VIEW"), handlers.GetWorkLocations)
-		api.POST("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "CREATE"), handlers.CreateWorkLocation)
-		api.PUT("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "EDIT"), handlers.UpdateWorkLocation)
-		api.DELETE("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "DELETE"), handlers.DeleteWorkLocation)
+		api.GET("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "VIEW"), sethandler.GetHolidays)
+		api.POST("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "CREATE"), sethandler.CreateHoliday)
+		api.PUT("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "EDIT"), sethandler.UpdateHoliday)
+		api.DELETE("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "DELETE"), sethandler.DeleteHoliday)
 
-		// --- Leave Type Settings (Per-Company) ---
-		api.GET("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "VIEW"), handlers.GetLeaveTypeSettings)
-		api.POST("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "CREATE"), handlers.CreateLeaveTypeSetting)
-		api.PUT("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "EDIT"), handlers.UpdateLeaveTypeSetting)
-		api.DELETE("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "DELETE"), handlers.DeleteLeaveTypeSetting)
+		api.GET("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "VIEW"), sethandler.GetWorkLocations)
+		api.POST("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "CREATE"), sethandler.CreateWorkLocation)
+		api.PUT("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "EDIT"), sethandler.UpdateWorkLocation)
+		api.DELETE("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "DELETE"), sethandler.DeleteWorkLocation)
 
-		// --- Earning Categories (Global) ---
-		api.GET("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), handlers.GetEarningCategories)
-		api.POST("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), handlers.CreateEarningCategory)
-		api.PUT("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), handlers.UpdateEarningCategory)
-		api.DELETE("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), handlers.DeleteEarningCategory)
+		api.GET("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "VIEW"), sethandler.GetLeaveTypeSettings)
+		api.POST("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "CREATE"), sethandler.CreateLeaveTypeSetting)
+		api.PUT("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "EDIT"), sethandler.UpdateLeaveTypeSetting)
+		api.DELETE("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "DELETE"), sethandler.DeleteLeaveTypeSetting)
 
-		// --- Deduction Categories (Global) ---
-		api.GET("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), handlers.GetDeductionCategories)
-		api.POST("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), handlers.CreateDeductionCategory)
-		api.PUT("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), handlers.UpdateDeductionCategory)
-		api.DELETE("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), handlers.DeleteDeductionCategory)
+		// --- Reports ---
+		api.GET("/payslips/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), rephandler.GetPayslipReport)
+		api.GET("/reports/bank-transfer/:cycle_id", middleware.CheckPermission("BankTransferReportPage", "VIEW"), rephandler.GetBankTransferReport)
+		api.GET("/reports/tax-forms/pnd1/:cycle_id", middleware.CheckPermission("TaxFormsReportPage", "VIEW"), rephandler.GetTaxFormsPND1)
+		api.GET("/reports/tax-forms/50tawi/:transaction_id", middleware.CheckPermission("TaxFormsReportPage", "VIEW"), rephandler.GetTax50Tawi)
+		api.GET("/reports/sso/:cycle_id", middleware.CheckPermission("SSOReportPage", "VIEW"), rephandler.GetSSOReport)
+		api.GET("/reports/payroll-analysis/:cycle_id", middleware.CheckPermission("PayrollAnalysisPage", "VIEW"), rephandler.GetPayrollAnalysis)
 	}
 	return r
 }
