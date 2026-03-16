@@ -58,7 +58,7 @@ func CreateCycleDeduction(c *gin.Context) {
 	}
 
 	// Validate cycle belongs to company.
-	if err := repository.EnsurePayrollCycleEditable(input.CycleID, currentUser.CompaniesID); err != nil {
+	if err := repository.EnsurePayrollCycleOpen(input.CycleID, currentUser.CompaniesID); err != nil {
 		if err == repository.ErrPayrollCycleNotFound {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
 			return
@@ -94,7 +94,7 @@ func UpdateCycleDeduction(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
-	if err := repository.EnsurePayrollCycleEditable(item.CycleID, currentUser.CompaniesID); err != nil {
+	if err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser.CompaniesID); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot update deductions in a closed cycle"})
 			return
@@ -136,7 +136,7 @@ func DeleteCycleDeduction(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return
 	}
-	if err := repository.EnsurePayrollCycleEditable(item.CycleID, currentUser.CompaniesID); err != nil {
+	if err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser.CompaniesID); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete deductions in a closed cycle"})
 			return

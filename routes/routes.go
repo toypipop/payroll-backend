@@ -103,43 +103,43 @@ func SetupRouter() *gin.Engine {
 		api.GET("/earning-types", middleware.CheckPermission("EarningTypesPage", "VIEW"), cfghandler.GetEarningTypes)
 		api.POST("/earning-types", middleware.CheckPermission("EarningTypesPage", "CREATE"), cfghandler.CreateEarningType)
 		api.PUT("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), cfghandler.UpdateEarningType)
-		api.DELETE("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), cfghandler.DeleteEarningType)
+		api.DELETE("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), middleware.PreventDeleteIfReferenced("earning_type"), cfghandler.DeleteEarningType)
 
 		api.GET("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "VIEW"), cfghandler.GetDeductionTypes)
 		api.POST("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.CreateDeductionType)
 		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.UpdateDeductionType)
-		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.DeleteDeductionType)
+		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), middleware.PreventDeleteIfReferenced("deduction_type"), cfghandler.DeleteDeductionType)
 
 		api.GET("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "VIEW"), cfghandler.GetEmploymentTypes)
 		api.POST("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "CREATE"), cfghandler.CreateEmploymentType)
 		api.PUT("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "EDIT"), cfghandler.UpdateEmploymentType)
-		api.DELETE("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "DELETE"), cfghandler.DeleteEmploymentType)
+		api.DELETE("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "DELETE"), middleware.PreventDeleteIfReferenced("employment_type"), cfghandler.DeleteEmploymentType)
 
 		api.GET("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), cfghandler.GetEarningCategories)
 		api.POST("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), cfghandler.CreateEarningCategory)
 		api.PUT("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), cfghandler.UpdateEarningCategory)
-		api.DELETE("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), cfghandler.DeleteEarningCategory)
+		api.DELETE("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), middleware.PreventDeleteIfReferenced("earning_category"), cfghandler.DeleteEarningCategory)
 
 		api.GET("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), cfghandler.GetDeductionCategories)
 		api.POST("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), cfghandler.CreateDeductionCategory)
 		api.PUT("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), cfghandler.UpdateDeductionCategory)
-		api.DELETE("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), cfghandler.DeleteDeductionCategory)
+		api.DELETE("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), middleware.PreventDeleteIfReferenced("deduction_category"), cfghandler.DeleteDeductionCategory)
 
 		// --- Settings ---
 		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), sethandler.GetDepartments)
 		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartment)
 		api.PUT("/departments/:id", middleware.CheckPermission("DepartmentSettings", "EDIT"), sethandler.UpdateDepartment)
-		api.DELETE("/departments/:id", middleware.CheckPermission("DepartmentSettings", "DELETE"), sethandler.DeleteDepartment)
+		api.DELETE("/departments/:id", middleware.CheckPermission("DepartmentSettings", "DELETE"), middleware.PreventDeleteIfReferenced("department"), sethandler.DeleteDepartment)
 
 		api.GET("/positions", middleware.CheckPermission("PositionSettings", "VIEW"), sethandler.GetPositions)
 		api.POST("/positions", middleware.CheckPermission("PositionSettings", "CREATE"), sethandler.CreatePosition)
 		api.PUT("/positions/:id", middleware.CheckPermission("PositionSettings", "EDIT"), sethandler.UpdatePosition)
-		api.DELETE("/positions/:id", middleware.CheckPermission("PositionSettings", "DELETE"), sethandler.DeletePosition)
+		api.DELETE("/positions/:id", middleware.CheckPermission("PositionSettings", "DELETE"), middleware.PreventDeleteIfReferenced("position"), sethandler.DeletePosition)
 
 		api.GET("/roles", middleware.CheckPermission("RolesPage", "VIEW"), sethandler.GetRoles)
 		api.POST("/roles", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.CreateRole)
 		api.PUT("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.UpdateRole)
-		api.DELETE("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.DeleteRole)
+		api.DELETE("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), middleware.PreventDeleteIfReferenced("role"), sethandler.DeleteRole)
 
 		api.GET("/permissions/:id", middleware.CheckPermission("PermissionSettings", "VIEW"), sethandler.GetRolesPermissions)
 		api.POST("/permissions/:id", middleware.CheckPermission("PermissionSettings", "EDIT"), sethandler.UpdateRolesPermissions)
@@ -148,27 +148,27 @@ func SetupRouter() *gin.Engine {
 		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetCompanies)
 		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), sethandler.CreateCompanies)
 		api.PUT("/companies/:id", middleware.CheckPermission("CompaniesPage", "EDIT"), sethandler.UpdateCompanies)
-		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), sethandler.DeleteCompanies)
+		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), middleware.PreventDeleteIfReferenced("companies"), sethandler.DeleteCompanies)
 
 		api.GET("/master/banks", middleware.CheckPermission("MasterBankPage", "VIEW"), sethandler.GetBanks)
 		api.POST("/master/banks", middleware.CheckPermission("MasterBankPage", "CREATE"), sethandler.CreateBank)
 		api.PUT("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "EDIT"), sethandler.UpdateBank)
-		api.DELETE("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "DELETE"), sethandler.DeleteBank)
+		api.DELETE("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "DELETE"), middleware.PreventDeleteIfReferenced("bank"), sethandler.DeleteBank)
 
 		api.GET("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "VIEW"), sethandler.GetHolidays)
 		api.POST("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "CREATE"), sethandler.CreateHoliday)
 		api.PUT("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "EDIT"), sethandler.UpdateHoliday)
-		api.DELETE("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "DELETE"), sethandler.DeleteHoliday)
+		api.DELETE("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "DELETE"), middleware.PreventDeleteIfReferenced("holiday"), sethandler.DeleteHoliday)
 
 		api.GET("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "VIEW"), sethandler.GetWorkLocations)
 		api.POST("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "CREATE"), sethandler.CreateWorkLocation)
 		api.PUT("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "EDIT"), sethandler.UpdateWorkLocation)
-		api.DELETE("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "DELETE"), sethandler.DeleteWorkLocation)
+		api.DELETE("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "DELETE"), middleware.PreventDeleteIfReferenced("work_location"), sethandler.DeleteWorkLocation)
 
 		api.GET("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "VIEW"), sethandler.GetLeaveTypeSettings)
 		api.POST("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "CREATE"), sethandler.CreateLeaveTypeSetting)
 		api.PUT("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "EDIT"), sethandler.UpdateLeaveTypeSetting)
-		api.DELETE("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "DELETE"), sethandler.DeleteLeaveTypeSetting)
+		api.DELETE("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "DELETE"), middleware.PreventDeleteIfReferenced("leave_type"), sethandler.DeleteLeaveTypeSetting)
 
 		// --- Reports ---
 		api.GET("/payslips/:transaction_id", middleware.CheckPermission("PayslipsReportPage", "VIEW"), rephandler.GetPayslipReport)

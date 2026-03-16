@@ -56,17 +56,6 @@ func UpdateAttendanceConfig(c *gin.Context) {
 		return
 	}
 
-	// Reject all edits (create or update) to global settings once the company has any closed cycle
-	isClosedLocked, lockErr := repository.HasClosedCycleForCompany(input.CompaniesID)
-	if lockErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": lockErr.Error()})
-		return
-	}
-	if isClosedLocked {
-		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrGlobalSettingLocked.Error()})
-		return
-	}
-
 	err := config.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "companies_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{

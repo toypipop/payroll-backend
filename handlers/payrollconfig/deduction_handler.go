@@ -77,31 +77,9 @@ func UpdateDeductionType(c *gin.Context) {
 		return
 	}
 
-	isLocked, err := repository.IsRecordLocked("deduction_type", deduction.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	var input models.DeductionType
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if isLocked {
-		// Locked records may only update non-calculation fields.
-		if input.IsTaxDeductible != deduction.IsTaxDeductible || input.IsSsoDeductible != deduction.IsSsoDeductible {
-			c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
-			return
-		}
-		if err := config.DB.Model(&deduction).Updates(map[string]interface{}{
-			"name": input.Name,
-		}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
-			return
-		}
-		c.JSON(http.StatusOK, deduction)
 		return
 	}
 
@@ -133,16 +111,6 @@ func DeleteDeductionType(c *gin.Context) {
 		repository.ApplyScopes(currentUser, dataScope, "deduction_types.companies_id", "unused"),
 	).Where("id = ?", id).First(&deduction).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
-		return
-	}
-
-	isLocked, err := repository.IsRecordLocked("deduction_type", deduction.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if isLocked {
-		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
 		return
 	}
 

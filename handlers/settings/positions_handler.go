@@ -92,16 +92,6 @@ func DeletePosition(c *gin.Context) {
 		return
 	}
 
-	isLocked, err := repository.IsRecordLocked("position", pos.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if isLocked {
-		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
-		return
-	}
-
 	result := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
 	).Where("id = ?", id).Delete(&models.Position{})
