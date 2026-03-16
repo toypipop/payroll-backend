@@ -56,17 +56,15 @@ func UpdateAttendanceConfig(c *gin.Context) {
 		return
 	}
 
-	var existing models.AttendanceConfig
-	if err := config.DB.Where("companies_id = ?", input.CompaniesID).First(&existing).Error; err == nil {
-		isLocked, lockErr := repository.IsRecordLocked("attendance_config", existing.ID)
-		if lockErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": lockErr.Error()})
-			return
-		}
-		if isLocked {
-			c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
-			return
-		}
+	// Reject all edits (create or update) to global settings once the company has any closed cycle
+	isClosedLocked, lockErr := repository.HasClosedCycleForCompany(input.CompaniesID)
+	if lockErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": lockErr.Error()})
+		return
+	}
+	if isClosedLocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrGlobalSettingLocked.Error()})
+		return
 	}
 
 	err := config.DB.Clauses(clause.OnConflict{

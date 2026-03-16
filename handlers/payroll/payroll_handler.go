@@ -66,7 +66,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 		return
 	}
 	if isClosedLocked {
-		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrRecordInUse.Error()})
+		c.JSON(http.StatusForbidden, gin.H{"error": repository.ErrGlobalSettingLocked.Error()})
 		return
 	}
 
