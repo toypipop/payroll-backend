@@ -4,15 +4,43 @@ import (
 	"math"
 	"payroll-backend/config"
 	"payroll-backend/models"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
 
+// calculateTaxByMethod computes income tax based on the configured tax calculation method
+func calculateTaxByMethod(taxMethod string, taxableBase float64, taxDeductible float64) float64 {
+	method := strings.ToLower(strings.TrimSpace(taxMethod))
+
+	switch {
+	case method == "none" || method == "no tax":
+		return 0.0
+	case method == "fixed" || method == "fixed rate":
+		// Fixed rate: 5% on taxable base (configurable via payroll config if needed)
+		return math.Round(taxableBase*0.05*100) / 100
+	default:
+		// Default to Progressive for "Progressive", "Progressive Rate", or any unknown method
+		annualTaxableBase := (taxableBase - taxDeductible) * 12
+		workExpenseDeduction := math.Min(annualTaxableBase*0.5, 100000)
+		personalAllowance := 60000.0
+		annualNetIncome := annualTaxableBase - workExpenseDeduction - personalAllowance
+		return math.Round(calculateThaiProgressiveTax(annualNetIncome)/12*100) / 100
+	}
+}
+
 // runPayrollSnapshot recalculates and persists payroll transactions/details for one cycle.
+// CRITICAL: Fetches ONLY the LATEST ACTIVE config (non-deleted, newest created)
+// This ensures calculations always use current parameters, never stale/old versions
 func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, error) {
+	// LATEST ACTIVE VERSION: Fetch the newest NON-DELETED config
+	// Ensures stale/old configs are never used in calculation
 	var payrollConfig models.PayrollConfig
-	if err := config.DB.Where("companies_id = ?", companiesID).First(&payrollConfig).Error; err != nil {
+	if err := config.DB.
+		Where("companies_id = ? AND deleted_at IS NULL", companiesID).
+		Order("created_at DESC").
+		First(&payrollConfig).Error; err != nil {
 		return 0, 0, err
 	}
 
@@ -203,11 +231,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			ssoAmount = math.Round(computed*100) / 100
 		}
 
-		annualTaxableBase := (taxableBase - taxDeductible) * 12
-		workExpenseDeduction := math.Min(annualTaxableBase*0.5, 100000)
-		personalAllowance := 60000.0
-		annualNetIncome := annualTaxableBase - workExpenseDeduction - personalAllowance
-		monthlyTax := math.Round(calculateThaiProgressiveTax(annualNetIncome)/12*100) / 100
+		monthlyTax := calculateTaxByMethod(payrollConfig.TaxCalculation, taxableBase, taxDeductible)
 
 		totalEarning := math.Round((baseSalary+additionalEarning+otAmount)*100) / 100
 		totalDeduction := math.Round((unpaidLeaveDeduction+additionalDeduction+lateDeduction+absentDeduction)*100) / 100

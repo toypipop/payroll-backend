@@ -99,6 +99,7 @@ func SetupRouter() *gin.Engine {
 		// --- Payroll Config ---
 		api.GET("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "VIEW"), payhandler.GetPayrollConfigs)
 		api.POST("/global", middleware.CheckPermission("PayrollGlobalSettingsPage", "EDIT"), payhandler.UpdatePayrollConfig)
+		api.GET("/payroll/config/:cycle_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), cfghandler.GetConfigByPayrollCycle)
 
 		api.GET("/earning-types", middleware.CheckPermission("EarningTypesPage", "VIEW"), cfghandler.GetEarningTypes)
 		api.POST("/earning-types", middleware.CheckPermission("EarningTypesPage", "CREATE"), cfghandler.CreateEarningType)

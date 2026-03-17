@@ -69,7 +69,7 @@ func CalculatePayroll(c *gin.Context) {
 		return
 	}
 
-	processedCount, skippedCount, snapshotErr := runPayrollSnapshot(currentUser.CompaniesID, cycle)
+	processedCount, skippedCount, snapshotErr := runPayrollSnapshot(cycle.CompaniesID, cycle)
 
 	status := http.StatusOK
 	if snapshotErr != nil {

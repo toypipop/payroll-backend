@@ -150,7 +150,7 @@ func main() {
 		config.DB.Where(models.EmploymentType{Name: et.Name}).Assign(et).FirstOrCreate(&et)
 	}
 
-	// --- Earning Categories (Global) ---
+	// --- Earning & Deduction (Global) ---
 	earningCats := []models.EarningCategory{
 		{Name: "Regular Pay"},
 		{Name: "Allowance"},
@@ -322,7 +322,7 @@ func main() {
 		{ModuleName: "Earning Types", ModuleKey: "EarningTypesPage", RoutePath: "/earning-types", Icon: "AddCard", Order: 2, ParentID: ptr(5)},
 		{ModuleName: "Deduction Types", ModuleKey: "DeductionTypesPage", RoutePath: "/deduction-types", Icon: "PriceCheck", Order: 3, ParentID: ptr(5)},
 		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 4, ParentID: ptr(5)},
-		{ModuleName: "Earning Categories", ModuleKey: "EarningCategoryPage", RoutePath: "/earning-categories", Icon: "Category", Order: 5, ParentID: ptr(5)},
+		{ModuleName: "Earning & Deduction", ModuleKey: "EarningCategoryPage", RoutePath: "/earning-categories", Icon: "Category", Order: 5, ParentID: ptr(5)},
 
 		// Level 2: Sub-Menus under Settings
 		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 1, ParentID: ptr(6)},
@@ -623,14 +623,17 @@ func main() {
 		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, sysComp.ID},
 		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, sysComp.ID},
 		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, sysComp.ID},
 		// Tech Corp (compA)
 		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, compA.ID},
 		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, compA.ID},
 		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, compA.ID},
 		// Biz Group (compB)
 		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, compB.ID},
 		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, compB.ID},
 		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, compB.ID},
 	}
 	for _, s := range cycleSeeds {
 		config.DB.Where(models.PayrollCycle{CompaniesID: s.companiesID, CycleName: s.cycle.CycleName}).

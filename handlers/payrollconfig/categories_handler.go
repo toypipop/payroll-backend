@@ -8,12 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ── Earning Categories (global) ──────────────────────────────
+// ── Earning & Deduction (global) ──────────────────────────────
 
 func GetEarningCategories(c *gin.Context) {
 	var cats []models.EarningCategory
 	if err := config.DB.Order("name").Find(&cats).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch earning categories"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch Earning & Deduction"})
 		return
 	}
 	c.JSON(http.StatusOK, cats)

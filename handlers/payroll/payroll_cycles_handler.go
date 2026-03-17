@@ -91,7 +91,7 @@ func ClosePayrollCycle(c *gin.Context) {
 		return
 	}
 
-	processedCount, skippedCount, snapshotErr := runPayrollSnapshot(currentUser.CompaniesID, cycle)
+	processedCount, skippedCount, snapshotErr := runPayrollSnapshot(cycle.CompaniesID, cycle)
 	if snapshotErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to snapshot transactions before closing cycle: " + snapshotErr.Error()})
 		return
