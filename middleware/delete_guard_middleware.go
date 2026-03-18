@@ -9,8 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// PreventDeleteIfReferenced blocks DELETE requests when the target record is referenced by other tables.
-// entity is a small string key understood by repository.CheckDeleteBlocked.
+// PreventDeleteIfReferenced blocks deletion
 func PreventDeleteIfReferenced(entity string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request == nil || c.Request.Method != http.MethodDelete {
@@ -31,8 +30,7 @@ func PreventDeleteIfReferenced(entity string) gin.HandlerFunc {
 		}
 		id := uint(parsed)
 
-		// Do not use JWT companies_id for scoping here. Users may have permission to operate across
-		// multiple companies; the reference check should resolve company from the target record.
+		// Resolve company from target record
 		blocked, reason, checkErr := repository.CheckDeleteBlocked(entity, id, 0)
 		if checkErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": checkErr.Error()})

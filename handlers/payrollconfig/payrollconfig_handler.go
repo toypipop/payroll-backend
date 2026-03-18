@@ -22,12 +22,10 @@ func GetPayrollConfigs(c *gin.Context) {
 
 	var companies []models.Companies
 
-	// LATEST ACTIVE VERSION: Fetch companies with their LATEST non-deleted config
-	// Use a custom preload hook to ensure only the active (latest) version is loaded
+	// Fetch latest active config per company
 	err := config.DB.Debug().Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
 	).Preload("PayrollConfig", func(db *gorm.DB) *gorm.DB {
-		// Ensure preload returns ONLY the latest non-deleted config for each company
 		return db.Where("deleted_at IS NULL").Order("created_at DESC").Limit(1)
 	}).Find(&companies).Error
 
@@ -39,13 +37,7 @@ func GetPayrollConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, companies)
 }
 
-// UpdatePayrollConfig saves a new version of the payroll config.
-// APPROACH B: Versioning with Soft Delete
-// When saving new config for a company, soft-delete the old one and create a new row.
-// This ensures:
-// 1. Audit trail is preserved (old versions exist but marked deleted)
-// 2. Latest version is always active (newest non-deleted row)
-// 3. No data accumulation/duplication issues
+// UpdatePayrollConfig saves new config with soft delete versioning
 func UpdatePayrollConfig(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 
@@ -61,7 +53,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 		return
 	}
 
-	// Validation: Ensure user has access to the target Companie
+	// Validate user company access
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
@@ -70,15 +62,13 @@ func UpdatePayrollConfig(c *gin.Context) {
 		return
 	}
 
-	// SOFT DELETE: Mark any existing active config for this company as deleted
-	// This creates a new version while preserving the old one for audit trail
+	// Soft delete old config versions
 	if err := config.DB.Where("companies_id = ? AND deleted_at IS NULL", input.CompaniesID).Delete(&models.PayrollConfig{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to archive previous configuration"})
 		return
 	}
 
-	// CREATE: Insert the new config as the active version
-	// Note: Set ID to 0 to ensure a new row is created (not updated)
+	// Insert new config as active version
 	input.ID = 0
 	input.CreatedAt = time.Now()
 	input.UpdatedAt = time.Now()
@@ -91,9 +81,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Configuration saved", "data": input})
 }
 
-// GetConfigByPayrollCycle fetches the payroll configuration for a specific cycle.
-// CRITICAL: Filters by the Cycle's Company ID, NOT the current user's company.
-// This ensures the Run Payroll page always uses the correct company's SSO parameters.
+// GetConfigByPayrollCycle fetches config by cycle
 func GetConfigByPayrollCycle(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 
@@ -105,7 +93,7 @@ func GetConfigByPayrollCycle(c *gin.Context) {
 		return
 	}
 
-	// Fetch the cycle to get its company ID
+	// Fetch cycle for company ID
 	var cycle models.PayrollCycle
 	if err := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused"),
@@ -114,11 +102,7 @@ func GetConfigByPayrollCycle(c *gin.Context) {
 		return
 	}
 
-	// LATEST ACTIVE VERSION: Fetch the newest NON-DELETED config for this company
-	// Query ensures:
-	// 1. ONLY the cycle's company config (not user's company)
-	// 2. ONLY non-deleted rows (deleted_at IS NULL)
-	// 3. LATEST version (ORDER BY created_at DESC LIMIT 1)
+	// Fetch latest non-deleted config
 	var payrollConfig models.PayrollConfig
 	if err := config.DB.
 		Where("companies_id = ? AND deleted_at IS NULL", cycle.CompaniesID).
@@ -129,8 +113,8 @@ func GetConfigByPayrollCycle(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"config": payrollConfig,
-		"cycle_id": cycle.ID,
+		"config":       payrollConfig,
+		"cycle_id":     cycle.ID,
 		"companies_id": cycle.CompaniesID,
 	})
 }

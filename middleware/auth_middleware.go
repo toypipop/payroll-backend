@@ -13,10 +13,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-/* --- AuthMiddleware validates JWT and extracts Tenant info (English Comment) --- */
+// AuthMiddleware validates JWT and extracts tenant
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 1. Get Token from Header (English Comment)
+		// Get token from Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
@@ -24,7 +24,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 2. Check "Bearer " prefix (English Comment)
+		// Validate Bearer token prefix
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
@@ -35,9 +35,9 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenString := parts[1]
 		claims := &authhandler.TokenClaims{}
 
-		// 3. Parse and Validate Token (English Comment)
+		// Parse and validate JWT token
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return authhandler.GetJWTSecret(), nil // getter jwtSecret
+			return authhandler.GetJWTSecret(), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -46,7 +46,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 4. Set Tenant Data to Context (English Comment)
+		// Set tenant data to context
 		c.Set("user_id", claims.UserID)
 		c.Set("companies_id", claims.CompaniesID)
 		c.Set("roles_id", claims.RolesID)
@@ -72,7 +72,7 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 
 		var access models.RolesModuleAccess
 
-		// Use struct for Where to avoid hardcoded table names (English Comment)
+		// Use struct for Where clause
 		query := config.DB.Debug().
 			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
 			Where(&models.RolesModuleAccess{RolesID: rID}).

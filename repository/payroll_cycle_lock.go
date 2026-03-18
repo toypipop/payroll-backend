@@ -13,7 +13,7 @@ var (
 	ErrPayrollCycleClosed   = errors.New("payroll cycle is closed")
 )
 
-// EnsurePayrollCycleOpen validates that cycle exists in company and is not closed.
+// EnsurePayrollCycleOpen validates cycle
 func EnsurePayrollCycleOpen(cycleID uint, companiesID uint) error {
 	var cycle models.PayrollCycle
 	if err := config.DB.Where("id = ? AND companies_id = ?", cycleID, companiesID).First(&cycle).Error; err != nil {

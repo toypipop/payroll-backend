@@ -1,12 +1,12 @@
 package models
 
-// LoginRequest represents the input from the login form
+// LoginRequest from login form
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
-// LoginResponse represents the data sent back to the client
+// LoginResponse sent to client
 type LoginResponse struct {
 	Token    string `json:"token"`
 	ID       uint   `json:"id"`

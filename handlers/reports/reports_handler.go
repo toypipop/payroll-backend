@@ -259,7 +259,7 @@ type SSORow struct {
 }
 
 // GetSSOReport returns SSO Form 1-10 data for a closed cycle.
-// Employer SSO matches employee SSO (equal 5% contribution, capped at ฿750/month).
+// Employer SSO: 5% match, capped at 750
 func GetSSOReport(c *gin.Context) {
 	user, scope, ok := resolveCurrentUser(c)
 	if !ok {

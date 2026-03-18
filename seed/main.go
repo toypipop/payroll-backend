@@ -52,7 +52,7 @@ func main() {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	// --- Companies ---
+	// Initialize companies
 	sysComp := models.Companies{Name: "System Administration", TaxID: "0000000000000"}
 	config.DB.Where(models.Companies{TaxID: "0000000000000"}).Assign(sysComp).FirstOrCreate(&sysComp)
 
@@ -62,7 +62,7 @@ func main() {
 	compB := models.Companies{Name: "Biz Group", TaxID: "2222222222222"}
 	config.DB.Where(models.Companies{TaxID: "2222222222222"}).Assign(compB).FirstOrCreate(&compB)
 
-	// --- Payroll Configs (Global Settings) ---
+	// Initialize payroll configs
 	configSys := models.PayrollConfig{
 		CompaniesID:    sysComp.ID,
 		SsoRate:        5.0,
@@ -90,7 +90,7 @@ func main() {
 	}
 	config.DB.Where(models.PayrollConfig{CompaniesID: compB.ID}).Assign(configB).FirstOrCreate(&configB)
 
-	// --- Attendance Configs ---
+	// Initialize attendance configs
 	attConfigSys := models.AttendanceConfig{
 		CompaniesID:       sysComp.ID,
 		LateRatePerMinute: 5.0,
@@ -118,7 +118,7 @@ func main() {
 	}
 	config.DB.Where(models.AttendanceConfig{CompaniesID: compB.ID}).Assign(attConfigB).FirstOrCreate(&attConfigB)
 
-	// --- Banks (Global) ---
+	// Initialize global banks
 	banks := []models.Bank{
 		{BankCode: "BBL", BankName: "Bangkok Bank", SwiftCode: "BKKBTHBK"},
 		{BankCode: "KBANK", BankName: "Kasikorn Bank", SwiftCode: "KASITHBK"},
@@ -138,7 +138,7 @@ func main() {
 		config.DB.Where(models.Bank{BankCode: b.BankCode}).Assign(b).FirstOrCreate(&b)
 	}
 
-	// --- Employment Types (Global) ---
+	// Initialize employment types
 	empTypes := []models.EmploymentType{
 		{Name: "Full-time", Description: "Permanent full-time employee"},
 		{Name: "Part-time", Description: "Part-time employee working reduced hours"},
@@ -150,7 +150,7 @@ func main() {
 		config.DB.Where(models.EmploymentType{Name: et.Name}).Assign(et).FirstOrCreate(&et)
 	}
 
-	// --- Earning & Deduction (Global) ---
+	// Initialize categories
 	earningCats := []models.EarningCategory{
 		{Name: "Regular Pay"},
 		{Name: "Allowance"},
@@ -196,7 +196,7 @@ func main() {
 			config.DB.Where(models.LeaveTypeSetting{CompaniesID: comp.ID, Name: lt.Name}).Assign(lt).FirstOrCreate(&lt)
 		}
 
-		// Holidays (Thai Public Holidays 2026)
+		// Initialize 2026 Thai holidays
 		holidays := []models.Holiday{
 			{CompaniesID: comp.ID, Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Name: "New Year's Day", IsPaid: true},
 			{CompaniesID: comp.ID, Date: time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC), Name: "Makha Bucha Day", IsPaid: true},
@@ -411,7 +411,7 @@ func main() {
 		config.DB.Where(models.SalariesStructure{EmployeesID: existingEmp.ID}).Assign(salary).FirstOrCreate(&salary)
 	}
 
-	// --- TimeLogs for March 2026 (payroll cycle test data) ---
+	// --- TimeLogs for March & April 2026 (payroll cycle test data with identical data) ---
 	// Fetch employees by email so we can reference their IDs
 	var alice, bob, carol, david, eve, staff models.Employees
 	config.DB.Unscoped().Where("email = ?", "alice@techa.com").First(&alice)
@@ -444,7 +444,8 @@ func main() {
 	// Eve (Biz Group STAFF): a few late, some OT
 	// staff@admin.com: mostly normal
 	//
-	// Weekdays Mar 1–9, 2026: Mon 2, Tue 3, Wed 4, Thu 5, Fri 6, Mon 9
+	// Weekdays Mar 1–9 & Apr 1–9, 2026: Mon 2, Tue 3, Wed 4, Thu 5, Fri 6, Mon 9
+	// March data
 	ciA2, coA2 := d(time.March, 2, 9, 0, 19, 0)  // 10h → 2h OT
 	ciA3, coA3 := d(time.March, 3, 9, 0, 20, 0)  // 11h → 3h OT
 	ciA4, coA4 := d(time.March, 4, 9, 0, 18, 30) // 9.5h → 1.5h OT
@@ -487,7 +488,51 @@ func main() {
 	ciS6, coS6 := d(time.March, 6, 9, 0, 17, 0)
 	ciS9, coS9 := d(time.March, 9, 9, 0, 17, 0)
 
+	// April data (identical times, just different dates)
+	ciA2Apr, coA2Apr := d(time.April, 2, 9, 0, 19, 0)  // 10h → 2h OT
+	ciA3Apr, coA3Apr := d(time.April, 3, 9, 0, 20, 0)  // 11h → 3h OT
+	ciA4Apr, coA4Apr := d(time.April, 4, 9, 0, 18, 30) // 9.5h → 1.5h OT
+	ciA5Apr, coA5Apr := d(time.April, 5, 9, 0, 19, 0)  // 10h → 2h OT
+	ciA6Apr, coA6Apr := d(time.April, 6, 9, 0, 18, 0)  // 9h → 1h OT
+	ciA9Apr, coA9Apr := d(time.April, 9, 9, 0, 20, 0)  // 11h → 3h OT
+
+	ciB2Apr, coB2Apr := d(time.April, 2, 9, 0, 18, 0)   // 9h → 1h OT
+	ciB3Apr, coB3Apr := d(time.April, 3, 9, 0, 18, 0)   // 9h → 1h OT
+	ciB4Apr, coB4Apr := d(time.April, 4, 10, 30, 18, 0) // late, 7.5h → no OT
+	ciB5Apr, coB5Apr := d(time.April, 5, 9, 0, 17, 0)   // 8h → no OT
+	ciB6Apr, coB6Apr := d(time.April, 6, 9, 0, 18, 0)   // 9h → 1h OT
+	ciB9Apr, coB9Apr := d(time.April, 9, 9, 0, 17, 0)   // 8h → no OT
+
+	ciC2Apr, coC2Apr := d(time.April, 2, 10, 0, 18, 0)  // late, 8h
+	ciC3Apr, coC3Apr := d(time.April, 3, 10, 30, 18, 0) // late, 7.5h
+	ciC4Apr, coC4Apr := d(time.April, 4, 9, 0, 17, 0)   // on_time, 8h
+	ciC5Apr, coC5Apr := d(time.April, 5, 10, 15, 18, 0) // late, 7.75h
+	ciC6Apr, coC6Apr := d(time.April, 6, 10, 0, 18, 0)  // late, 8h
+	ciC9Apr, coC9Apr := d(time.April, 9, 9, 0, 17, 0)   // on_time, 8h
+
+	ciD2Apr, coD2Apr := d(time.April, 2, 9, 0, 18, 0)
+	ciD3Apr, coD3Apr := d(time.April, 3, 9, 0, 19, 30) // 10.5h → 2.5h OT
+	ciD4Apr, coD4Apr := d(time.April, 4, 9, 0, 18, 0)
+	ciD5Apr, coD5Apr := d(time.April, 5, 9, 0, 20, 0) // 11h → 3h OT
+	ciD6Apr, coD6Apr := d(time.April, 6, 9, 0, 18, 0)
+	ciD9Apr, coD9Apr := d(time.April, 9, 9, 0, 19, 0) // 10h → 2h OT
+
+	ciE2Apr, coE2Apr := d(time.April, 2, 10, 0, 18, 0)  // late
+	ciE3Apr, coE3Apr := d(time.April, 3, 9, 0, 18, 30)  // 9.5h → 1.5h OT
+	ciE4Apr, coE4Apr := d(time.April, 4, 10, 30, 18, 0) // late
+	ciE5Apr, coE5Apr := d(time.April, 5, 9, 0, 18, 0)   // 9h → 1h OT
+	ciE6Apr, coE6Apr := d(time.April, 6, 9, 0, 17, 0)   // 8h
+	ciE9Apr, coE9Apr := d(time.April, 9, 9, 0, 18, 0)   // 9h → 1h OT
+
+	ciS2Apr, coS2Apr := d(time.April, 2, 9, 0, 17, 0)
+	ciS3Apr, coS3Apr := d(time.April, 3, 9, 0, 17, 0)
+	ciS4Apr, coS4Apr := d(time.April, 4, 9, 0, 17, 0)
+	ciS5Apr, coS5Apr := d(time.April, 5, 9, 0, 17, 0)
+	ciS6Apr, coS6Apr := d(time.April, 6, 9, 0, 17, 0)
+	ciS9Apr, coS9Apr := d(time.April, 9, 9, 0, 17, 0)
+
 	timelogs := []tlSeed{
+		// === MARCH 2026 ===
 		// Alice — OT every day
 		{alice.ID, compA.ID, ciA2, coA2, models.StatusOnTime, ""},
 		{alice.ID, compA.ID, ciA3, coA3, models.StatusOnTime, "Sprint deadline"},
@@ -530,6 +575,50 @@ func main() {
 		{staff.ID, sysComp.ID, ciS5, coS5, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS6, coS6, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS9, coS9, models.StatusOnTime, ""},
+
+		// === APRIL 2026 (identical to March) ===
+		// Alice — OT every day
+		{alice.ID, compA.ID, ciA2Apr, coA2Apr, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA3Apr, coA3Apr, models.StatusOnTime, "Sprint deadline"},
+		{alice.ID, compA.ID, ciA4Apr, coA4Apr, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA5Apr, coA5Apr, models.StatusOnTime, "Client meeting"},
+		{alice.ID, compA.ID, ciA6Apr, coA6Apr, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA9Apr, coA9Apr, models.StatusOnTime, "Sprint deadline"},
+		// Bob — some OT, one late
+		{bob.ID, compA.ID, ciB2Apr, coB2Apr, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB3Apr, coB3Apr, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB4Apr, coB4Apr, models.StatusLate, "Traffic"},
+		{bob.ID, compA.ID, ciB5Apr, coB5Apr, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB6Apr, coB6Apr, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB9Apr, coB9Apr, models.StatusOnTime, ""},
+		// Carol — late most days, no OT
+		{carol.ID, compA.ID, ciC2Apr, coC2Apr, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC3Apr, coC3Apr, models.StatusLate, "Doctor appointment"},
+		{carol.ID, compA.ID, ciC4Apr, coC4Apr, models.StatusOnTime, ""},
+		{carol.ID, compA.ID, ciC5Apr, coC5Apr, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC6Apr, coC6Apr, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC9Apr, coC9Apr, models.StatusOnTime, ""},
+		// David — OT several days
+		{david.ID, compB.ID, ciD2Apr, coD2Apr, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD3Apr, coD3Apr, models.StatusOnTime, "Presentation prep"},
+		{david.ID, compB.ID, ciD4Apr, coD4Apr, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD5Apr, coD5Apr, models.StatusOnTime, "Quarter close"},
+		{david.ID, compB.ID, ciD6Apr, coD6Apr, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD9Apr, coD9Apr, models.StatusOnTime, ""},
+		// Eve — mixed: late + some OT
+		{eve.ID, compB.ID, ciE2Apr, coE2Apr, models.StatusLate, "Traffic"},
+		{eve.ID, compB.ID, ciE3Apr, coE3Apr, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE4Apr, coE4Apr, models.StatusLate, ""},
+		{eve.ID, compB.ID, ciE5Apr, coE5Apr, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE6Apr, coE6Apr, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE9Apr, coE9Apr, models.StatusOnTime, ""},
+		// staff@admin.com — clean, on time, no OT
+		{staff.ID, sysComp.ID, ciS2Apr, coS2Apr, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS3Apr, coS3Apr, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS4Apr, coS4Apr, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS5Apr, coS5Apr, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS6Apr, coS6Apr, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS9Apr, coS9Apr, models.StatusOnTime, ""},
 	}
 
 	for _, tl := range timelogs {
@@ -689,9 +778,7 @@ func main() {
 			Assign(ce).FirstOrCreate(&ce)
 	}
 
-	// --- Mock PayrollTransactions for January 2026 (closed cycles) ---
-	// Provides realistic seed data for testing the Payslips report without running the payroll engine.
-	// Values are pre-computed based on the standard Thai SSO / Progressive Tax rules.
+	// Mock Jan 2026 payroll data for testing
 
 	// Re-fetch Jan 2026 cycles
 	var cycleSysJan models.PayrollCycle

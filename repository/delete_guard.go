@@ -13,11 +13,7 @@ var (
 	ErrDeleteBlocked = errors.New("delete blocked: record is referenced")
 )
 
-// CheckDeleteBlocked returns (blocked, reason, error).
-//
-// companiesID is used for multi-tenant reference checks. It may be 0; in that case this function
-// attempts to resolve the company from the target record (when applicable) and otherwise falls
-// back to unscoped reference checks.
+// CheckDeleteBlocked returns blocked status
 func CheckDeleteBlocked(entity string, id uint, companiesID uint) (bool, string, error) {
 	switch entity {
 	case "earning_type":
@@ -151,7 +147,7 @@ func CheckDeleteBlocked(entity string, id uint, companiesID uint) (bool, string,
 		return false, "", nil
 
 	case "companies":
-		// If a company has any domain data, treat it as referenced.
+		// Company with data is referenced
 		if ok, err := modelCountExists(&models.Employees{}, "companies_id = ?", id); err != nil {
 			return false, "", err
 		} else if ok {
@@ -238,7 +234,7 @@ func CheckDeleteBlocked(entity string, id uint, companiesID uint) (bool, string,
 		return false, "", nil
 
 	case "holiday":
-		// No direct FK references today.
+		// No direct FK references
 		return false, "", nil
 
 	case "work_location":
@@ -294,8 +290,7 @@ func modelCountExists(model any, where string, args ...any) (bool, error) {
 	return count > 0, nil
 }
 
-// payrollTransactionDetailRefExists checks payroll transaction detail references.
-// refType: "earning" or "deduction".
+// Check payroll detail references
 func payrollTransactionDetailRefExists(refType string, typeID uint, companiesID uint) (bool, error) {
 	var count int64
 

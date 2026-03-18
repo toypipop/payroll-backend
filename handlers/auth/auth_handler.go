@@ -34,20 +34,20 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 1. Find Employees and Preload Roles to get RolesName later (English Comment)
+	// Find and load employee with roles
 	if err := config.DB.Preload("Roles").Where("email = ?", input.Email).First(&Employees).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
 		return
 	}
 
-	// 2. Check Password (English Comment)
+	// Verify password
 	err := bcrypt.CompareHashAndPassword([]byte(Employees.Password), []byte(input.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
-	// 3. Create Token with RolesID (English Comment)
+	// Create JWT token with claims
 	claims := TokenClaims{
 		UserID:       Employees.ID,
 		CompaniesID:  Employees.CompaniesID,
@@ -67,20 +67,20 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// 4. Send Response (English Comment)
+	// Return login response
 	c.JSON(http.StatusOK, models.LoginResponse{
 		Token:    tokenString,
 		ID:       Employees.ID,
 		FullName: Employees.FirstName + " " + Employees.LastName,
-		Roles:    Employees.Roles.RolesName, // Return actual roles name to frontend
+		Roles:    Employees.Roles.RolesName,
 	})
 }
 
 func GetAppModules(c *gin.Context) {
-	// Note: AppModule is usually global master data, so we don't need companies_id scope here.
+	// AppModule is global master data
 	var modules []models.AppModule
 
-	// Fetch active modules and sort by Order (English Comment)
+	// Fetch active modules sorted
 	if err := config.DB.
 		Where("is_active = ?", true).
 		Order("`order` ASC"). // Use backticks because 'order' is a reserved word in SQL

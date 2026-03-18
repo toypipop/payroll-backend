@@ -24,7 +24,7 @@ func ScopeDataAccess(user models.Employees, scope models.DataScope, tableCol ...
 			col = tableCol[0]
 		}
 
-		// "unused" means company-level reference data — skip per-employee filtering
+		// Skip employee filtering for company data
 		if col == "unused" {
 			return db
 		}

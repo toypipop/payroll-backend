@@ -24,7 +24,7 @@ const (
 	ModuleSettings   ModuleKey = "settings"
 )
 
-// Roles model with fixed size for Indexing (English Comment)
+// Roles model with fixed size
 type Roles struct {
 	ID           uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt    time.Time             `json:"created_at"`
@@ -37,7 +37,7 @@ type Roles struct {
 	Companies    Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
-// AppModule model with fixed size for ModuleKey (English Comment)
+// AppModule model with fixed size
 type AppModule struct {
 	ID         uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt  time.Time             `json:"created_at"`
@@ -53,7 +53,7 @@ type AppModule struct {
 	IsActive   bool                  `gorm:"default:true" json:"is_active"`
 }
 
-// RolesModuleAccess model with Composite Unique Index (English Comment)
+// RolesModuleAccess with composite index
 type RolesModuleAccess struct {
 	ID          uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt   time.Time             `json:"created_at"`
