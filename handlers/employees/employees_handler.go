@@ -36,7 +36,7 @@ func GetEmployees(c *gin.Context) {
 		Preload("Companies").
 		// Filter only valid salary records that are already effective (English Comment)
 		Preload("SalariesStructure", func(db *gorm.DB) *gorm.DB {
-			return db.Where("effective_date <= ? AND is_enabled = ?", now, true).
+			return db.Where("effective_date <= ? AND deleted_at = 0", now).
 				Order("effective_date DESC, created_at DESC")
 		}).
 		Find(&employees).Error; err != nil {
@@ -207,31 +207,55 @@ func UpsertEmployeeBankAccount(c *gin.Context) {
 	}
 
 	var input struct {
-		BankName    string `json:"bank_name" binding:"required"`
-		AccountName string `json:"account_name" binding:"required"`
-		AccountNo   string `json:"account_no" binding:"required"`
+		BankID      *uint  `json:"bank_id"`
+		AccountName string `json:"account_name"`
+		AccountNo   string `json:"account_no"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	if input.AccountName == "" || input.AccountNo == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Account name and account number are required"})
+		return
+	}
+
 	var bank models.EmployeeBankAccount
 	result := config.DB.Where("employees_id = ? AND companies_id = ?", emp.ID, emp.CompaniesID).First(&bank)
 
-	bank.EmployeesID = emp.ID
-	bank.CompaniesID = emp.CompaniesID
-	bank.BankName = input.BankName
-	bank.AccountName = input.AccountName
-	bank.AccountNo = input.AccountNo
+	// Resolve bank name from bank_id if provided
+	bankName := ""
+	if input.BankID != nil && *input.BankID > 0 {
+		var b models.Bank
+		if err := config.DB.First(&b, *input.BankID).Error; err == nil {
+			bankName = b.BankName
+		}
+	}
 
 	if result.Error != nil {
+		// Create new record
+		bank = models.EmployeeBankAccount{
+			CompaniesID: emp.CompaniesID,
+			EmployeesID: emp.ID,
+			BankID:      input.BankID,
+			BankName:    bankName,
+			AccountName: input.AccountName,
+			AccountNo:   input.AccountNo,
+		}
 		if err := config.DB.Create(&bank).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save bank account"})
 			return
 		}
 	} else {
-		if err := config.DB.Save(&bank).Error; err != nil {
+		// Update existing record - use Updates map to handle nullable bank_id
+		updates := map[string]interface{}{
+			"bank_id":      input.BankID,
+			"bank_name":    bankName,
+			"account_name": input.AccountName,
+			"account_no":   input.AccountNo,
+		}
+		if err := config.DB.Model(&bank).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bank account"})
 			return
 		}

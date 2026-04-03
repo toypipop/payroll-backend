@@ -150,6 +150,10 @@ func main() {
 		config.DB.Where(models.EmploymentType{Name: et.Name}).Assign(et).FirstOrCreate(&et)
 	}
 
+	// Fetch Full-time employment type ID for seeding employees
+	var fullTimeEmpType models.EmploymentType
+	config.DB.Where("name = ?", "Full-time").First(&fullTimeEmpType)
+
 	// Initialize categories
 	earningCats := []models.EarningCategory{
 		{Name: "Regular Pay"},
@@ -393,12 +397,12 @@ func main() {
 	}
 
 	usersToSeed := []empSeed{
-		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 40000.0},
-		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45000.0},
-		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30000.0},
-		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28000.0},
-		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50000.0},
-		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32000.0},
+		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0},
+		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50},
+		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00},
+		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75},
+		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00},
+		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25},
 	}
 
 	effDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -407,9 +411,20 @@ func main() {
 		var existingEmp models.Employees
 		config.DB.Unscoped().Where(models.Employees{Email: s.emp.Email}).Assign(s.emp).FirstOrCreate(&existingEmp)
 
-		salary := models.SalariesStructure{EmployeesID: existingEmp.ID, BaseSalaries: s.salary, IsEnabled: true, EffectiveDate: effDate}
-		config.DB.Where(models.SalariesStructure{EmployeesID: existingEmp.ID}).Assign(salary).FirstOrCreate(&salary)
+		if s.salary > 0 {
+			salary := models.SalariesStructure{EmployeesID: existingEmp.ID, BaseSalaries: s.salary, EffectiveDate: effDate}
+			config.DB.Where(models.SalariesStructure{EmployeesID: existingEmp.ID}).Assign(salary).FirstOrCreate(&salary)
+		} else {
+			var existing models.SalariesStructure
+			config.DB.Unscoped().Where("employees_id = ? AND deleted_at = 0", existingEmp.ID).First(&existing)
+			if existing.ID > 0 {
+				config.DB.Delete(&existing)
+			}
+		}
 	}
+
+	// Ensure all existing employees are set to Full-time employment type
+	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL").Update("employment_type_id", fullTimeEmpType.ID)
 
 	// --- TimeLogs for March & April 2026 (payroll cycle test data with identical data) ---
 	// Fetch employees by email so we can reference their IDs
@@ -930,27 +945,41 @@ func main() {
 	config.DB.Unscoped().Where("email = ?", "eve@bizgroup.com").First(&eveB)
 	config.DB.Unscoped().Where("email = ?", "staff@admin.com").First(&staffB)
 
+	// Fetch bank IDs by bank code
+	var bankBBL, bankKBANK, bankSCB, bankKTB, bankBAY, bankTTB models.Bank
+	config.DB.Where("bank_code = ?", "BBL").First(&bankBBL)
+	config.DB.Where("bank_code = ?", "KBANK").First(&bankKBANK)
+	config.DB.Where("bank_code = ?", "SCB").First(&bankSCB)
+	config.DB.Where("bank_code = ?", "KTB").First(&bankKTB)
+	config.DB.Where("bank_code = ?", "BAY").First(&bankBAY)
+	config.DB.Where("bank_code = ?", "TTB").First(&bankTTB)
+
 	type bankSeed struct {
 		emp  models.Employees
 		comp models.Companies
 		bank models.EmployeeBankAccount
 	}
 	bankSeeds := []bankSeed{
-		{aliceB, compA, models.EmployeeBankAccount{BankName: "KBANK", AccountNo: "123-4-56789-0", AccountName: "Alice Johnson"}},
-		{bobB, compA, models.EmployeeBankAccount{BankName: "SCB", AccountNo: "234-5-67890-1", AccountName: "Bob Smith"}},
-		{carolB, compA, models.EmployeeBankAccount{BankName: "BBL", AccountNo: "345-6-78901-2", AccountName: "Carol Davis"}},
-		{davidB, compB, models.EmployeeBankAccount{BankName: "KTB", AccountNo: "456-7-89012-3", AccountName: "David Wilson"}},
-		{eveB, compB, models.EmployeeBankAccount{BankName: "BAY", AccountNo: "567-8-90123-4", AccountName: "Eve Brown"}},
-		{staffB, sysComp, models.EmployeeBankAccount{BankName: "TTB", AccountNo: "678-9-01234-5", AccountName: "Test Staff"}},
+		{aliceB, compA, models.EmployeeBankAccount{BankID: ptr(bankKBANK.ID), BankName: "KBANK", AccountNo: "1234567890", AccountName: "Alice Johnson"}},
+		{bobB, compA, models.EmployeeBankAccount{BankID: ptr(bankSCB.ID), BankName: "SCB", AccountNo: "2345678901", AccountName: "Bob Smith"}},
+		{carolB, compA, models.EmployeeBankAccount{BankID: ptr(bankBBL.ID), BankName: "BBL", AccountNo: "3456789012", AccountName: "Carol Davis"}},
+		{davidB, compB, models.EmployeeBankAccount{BankID: ptr(bankKTB.ID), BankName: "KTB", AccountNo: "4567890123", AccountName: "David Wilson"}},
+		{eveB, compB, models.EmployeeBankAccount{BankID: ptr(bankBAY.ID), BankName: "BAY", AccountNo: "5678901234", AccountName: "Eve Brown"}},
+		{staffB, sysComp, models.EmployeeBankAccount{BankID: ptr(bankTTB.ID), BankName: "TTB", AccountNo: "6789012345", AccountName: "Test Staff"}},
 	}
+	// Disable FK checks temporarily for bank account seeding
+	config.DB.Exec("SET FOREIGN_KEY_CHECKS = 0")
 	for _, s := range bankSeeds {
 		if s.emp.ID == 0 {
 			continue
 		}
 		s.bank.CompaniesID = s.comp.ID
 		s.bank.EmployeesID = s.emp.ID
-		config.DB.Where(models.EmployeeBankAccount{EmployeesID: s.emp.ID}).Assign(s.bank).FirstOrCreate(&s.bank)
+		// Delete existing record first (hard delete to avoid soft-delete conflicts)
+		config.DB.Unscoped().Where("employees_id = ?", s.emp.ID).Delete(&models.EmployeeBankAccount{})
+		config.DB.Create(&s.bank)
 	}
+	config.DB.Exec("SET FOREIGN_KEY_CHECKS = 1")
 
 	log.Println("Migration & Setup completed with Payroll Configs!")
 }

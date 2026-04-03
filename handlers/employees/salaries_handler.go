@@ -18,7 +18,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 		EmployeesID   uint    `json:"employees_id" binding:"required"`
 		BaseSalaries  float64 `json:"base_salaries"`
 		EffectiveDate string  `json:"effective_date" binding:"required"`
-		IsEnabled     bool    `json:"is_enabled"`
+		DeletedAt     *bool   `json:"deleted_at"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -46,20 +46,65 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
-	salaries := models.SalariesStructure{
-		EmployeesID:   input.EmployeesID,
-		BaseSalaries:  input.BaseSalaries,
-		EffectiveDate: parsedDate,
-		IsEnabled:     input.IsEnabled,
+	var existing []models.SalariesStructure
+	config.DB.Unscoped().Where("employees_id = ?", input.EmployeesID).Order("id ASC").Find(&existing)
+
+	shouldDelete := input.DeletedAt != nil && *input.DeletedAt
+
+	if shouldDelete {
+		for i := range existing {
+			if existing[i].DeletedAt == 0 {
+				if err := config.DB.Model(&models.SalariesStructure{}).Where("id = ?", existing[i].ID).Update("deleted_at", time.Now().UnixNano()).Error; err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable salaries record"})
+					return
+				}
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Salaries structure disabled successfully",
+			"data":    nil,
+		})
+		return
 	}
 
-	if err := config.DB.Create(&salaries).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create salaries record"})
-		return
+	var activeRecords []models.SalariesStructure
+	for _, rec := range existing {
+		if rec.DeletedAt == 0 {
+			activeRecords = append(activeRecords, rec)
+		}
+	}
+
+	if len(activeRecords) > 0 {
+		tx := config.DB.Begin()
+		for i := 1; i < len(activeRecords); i++ {
+			if err := tx.Exec("UPDATE salaries_structure SET deleted_at = ? WHERE id = ?", time.Now().UnixNano(), activeRecords[i].ID).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clean duplicate records"})
+				return
+			}
+		}
+		if err := tx.Model(&models.SalariesStructure{}).Where("id = ?", activeRecords[0].ID).Updates(map[string]interface{}{
+			"base_salaries":  input.BaseSalaries,
+			"effective_date": parsedDate,
+		}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update salaries record"})
+			return
+		}
+		tx.Commit()
+	} else {
+		salaries := models.SalariesStructure{
+			EmployeesID:   input.EmployeesID,
+			BaseSalaries:  input.BaseSalaries,
+			EffectiveDate: parsedDate,
+		}
+		if err := config.DB.Create(&salaries).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create salaries record"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Salaries structure updated successfully",
-		"data":    salaries,
 	})
 }

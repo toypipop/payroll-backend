@@ -35,12 +35,12 @@ type Employees struct {
 	IsActive bool `gorm:"default:true" json:"is_active"`
 
 	// Relations
-	Companies         Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
-	Department        Department            `gorm:"foreignKey:DeptID" json:"department"`
-	Position          Position              `gorm:"foreignKey:PosID" json:"position"`
-	Roles             Roles                 `gorm:"foreignKey:RolesID" json:"roles"`
-	SalariesStructure SalariesStructure     `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
-	EmploymentType    *EmploymentType `gorm:"foreignKey:EmploymentTypeID" json:"employment_type"`
+	Companies         Companies         `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Department        Department        `gorm:"foreignKey:DeptID" json:"department"`
+	Position          Position          `gorm:"foreignKey:PosID" json:"position"`
+	Roles             Roles             `gorm:"foreignKey:RolesID" json:"roles"`
+	SalariesStructure SalariesStructure `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
+	EmploymentType    *EmploymentType   `gorm:"foreignKey:EmploymentTypeID" json:"employment_type"`
 }
 
 // EmployeeBankAccount stores the bank transfer details for each Employee
@@ -51,13 +51,13 @@ type EmployeeBankAccount struct {
 	DeletedAt   soft_delete.DeletedAt `gorm:"uniqueIndex:idx_bank_emp_deleted;not null;default:0" json:"-"`
 	CompaniesID uint                  `gorm:"not null;index" json:"companies_id"`
 	EmployeesID uint                  `gorm:"uniqueIndex:idx_bank_emp_deleted;not null" json:"employees_id"`
-	BankID      *uint     `json:"bank_id"` // FK -> Bank
-	BankName    string    `gorm:"size:100" json:"bank_name"` // cached display name
-	AccountName string    `gorm:"not null;size:200" json:"account_name"`
-	AccountNo   string    `gorm:"not null;size:50" json:"account_no"`
-	Companies   Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
-	Employees   Employees `gorm:"foreignKey:EmployeesID" json:"employees"`
-	Bank        *Bank     `gorm:"foreignKey:BankID" json:"bank"`
+	BankID      *uint                 `json:"bank_id"`                   // FK -> Bank
+	BankName    string                `gorm:"size:100" json:"bank_name"` // cached display name
+	AccountName string                `gorm:"not null;size:200" json:"account_name"`
+	AccountNo   string                `gorm:"not null;size:50" json:"account_no"`
+	Companies   Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Employees   Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
+	Bank        *Bank                 `gorm:"foreignKey:BankID" json:"bank"`
 }
 
 // SalariesStructure defines the base pay for each Employees
@@ -65,11 +65,10 @@ type SalariesStructure struct {
 	ID            uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
-	DeletedAt     soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_sal_eff_deleted;not null;default:0" json:"-"`
+	DeletedAt     soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_sal_eff_deleted;not null;default:0" json:"deleted_at"`
 	EmployeesID   uint                  `gorm:"not null;index;uniqueIndex:idx_emp_sal_eff_deleted" json:"employees_id"`
 	BaseSalaries  float64               `gorm:"type:decimal(15,2)" json:"base_salaries"`
 	EffectiveDate time.Time             `gorm:"not null;uniqueIndex:idx_emp_sal_eff_deleted" json:"effective_date"`
-	IsEnabled     bool                  `json:"is_enabled" gorm:"default:true"`
 }
 
 // PayrollCycle manages the time periods for salaries processing
