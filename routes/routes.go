@@ -43,8 +43,6 @@ func SetupRouter() *gin.Engine {
 		api.POST("/employees", middleware.CheckPermission("EmployeesListPage", "CREATE"), emphandler.CreateEmployees)
 		api.PUT("/employees/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), emphandler.UpdateEmployees)
 		api.DELETE("/employees/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), emphandler.DeleteEmployees)
-		api.GET("/employees/:id/bank-account", middleware.CheckPermission("EmployeesListPage", "VIEW"), emphandler.GetEmployeeBankAccount)
-		api.PUT("/employees/:id/bank-account", middleware.CheckPermission("EmployeesListPage", "EDIT"), emphandler.UpsertEmployeeBankAccount)
 
 		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), emphandler.GetEmployees)
 		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "CREATE"), emphandler.UpdateSalariesStructure)

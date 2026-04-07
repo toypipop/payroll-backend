@@ -226,7 +226,7 @@ func CheckDeleteBlocked(entity string, id uint, companiesID uint) (bool, string,
 		return false, "", nil
 
 	case "bank":
-		if ok, err := modelCountExists(&models.EmployeeBankAccount{}, "bank_id = ?", id); err != nil {
+		if ok, err := modelCountExists(&models.Employees{}, "bank_id = ?", id); err != nil {
 			return false, "", err
 		} else if ok {
 			return true, "referenced by employee bank accounts", nil

@@ -38,7 +38,6 @@ func main() {
 		&models.PayrollCycleEarning{},
 		&models.PayrollCycleDeduction{},
 		&models.AttendanceConfig{},
-		&models.EmployeeBankAccount{},
 		&models.Bank{},
 		&models.EmploymentType{},
 		&models.Holiday{},

@@ -125,14 +125,9 @@ func GetBankTransferReport(c *gin.Context) {
 			LastName:      tx.Employees.LastName,
 			NetPay:        tx.NetPay,
 			CompaniesName: tx.Employees.Companies.Name,
-		}
-
-		var bank models.EmployeeBankAccount
-		if err := config.DB.Where("employees_id = ? AND companies_id = ?", tx.EmployeesID, cycle.CompaniesID).
-			First(&bank).Error; err == nil {
-			row.BankName = bank.BankName
-			row.AccountNo = bank.AccountNo
-			row.AccountName = bank.AccountName
+			BankName:      tx.Employees.BankName,
+			AccountNo:     tx.Employees.AccountNo,
+			AccountName:   tx.Employees.AccountName,
 		}
 
 		rows = append(rows, row)
@@ -367,12 +362,12 @@ func GetPayrollAnalysis(c *gin.Context) {
 		"company":      cycle.Companies,
 		"transactions": transactions,
 		"summary": gin.H{
-			"total_gross":             totalGross,
-			"total_other_deductions":  totalOtherDeductions,
-			"total_sso_employee":      totalSSO,
-			"total_sso_employer":      totalSSO,
-			"total_tax":               totalTax,
-			"total_net":               totalNet,
+			"total_gross":            totalGross,
+			"total_other_deductions": totalOtherDeductions,
+			"total_sso_employee":     totalSSO,
+			"total_sso_employer":     totalSSO,
+			"total_tax":              totalTax,
+			"total_net":              totalNet,
 		},
 		"journal": journal,
 	})
