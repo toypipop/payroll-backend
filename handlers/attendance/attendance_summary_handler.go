@@ -64,10 +64,11 @@ func GetAttendanceSummary(c *gin.Context) {
 	var attConfig models.AttendanceConfig
 	config.DB.Where("companies_id = ?", currentUser.CompaniesID).First(&attConfig)
 
-	workStartHour := attConfig.WorkStartHour
-	workStartMin := attConfig.WorkStartMin
-	if workStartHour == 0 && workStartMin == 0 {
-		workStartHour = 9 // fallback default 09:00
+	workStartHour := 9
+	workStartMin := 0
+	if attConfig.WorkStartTime != nil {
+		workStartHour = attConfig.WorkStartTime.Hour()
+		workStartMin = attConfig.WorkStartTime.Minute()
 	}
 	lateRate := attConfig.LateRatePerMinute
 	absentRate := attConfig.AbsentRatePerDay

@@ -91,30 +91,47 @@ func main() {
 	config.DB.Where(models.PayrollConfig{CompaniesID: compB.ID}).Assign(configB).FirstOrCreate(&configB)
 
 	// Initialize attendance configs
+	parseTime := func(h, m int) *time.Time {
+		t := time.Date(2026, 1, 1, h, m, 0, 0, time.UTC)
+		return &t
+	}
+
 	attConfigSys := models.AttendanceConfig{
-		CompaniesID:       sysComp.ID,
-		LateRatePerMinute: 5.0,
-		AbsentRatePerDay:  300.0,
-		WorkStartHour:     9,
-		WorkStartMin:      0,
+		CompaniesID:               sysComp.ID,
+		LateRatePerMinute:         5.0,
+		AbsentRatePerDay:          300.0,
+		WorkStartTime:             parseTime(9, 0),
+		WorkEndTime:               parseTime(18, 0),
+		OvertimeRatePerMinute:     5.0,
+		ExtraRatePerDay:           300.0,
+		IsOvertimeEarningsEnabled: true,
+		IsExtraEarningsEnabled:    true,
 	}
 	config.DB.Where(models.AttendanceConfig{CompaniesID: sysComp.ID}).Assign(attConfigSys).FirstOrCreate(&attConfigSys)
 
 	attConfigA := models.AttendanceConfig{
-		CompaniesID:       compA.ID,
-		LateRatePerMinute: 5.0,
-		AbsentRatePerDay:  300.0,
-		WorkStartHour:     9,
-		WorkStartMin:      0,
+		CompaniesID:               compA.ID,
+		LateRatePerMinute:         5.0,
+		AbsentRatePerDay:          300.0,
+		WorkStartTime:             parseTime(9, 0),
+		WorkEndTime:               parseTime(18, 0),
+		OvertimeRatePerMinute:     5.0,
+		ExtraRatePerDay:           300.0,
+		IsOvertimeEarningsEnabled: true,
+		IsExtraEarningsEnabled:    true,
 	}
 	config.DB.Where(models.AttendanceConfig{CompaniesID: compA.ID}).Assign(attConfigA).FirstOrCreate(&attConfigA)
 
 	attConfigB := models.AttendanceConfig{
-		CompaniesID:       compB.ID,
-		LateRatePerMinute: 5.0,
-		AbsentRatePerDay:  300.0,
-		WorkStartHour:     9,
-		WorkStartMin:      0,
+		CompaniesID:               compB.ID,
+		LateRatePerMinute:         5.0,
+		AbsentRatePerDay:          300.0,
+		WorkStartTime:             parseTime(9, 0),
+		WorkEndTime:               parseTime(18, 0),
+		OvertimeRatePerMinute:     5.0,
+		ExtraRatePerDay:           300.0,
+		IsOvertimeEarningsEnabled: true,
+		IsExtraEarningsEnabled:    true,
 	}
 	config.DB.Where(models.AttendanceConfig{CompaniesID: compB.ID}).Assign(attConfigB).FirstOrCreate(&attConfigB)
 
@@ -416,10 +433,7 @@ func main() {
 			config.DB.Where(models.SalariesStructure{EmployeesID: existingEmp.ID}).Assign(salary).FirstOrCreate(&salary)
 		} else {
 			var existing models.SalariesStructure
-			config.DB.Unscoped().Where("employees_id = ? AND deleted_at = 0", existingEmp.ID).First(&existing)
-			if existing.ID > 0 {
-				config.DB.Delete(&existing)
-			}
+			config.DB.Unscoped().Where("employees_id = ? AND deleted_at = 0", existingEmp.ID).Delete(&existing)
 		}
 	}
 

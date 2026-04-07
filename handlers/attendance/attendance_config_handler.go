@@ -33,10 +33,36 @@ func GetAttendanceConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, companies)
 }
 
+func parseTimeString(timeStr string) *time.Time {
+	if timeStr == "" {
+		return nil
+	}
+	parsed, err := time.Parse("15:04", timeStr)
+	if err != nil {
+		return nil
+	}
+	now := time.Now()
+	result := time.Date(now.Year(), now.Month(), now.Day(), parsed.Hour(), parsed.Minute(), 0, 0, now.Location())
+	return &result
+}
+
 func UpdateAttendanceConfig(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 
-	var input models.AttendanceConfig
+	var input struct {
+		CompaniesID               uint    `json:"companies_id"`
+		LateRatePerMinute         float64 `json:"late_rate_per_minute"`
+		AbsentRatePerDay          float64 `json:"absent_rate_per_day"`
+		IsLateDeductionEnabled    bool    `json:"is_late_deduction_enabled"`
+		IsAbsentDeductionEnabled  bool    `json:"is_absent_deduction_enabled"`
+		WorkStartTime             string  `json:"work_start_time"`
+		WorkEndTime               string  `json:"work_end_time"`
+		OvertimeRatePerMinute     float64 `json:"overtime_rate_per_minute"`
+		ExtraRatePerDay           float64 `json:"extra_rate_per_day"`
+		IsOvertimeEarningsEnabled bool    `json:"is_overtime_earnings_enabled"`
+		IsExtraEarningsEnabled    bool    `json:"is_extra_earnings_enabled"`
+	}
+
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -56,18 +82,38 @@ func UpdateAttendanceConfig(c *gin.Context) {
 		return
 	}
 
+	// Parse time strings to time.Time
+	workStartTime := parseTimeString(input.WorkStartTime)
+	workEndTime := parseTimeString(input.WorkEndTime)
+
 	err := config.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "companies_id"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"late_rate_per_minute":        input.LateRatePerMinute,
-			"absent_rate_per_day":         input.AbsentRatePerDay,
-			"is_late_deduction_enabled":   input.IsLateDeductionEnabled,
-			"is_absent_deduction_enabled": input.IsAbsentDeductionEnabled,
-			"work_start_hour":             input.WorkStartHour,
-			"work_start_min":              input.WorkStartMin,
-			"updated_at":                  time.Now(),
+			"late_rate_per_minute":         input.LateRatePerMinute,
+			"absent_rate_per_day":          input.AbsentRatePerDay,
+			"is_late_deduction_enabled":    input.IsLateDeductionEnabled,
+			"is_absent_deduction_enabled":  input.IsAbsentDeductionEnabled,
+			"work_start_time":              workStartTime,
+			"work_end_time":                workEndTime,
+			"overtime_rate_per_minute":     input.OvertimeRatePerMinute,
+			"extra_rate_per_day":           input.ExtraRatePerDay,
+			"is_overtime_earnings_enabled": input.IsOvertimeEarningsEnabled,
+			"is_extra_earnings_enabled":    input.IsExtraEarningsEnabled,
+			"updated_at":                   time.Now(),
 		}),
-	}).Create(&input).Error
+	}).Create(&models.AttendanceConfig{
+		CompaniesID:               input.CompaniesID,
+		LateRatePerMinute:         input.LateRatePerMinute,
+		AbsentRatePerDay:          input.AbsentRatePerDay,
+		IsLateDeductionEnabled:    input.IsLateDeductionEnabled,
+		IsAbsentDeductionEnabled:  input.IsAbsentDeductionEnabled,
+		WorkStartTime:             workStartTime,
+		WorkEndTime:               workEndTime,
+		OvertimeRatePerMinute:     input.OvertimeRatePerMinute,
+		ExtraRatePerDay:           input.ExtraRatePerDay,
+		IsOvertimeEarningsEnabled: input.IsOvertimeEarningsEnabled,
+		IsExtraEarningsEnabled:    input.IsExtraEarningsEnabled,
+	}).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})

@@ -54,18 +54,22 @@ type TimeLog struct {
 
 // AttendanceConfig for deduction rates
 type AttendanceConfig struct {
-	ID                       uint           `gorm:"primaryKey" json:"id"`
-	CompaniesID              uint           `gorm:"not null;uniqueIndex" json:"companies_id"`
-	LateRatePerMinute        float64        `gorm:"type:decimal(10,2);default:0" json:"late_rate_per_minute"`
-	AbsentRatePerDay         float64        `gorm:"type:decimal(10,2);default:0" json:"absent_rate_per_day"`
-	IsLateDeductionEnabled   bool           `gorm:"default:true" json:"is_late_deduction_enabled"`
-	IsAbsentDeductionEnabled bool           `gorm:"default:true" json:"is_absent_deduction_enabled"`
-	WorkStartHour            int            `gorm:"default:9" json:"work_start_hour"`
-	WorkStartMin             int            `gorm:"default:0" json:"work_start_min"`
-	CreatedAt                time.Time      `json:"created_at"`
-	UpdatedAt                time.Time      `json:"updated_at"`
-	DeletedAt                gorm.DeletedAt `gorm:"index" json:"-"`
-	Companies                Companies      `gorm:"foreignKey:CompaniesID" json:"companies"`
+	ID                        uint           `gorm:"primaryKey" json:"id"`
+	CompaniesID               uint           `gorm:"not null;uniqueIndex" json:"companies_id"`
+	LateRatePerMinute         float64        `gorm:"type:decimal(10,2);default:0" json:"late_rate_per_minute"`
+	AbsentRatePerDay          float64        `gorm:"type:decimal(10,2);default:0" json:"absent_rate_per_day"`
+	IsLateDeductionEnabled    bool           `gorm:"default:true" json:"is_late_deduction_enabled"`
+	IsAbsentDeductionEnabled  bool           `gorm:"default:true" json:"is_absent_deduction_enabled"`
+	WorkStartTime             *time.Time     `json:"work_start_time"`
+	WorkEndTime               *time.Time     `json:"work_end_time"`
+	OvertimeRatePerMinute     float64        `gorm:"type:decimal(10,2);default:0" json:"overtime_rate_per_minute"`
+	ExtraRatePerDay           float64        `gorm:"type:decimal(10,2);default:0" json:"extra_rate_per_day"`
+	IsOvertimeEarningsEnabled bool           `gorm:"default:false" json:"is_overtime_earnings_enabled"`
+	IsExtraEarningsEnabled    bool           `gorm:"default:false" json:"is_extra_earnings_enabled"`
+	CreatedAt                 time.Time      `json:"created_at"`
+	UpdatedAt                 time.Time      `json:"updated_at"`
+	DeletedAt                 gorm.DeletedAt `gorm:"index" json:"-"`
+	Companies                 Companies      `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 type LeaveRequest struct {

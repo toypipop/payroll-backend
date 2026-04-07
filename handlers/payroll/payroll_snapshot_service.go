@@ -193,10 +193,11 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		totalLateMins := 0.0
 		totalAbsentDays := 0
-		workStartHour := attendanceConfig.WorkStartHour
-		workStartMin := attendanceConfig.WorkStartMin
-		if workStartHour == 0 && workStartMin == 0 {
-			workStartHour = 9
+		workStartHour := 9
+		workStartMin := 0
+		if attendanceConfig.WorkStartTime != nil {
+			workStartHour = attendanceConfig.WorkStartTime.Hour()
+			workStartMin = attendanceConfig.WorkStartTime.Minute()
 		}
 
 		for _, log := range attendanceLogs {
