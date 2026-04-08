@@ -41,17 +41,45 @@ func CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user session invalid"})
 		return
 	}
 
-	if input.EndDate.Before(input.StartDate) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "End date cannot be before start date"})
+	if !input.EndDate.After(input.StartDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "End date must be after start date"})
 		return
 	}
+
+	if input.LeaveTypeID == nil || *input.LeaveTypeID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Leave type is required"})
+		return
+	}
+
+	var targetEmployee models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).Select("id, companies_id").First(&targetEmployee, input.EmployeesID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee or access denied"})
+		return
+	}
+
+	var leaveType models.LeaveTypeSetting
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+	).Where("id = ?", *input.LeaveTypeID).First(&leaveType).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid leave type for your company"})
+		return
+	}
+
+	if leaveType.CompaniesID != targetEmployee.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Leave type must belong to employee company"})
+		return
+	}
+
+	input.LeaveType = models.LeaveType(leaveType.Name)
 
 	// Change from userID to input.EmployeesID to check the selected employee
 	var count int64
@@ -65,7 +93,7 @@ func CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	input.CompaniesID = currentUser.CompaniesID
+	input.CompaniesID = targetEmployee.CompaniesID
 	input.Status = models.LeaveStatusPending
 
 	duration := input.EndDate.Sub(input.StartDate)
@@ -101,13 +129,82 @@ func UpdateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	if err := c.ShouldBindJSON(&leave); err != nil {
+	var input struct {
+		EmployeesID uint      `json:"employees_id" binding:"required"`
+		LeaveTypeID uint      `json:"leave_type_id" binding:"required"`
+		StartDate   time.Time `json:"start_date" binding:"required"`
+		EndDate     time.Time `json:"end_date" binding:"required"`
+		Reason      string    `json:"reason"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	leave.CompaniesID = currentUser.CompaniesID
-	config.DB.Save(&leave)
+	if !input.EndDate.After(input.StartDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "End date must be after start date"})
+		return
+	}
+
+	var count int64
+	config.DB.Model(&models.LeaveRequest{}).
+		Where("id <> ?", leave.ID).
+		Where("employees_id = ? AND status IN (?)", input.EmployeesID, []models.LeaveStatus{models.LeaveStatusPending, models.LeaveStatusApproved}).
+		Where("NOT (start_date > ? OR end_date < ?)", input.EndDate, input.StartDate).
+		Count(&count)
+
+	if count > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "This employee already has a leave request during this period"})
+		return
+	}
+
+	var targetEmployee models.Employees
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+	).Select("id, companies_id").First(&targetEmployee, input.EmployeesID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee or access denied"})
+		return
+	}
+
+	var leaveType models.LeaveTypeSetting
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+	).Where("id = ?", input.LeaveTypeID).First(&leaveType).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid leave type for your company"})
+		return
+	}
+
+	if leaveType.CompaniesID != targetEmployee.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Leave type must belong to employee company"})
+		return
+	}
+
+	duration := input.EndDate.Sub(input.StartDate)
+	totalDays := (duration.Hours() / 24) + 1
+
+	updates := map[string]interface{}{
+		"employees_id":  input.EmployeesID,
+		"leave_type_id": input.LeaveTypeID,
+		"leave_type":    models.LeaveType(leaveType.Name),
+		"start_date":    input.StartDate,
+		"end_date":      input.EndDate,
+		"total_days":    totalDays,
+		"reason":        input.Reason,
+		"companies_id":  targetEmployee.CompaniesID,
+		"updated_at":    time.Now(),
+	}
+
+	if err := config.DB.Model(&leave).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := config.DB.Preload("Employees").Preload("Employees.Companies").Preload("Approver").Preload("LeaveTypeMaster").First(&leave, leave.ID).Error; err != nil {
+		c.JSON(http.StatusOK, leave)
+		return
+	}
+
 	c.JSON(http.StatusOK, leave)
 }
 

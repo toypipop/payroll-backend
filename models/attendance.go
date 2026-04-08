@@ -80,7 +80,7 @@ type LeaveRequest struct {
 	CompaniesID     uint                  `gorm:"not null;index" json:"companies_id"`
 	EmployeesID     uint                  `gorm:"not null;index" json:"employees_id"`
 	LeaveTypeID     *uint                 `json:"leave_type_id"` // FK: LeaveTypeSetting
-	LeaveType       LeaveType             `gorm:"not null;size:50" json:"leave_type" binding:"required,oneof=Sick Personal Annual Unpaid"`
+	LeaveType       LeaveType             `gorm:"not null;size:50" json:"leave_type"`
 	StartDate       time.Time             `gorm:"not null" json:"start_date"`
 	EndDate         time.Time             `gorm:"not null" json:"end_date"`
 	TotalDays       float64               `gorm:"type:decimal(5,2)" json:"total_days"`
