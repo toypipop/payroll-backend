@@ -27,6 +27,7 @@ func GetEmployees(c *gin.Context) {
 		Preload("Position").
 		Preload("Companies").
 		Preload("Roles").
+		Preload("SalariesStructure").
 		Preload("Bank").
 		Preload("EmploymentType").
 		Find(&employees).Error; err != nil {
