@@ -74,7 +74,8 @@ func SetupRouter() *gin.Engine {
 		api.GET("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "VIEW"), atthandler.GetAttendanceConfigs)
 		api.POST("/attendance/config", middleware.CheckPermission("AttendanceSettingsPage", "EDIT"), atthandler.UpdateAttendanceConfig)
 
-		api.GET("/attendance/summary", middleware.CheckPermission("AttendanceSummaryPage", "VIEW"), atthandler.GetAttendanceSummary)
+		api.GET("/deduction/summary", middleware.CheckPermission("DeductionSummaryPage", "VIEW"), atthandler.GetAttendanceSummary)
+		api.GET("/earning/summary", middleware.CheckPermission("EarningSummaryPage", "VIEW"), atthandler.GetEarningSummary)
 
 		// --- Payroll Processing ---
 		api.GET("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "VIEW"), payhandler.GetPayrollCycles)
@@ -158,6 +159,12 @@ func SetupRouter() *gin.Engine {
 		api.POST("/master/holidays", middleware.CheckPermission("HolidayCalendarPage", "CREATE"), sethandler.CreateHoliday)
 		api.PUT("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "EDIT"), sethandler.UpdateHoliday)
 		api.DELETE("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "DELETE"), middleware.PreventDeleteIfReferenced("holiday"), sethandler.DeleteHoliday)
+
+		api.GET("/master/day-offs", middleware.CheckPermission("DayOffPage", "VIEW"), sethandler.GetDayOffs)
+		api.GET("/master/day-offs/companies", middleware.CheckPermission("DayOffPage", "VIEW"), sethandler.GetDayOffCompanies)
+		api.POST("/master/day-offs", middleware.CheckPermission("DayOffPage", "CREATE"), sethandler.CreateDayOff)
+		api.PUT("/master/day-offs/:id", middleware.CheckPermission("DayOffPage", "EDIT"), sethandler.UpdateDayOff)
+		api.DELETE("/master/day-offs/:id", middleware.CheckPermission("DayOffPage", "DELETE"), sethandler.DeleteDayOff)
 
 		api.GET("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "VIEW"), sethandler.GetWorkLocations)
 		api.POST("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "CREATE"), sethandler.CreateWorkLocation)

@@ -87,6 +87,21 @@ type Holiday struct {
 	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
+// DayOff manages company-specific planned days off (weekends/company off days)
+type DayOff struct {
+	ID        uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time             `json:"created_at"`
+	UpdatedAt time.Time             `json:"updated_at"`
+	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_dayoff_comp_weekday_deleted;not null;default:0" json:"-"`
+
+	CompaniesID uint   `gorm:"uniqueIndex:idx_dayoff_comp_weekday_deleted;not null;index" json:"companies_id"`
+	Weekday     int    `gorm:"uniqueIndex:idx_dayoff_comp_weekday_deleted;not null" json:"weekday"` // 0=Sunday ... 6=Saturday
+	Name        string `gorm:"not null;size:200" json:"name"`
+	IsPaid      bool   `gorm:"default:true" json:"is_paid"`
+
+	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
+}
+
 // WorkLocation lists branches or remote sites per company
 type WorkLocation struct {
 	ID        uint                  `gorm:"primaryKey" json:"id"`

@@ -111,3 +111,61 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if len(moduleKeys) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			c.Abort()
+			return
+		}
+
+		valRoles, _ := c.Get("roles_id")
+
+		var rID uint
+		switch v := valRoles.(type) {
+		case uint:
+			rID = v
+		case float64:
+			rID = uint(v)
+		case int:
+			rID = uint(v)
+		}
+
+		var accesses []models.RolesModuleAccess
+		err := config.DB.Debug().
+			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
+			Where(&models.RolesModuleAccess{RolesID: rID}).
+			Where("`AppModule`.`module_key` IN ?", moduleKeys).
+			Find(&accesses).Error
+
+		if err != nil || len(accesses) == 0 {
+			log.Printf("[DEBUG] ModuleKeys: %v, RolesID: %d, Error: %v", moduleKeys, rID, err)
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			c.Abort()
+			return
+		}
+
+		for _, access := range accesses {
+			permissions := map[string]bool{
+				"VIEW":   access.CanView,
+				"CREATE": access.CanCreate,
+				"EDIT":   access.CanEdit,
+				"DELETE": access.CanDelete,
+			}
+
+			allowed, ok := permissions[action]
+			if ok && allowed {
+				c.Set("data_scope", access.DataScope)
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":  "Permission denied",
+			"action": action,
+		})
+		c.Abort()
+	}
+}

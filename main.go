@@ -41,6 +41,7 @@ func main() {
 		&models.Bank{},
 		&models.EmploymentType{},
 		&models.Holiday{},
+		&models.DayOff{},
 		&models.WorkLocation{},
 		&models.LeaveTypeSetting{},
 		&models.EarningCategory{},
@@ -74,7 +75,8 @@ func main() {
 // │   ├── Timelogs
 // │   ├── Leave Requests
 // │   ├── Leave Approved
-// │   └── Attendance Summary
+// │   └── Earning Summary
+// │   └── Deduction Summary
 // ├── Payroll Processing
 // │   ├── Payroll Cycles
 // │   ├── Run Payroll

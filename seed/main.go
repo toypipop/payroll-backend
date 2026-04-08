@@ -42,6 +42,7 @@ func main() {
 		&models.Bank{},
 		&models.EmploymentType{},
 		&models.Holiday{},
+		&models.DayOff{},
 		&models.WorkLocation{},
 		&models.LeaveTypeSetting{},
 		&models.EarningCategory{},
@@ -248,6 +249,14 @@ func main() {
 			dateStr := h.Date.Format("2006-01-02")
 			config.DB.Where("companies_id = ? AND date = ?", comp.ID, dateStr).Assign(h).FirstOrCreate(&h)
 		}
+
+		dayOffs := []models.DayOff{
+			{CompaniesID: comp.ID, Weekday: int(time.Sunday), Name: "Sunday Off", IsPaid: true},
+			{CompaniesID: comp.ID, Weekday: int(time.Monday), Name: "Monday Off", IsPaid: true},
+		}
+		for _, d := range dayOffs {
+			config.DB.Where("companies_id = ? AND weekday = ?", comp.ID, d.Weekday).Assign(d).FirstOrCreate(&d)
+		}
 	}
 
 	// --- Earning Types ---
@@ -337,7 +346,8 @@ func main() {
 		{ModuleName: "Timelogs", ModuleKey: "TimelogsListPage", RoutePath: "/timelogs", Icon: "Schedule", Order: 1, ParentID: ptr(3)},
 		{ModuleName: "Leave Requests", ModuleKey: "LeaveRequestsPage", RoutePath: "/leave-requests", Icon: "EventNote", Order: 2, ParentID: ptr(3)},
 		{ModuleName: "Leave Approved", ModuleKey: "LeaveApprovedPage", RoutePath: "/leave-approved", Icon: "FactCheck", Order: 3, ParentID: ptr(3)},
-		{ModuleName: "Attendance Summary", ModuleKey: "AttendanceSummaryPage", RoutePath: "/attendance-summary", Icon: "Summarize", Order: 4, ParentID: ptr(3)},
+		{ModuleName: "Deduction Summary", ModuleKey: "DeductionSummaryPage", RoutePath: "/deduction-summary", Icon: "Summarize", Order: 4, ParentID: ptr(3)},
+		{ModuleName: "Earning Summary", ModuleKey: "EarningSummaryPage", RoutePath: "/earning-summary", Icon: "TrendingUp", Order: 5, ParentID: ptr(3)},
 
 		// Level 2: Sub-Menus under Payroll Processing
 		{ModuleName: "Payroll Cycles", ModuleKey: "PayrollCyclesPage", RoutePath: "/payroll-cycles", Icon: "Sync", Order: 1, ParentID: ptr(4)},
@@ -362,8 +372,9 @@ func main() {
 		{ModuleName: "Attendance Settings", ModuleKey: "AttendanceSettingsPage", RoutePath: "/attendance-settings", Icon: "Tune", Order: 6, ParentID: ptr(6)},
 		{ModuleName: "Bank Master", ModuleKey: "MasterBankPage", RoutePath: "/master-banks", Icon: "AccountBalance", Order: 7, ParentID: ptr(6)},
 		{ModuleName: "Holiday Calendar", ModuleKey: "HolidayCalendarPage", RoutePath: "/holidays", Icon: "CalendarMonth", Order: 8, ParentID: ptr(6)},
-		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 9, ParentID: ptr(6)},
-		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 10, ParentID: ptr(6)},
+		{ModuleName: "Day Off", ModuleKey: "DayOffPage", RoutePath: "/day-offs", Icon: "EventAvailable", Order: 9, ParentID: ptr(6)},
+		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 10, ParentID: ptr(6)},
+		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 11, ParentID: ptr(6)},
 
 		// Level 2: Sub-Menus under Reports
 		{ModuleName: "Payslips", ModuleKey: "PayslipsReportPage", RoutePath: "/payslips", Icon: "Description", Order: 1, ParentID: ptr(7)},
@@ -482,7 +493,7 @@ func main() {
 		compID   uint
 		checkIn  *time.Time
 		checkOut *time.Time
-		status   models.AttendanceStatus
+		legacy   models.AttendanceStatus
 		remark   string
 	}
 
@@ -537,6 +548,10 @@ func main() {
 	ciS6, coS6 := d(time.March, 6, 9, 0, 17, 0)
 	ciS9, coS9 := d(time.March, 9, 9, 0, 17, 0)
 
+	// Extra-day (holiday/weekend) work in March
+	ciA7Extra, coA7Extra := d(time.March, 7, 9, 0, 19, 0)  // 10h weekend OT
+	ciD8Extra, coD8Extra := d(time.March, 8, 10, 0, 18, 0) // 8h weekend extra day
+
 	// April data (identical times, just different dates)
 	ciA2Apr, coA2Apr := d(time.April, 2, 9, 0, 19, 0)  // 10h → 2h OT
 	ciA3Apr, coA3Apr := d(time.April, 3, 9, 0, 20, 0)  // 11h → 3h OT
@@ -579,6 +594,10 @@ func main() {
 	ciS5Apr, coS5Apr := d(time.April, 5, 9, 0, 17, 0)
 	ciS6Apr, coS6Apr := d(time.April, 6, 9, 0, 17, 0)
 	ciS9Apr, coS9Apr := d(time.April, 9, 9, 0, 17, 0)
+
+	// Extra-day (holiday/weekend) work in April
+	ciA11Extra, coA11Extra := d(time.April, 11, 9, 0, 18, 30) // 9.5h weekend OT
+	ciE12Extra, coE12Extra := d(time.April, 12, 10, 0, 18, 0) // 8h weekend extra day
 
 	timelogs := []tlSeed{
 		// === MARCH 2026 ===
@@ -624,6 +643,10 @@ func main() {
 		{staff.ID, sysComp.ID, ciS5, coS5, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS6, coS6, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS9, coS9, models.StatusOnTime, ""},
+		// Extra-day work + absent sample
+		{alice.ID, compA.ID, ciA7Extra, coA7Extra, models.StatusHoliday, "Weekend deployment"},
+		{david.ID, compB.ID, ciD8Extra, coD8Extra, models.StatusHoliday, "Weekend stock count"},
+		{bob.ID, compA.ID, nil, nil, models.StatusAbsent, "Absent on 2026-03-10"},
 
 		// === APRIL 2026 (identical to March) ===
 		// Alice — OT every day
@@ -668,6 +691,10 @@ func main() {
 		{staff.ID, sysComp.ID, ciS5Apr, coS5Apr, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS6Apr, coS6Apr, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS9Apr, coS9Apr, models.StatusOnTime, ""},
+		// Extra-day work + absent sample
+		{alice.ID, compA.ID, ciA11Extra, coA11Extra, models.StatusHoliday, "Weekend migration"},
+		{eve.ID, compB.ID, ciE12Extra, coE12Extra, models.StatusHoliday, "Weekend support"},
+		{carol.ID, compA.ID, nil, nil, models.StatusAbsent, "Absent on 2026-04-10"},
 	}
 
 	for _, tl := range timelogs {
@@ -679,8 +706,20 @@ func main() {
 			EmployeesID: tl.empID,
 			CheckIn:     tl.checkIn,
 			CheckOut:    tl.checkOut,
-			Status:      tl.status,
+			Status:      models.StatusOnTime,
 			Remark:      tl.remark,
+		}
+		if tl.checkIn == nil || tl.checkOut == nil {
+			log.Status = models.StatusAbsent
+		} else {
+			day := tl.checkIn.Format("2006-01-02")
+			var holidayCount int64
+			config.DB.Model(&models.Holiday{}).Where("companies_id = ? AND date = ?", tl.compID, day).Count(&holidayCount)
+			var dayOffCount int64
+			config.DB.Model(&models.DayOff{}).Where("companies_id = ? AND weekday = ?", tl.compID, int(tl.checkIn.Weekday())).Count(&dayOffCount)
+			if holidayCount > 0 || dayOffCount > 0 {
+				log.Status = models.StatusHoliday
+			}
 		}
 		// Use check_in as unique key to avoid duplicate rows on re-run
 		config.DB.Where(models.TimeLog{EmployeesID: tl.empID, CheckIn: tl.checkIn}).
@@ -940,8 +979,12 @@ func main() {
 			continue
 		}
 		var tx models.PayrollTransaction
-		result := config.DB.Where("cycle_id = ? AND employees_id = ?", s.cycleID, s.emp.ID).First(&tx)
+		result := config.DB.Where("cycle_id = ? AND employees_id = ?", s.cycleID, s.emp.ID).Limit(1).Find(&tx)
 		if result.Error != nil {
+			log.Printf("Failed to query mock transaction for emp %d: %v", s.emp.ID, result.Error)
+			continue
+		}
+		if result.RowsAffected == 0 {
 			// Create the transaction
 			tx = models.PayrollTransaction{
 				CycleID:        s.cycleID,
