@@ -48,8 +48,12 @@ func CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	if !input.EndDate.After(input.StartDate) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "End date must be after start date"})
+	// Normalize CreateLeaveRequest dates to midnight UTC before validation
+	input.StartDate = time.Date(input.StartDate.Year(), input.StartDate.Month(), input.StartDate.Day(), 0, 0, 0, 0, time.UTC)
+	input.EndDate = time.Date(input.EndDate.Year(), input.EndDate.Month(), input.EndDate.Day(), 0, 0, 0, 0, time.UTC)
+
+	if input.EndDate.Before(input.StartDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "End date must be on or after start date"})
 		return
 	}
 
@@ -96,8 +100,7 @@ func CreateLeaveRequest(c *gin.Context) {
 	input.CompaniesID = targetEmployee.CompaniesID
 	input.Status = models.LeaveStatusPending
 
-	duration := input.EndDate.Sub(input.StartDate)
-	input.TotalDays = (duration.Hours() / 24) + 1
+	input.TotalDays = float64(int(input.EndDate.Sub(input.StartDate).Hours()/24)) + 1
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -142,8 +145,12 @@ func UpdateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	if !input.EndDate.After(input.StartDate) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "End date must be after start date"})
+	// Normalize dates to midnight UTC for date-only storage
+	input.StartDate = time.Date(input.StartDate.Year(), input.StartDate.Month(), input.StartDate.Day(), 0, 0, 0, 0, time.UTC)
+	input.EndDate = time.Date(input.EndDate.Year(), input.EndDate.Month(), input.EndDate.Day(), 0, 0, 0, 0, time.UTC)
+
+	if input.EndDate.Before(input.StartDate) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "End date must be on or after start date"})
 		return
 	}
 
@@ -180,8 +187,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	duration := input.EndDate.Sub(input.StartDate)
-	totalDays := (duration.Hours() / 24) + 1
+	totalDays := float64(int(input.EndDate.Sub(input.StartDate).Hours()/24)) + 1
 
 	updates := map[string]interface{}{
 		"employees_id":  input.EmployeesID,

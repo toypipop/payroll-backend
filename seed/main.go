@@ -497,204 +497,284 @@ func main() {
 		remark   string
 	}
 
-	// Alice (Tech Corp MANAGER): mostly OT — check-out at 19:00 or 20:00 (10–11h = 2–3h OT/day)
-	// Bob (Tech Corp STAFF): some OT, one late day
-	// Carol (Tech Corp STAFF): late check-ins, no OT
-	// David (Biz Group MANAGER): normal with OT
-	// Eve (Biz Group STAFF): a few late, some OT
-	// staff@admin.com: mostly normal
+	// Alice (Tech Corp MANAGER): perfect attendance — on time every day, heavy OT
+	// Bob   (Tech Corp STAFF):  some OT, late every Thu
+	// Carol (Tech Corp STAFF):  mostly late check-ins, no OT
+	// David (Biz Group MANAGER): normal + OT on Tue/Thu/Sat
+	// Eve   (Biz Group STAFF):   mixed late + OT
+	// staff@admin.com:           clean, on time, no OT
 	//
-	// Weekdays Mar 1–9 & Apr 1–9, 2026: Mon 2, Tue 3, Wed 4, Thu 5, Fri 6, Mon 9
-	// March data
-	ciA2, coA2 := d(time.March, 2, 9, 0, 19, 0)  // 10h → 2h OT
-	ciA3, coA3 := d(time.March, 3, 9, 0, 20, 0)  // 11h → 3h OT
-	ciA4, coA4 := d(time.March, 4, 9, 0, 18, 30) // 9.5h → 1.5h OT
-	ciA5, coA5 := d(time.March, 5, 9, 0, 19, 0)  // 10h → 2h OT
-	ciA6, coA6 := d(time.March, 6, 9, 0, 18, 0)  // 9h → 1h OT
-	ciA9, coA9 := d(time.March, 9, 9, 0, 20, 0)  // 11h → 3h OT
+	// === FEBRUARY 2026 ===
+	// Day-offs: Sunday (0) + Monday (1)
+	// Working days (Tue–Sat): 3,4,5,6,7 / 10,11,12,13,14 / 17,18,19,20,21 / 24,25,26,27,28
 
-	ciB2, coB2 := d(time.March, 2, 9, 0, 18, 0)   // 9h → 1h OT
-	ciB3, coB3 := d(time.March, 3, 9, 0, 18, 0)   // 9h → 1h OT
-	ciB4, coB4 := d(time.March, 4, 10, 30, 18, 0) // late, 7.5h → no OT
-	ciB5, coB5 := d(time.March, 5, 9, 0, 17, 0)   // 8h → no OT
-	ciB6, coB6 := d(time.March, 6, 9, 0, 18, 0)   // 9h → 1h OT
-	ciB9, coB9 := d(time.March, 9, 9, 0, 17, 0)   // 8h → no OT
+	// Alice — all 20 working days, on time, OT every day
+	ciA3, coA3 := d(time.February, 3, 9, 0, 19, 0)     // Tue w1  10h → 2h OT
+	ciA4, coA4 := d(time.February, 4, 9, 0, 20, 0)     // Wed w1  11h → 3h OT
+	ciA5, coA5 := d(time.February, 5, 9, 0, 18, 30)    // Thu w1  9.5h → 1.5h OT
+	ciA6, coA6 := d(time.February, 6, 9, 0, 19, 0)     // Fri w1  10h → 2h OT
+	ciA7, coA7 := d(time.February, 7, 9, 0, 18, 0)     // Sat w1  9h → 1h OT
+	ciA10, coA10 := d(time.February, 10, 9, 0, 20, 0)  // Tue w2  11h → 3h OT
+	ciA11, coA11 := d(time.February, 11, 9, 0, 19, 0)  // Wed w2  10h → 2h OT
+	ciA12, coA12 := d(time.February, 12, 9, 0, 18, 30) // Thu w2  9.5h → 1.5h OT
+	ciA13, coA13 := d(time.February, 13, 9, 0, 19, 0)  // Fri w2  10h → 2h OT
+	ciA14, coA14 := d(time.February, 14, 9, 0, 18, 0)  // Sat w2  9h → 1h OT
+	ciA17, coA17 := d(time.February, 17, 9, 0, 20, 0)  // Tue w3  11h → 3h OT
+	ciA18, coA18 := d(time.February, 18, 9, 0, 19, 0)  // Wed w3  10h → 2h OT
+	ciA19, coA19 := d(time.February, 19, 9, 0, 18, 30) // Thu w3  9.5h → 1.5h OT
+	ciA20, coA20 := d(time.February, 20, 9, 0, 19, 0)  // Fri w3  10h → 2h OT
+	ciA21, coA21 := d(time.February, 21, 9, 0, 18, 0)  // Sat w3  9h → 1h OT
+	ciA24, coA24 := d(time.February, 24, 9, 0, 19, 0)  // Tue w4  10h → 2h OT
+	ciA25, coA25 := d(time.February, 25, 9, 0, 20, 0)  // Wed w4  11h → 3h OT
+	ciA26, coA26 := d(time.February, 26, 9, 0, 18, 30) // Thu w4  9.5h → 1.5h OT
+	ciA27, coA27 := d(time.February, 27, 9, 0, 19, 0)  // Fri w4  10h → 2h OT
+	ciA28, coA28 := d(time.February, 28, 9, 0, 18, 0)  // Sat w4  9h → 1h OT
 
-	ciC2, coC2 := d(time.March, 2, 10, 0, 18, 0)  // late, 8h
-	ciC3, coC3 := d(time.March, 3, 10, 30, 18, 0) // late, 7.5h
-	ciC4, coC4 := d(time.March, 4, 9, 0, 17, 0)   // on_time, 8h
-	ciC5, coC5 := d(time.March, 5, 10, 15, 18, 0) // late, 7.75h
-	ciC6, coC6 := d(time.March, 6, 10, 0, 18, 0)  // late, 8h
-	ciC9, coC9 := d(time.March, 9, 9, 0, 17, 0)   // on_time, 8h
+	// Bob — all 20 working days, late every Thu (5,12,19,26), OT on Tue/Wed/Sat
+	ciB3, coB3 := d(time.February, 3, 9, 0, 18, 0)      // Tue w1  9h → 1h OT
+	ciB4, coB4 := d(time.February, 4, 9, 0, 18, 0)      // Wed w1  9h → 1h OT
+	ciB5, coB5 := d(time.February, 5, 10, 30, 18, 0)    // Thu w1  late 7.5h
+	ciB6, coB6 := d(time.February, 6, 9, 0, 17, 0)      // Fri w1  8h
+	ciB7, coB7 := d(time.February, 7, 9, 0, 18, 0)      // Sat w1  9h → 1h OT
+	ciB10, coB10 := d(time.February, 10, 9, 0, 18, 0)   // Tue w2  9h → 1h OT
+	ciB11, coB11 := d(time.February, 11, 9, 0, 18, 0)   // Wed w2  9h → 1h OT
+	ciB12, coB12 := d(time.February, 12, 10, 30, 18, 0) // Thu w2  late 7.5h
+	ciB13, coB13 := d(time.February, 13, 9, 0, 17, 0)   // Fri w2  8h
+	ciB14, coB14 := d(time.February, 14, 9, 0, 18, 0)   // Sat w2  9h → 1h OT
+	ciB17, coB17 := d(time.February, 17, 9, 0, 17, 0)   // Tue w3  8h
+	ciB18, coB18 := d(time.February, 18, 9, 0, 18, 0)   // Wed w3  9h → 1h OT
+	ciB19, coB19 := d(time.February, 19, 10, 30, 18, 0) // Thu w3  late 7.5h
+	ciB20, coB20 := d(time.February, 20, 9, 0, 17, 0)   // Fri w3  8h
+	ciB21, coB21 := d(time.February, 21, 9, 0, 18, 0)   // Sat w3  9h → 1h OT
+	ciB24, coB24 := d(time.February, 24, 9, 0, 18, 0)   // Tue w4  9h → 1h OT
+	ciB25, coB25 := d(time.February, 25, 9, 0, 17, 0)   // Wed w4  8h
+	ciB26, coB26 := d(time.February, 26, 10, 30, 18, 0) // Thu w4  late 7.5h
+	ciB27, coB27 := d(time.February, 27, 9, 0, 17, 0)   // Fri w4  8h
+	ciB28, coB28 := d(time.February, 28, 9, 0, 18, 0)   // Sat w4  9h → 1h OT
 
-	ciD2, coD2 := d(time.March, 2, 9, 0, 18, 0)
-	ciD3, coD3 := d(time.March, 3, 9, 0, 19, 30) // 10.5h → 2.5h OT
-	ciD4, coD4 := d(time.March, 4, 9, 0, 18, 0)
-	ciD5, coD5 := d(time.March, 5, 9, 0, 20, 0) // 11h → 3h OT
-	ciD6, coD6 := d(time.March, 6, 9, 0, 18, 0)
-	ciD9, coD9 := d(time.March, 9, 9, 0, 19, 0) // 10h → 2h OT
+	// Carol — all 20 working days, mostly late, no OT
+	ciC3, coC3 := d(time.February, 3, 10, 0, 18, 0)     // Tue w1  late 8h
+	ciC4, coC4 := d(time.February, 4, 10, 30, 18, 0)    // Wed w1  late 7.5h
+	ciC5, coC5 := d(time.February, 5, 9, 0, 17, 0)      // Thu w1  on time 8h
+	ciC6, coC6 := d(time.February, 6, 10, 15, 18, 0)    // Fri w1  late 7.75h
+	ciC7, coC7 := d(time.February, 7, 10, 0, 18, 0)     // Sat w1  late 8h
+	ciC10, coC10 := d(time.February, 10, 10, 0, 18, 0)  // Tue w2  late 8h
+	ciC11, coC11 := d(time.February, 11, 10, 30, 18, 0) // Wed w2  late 7.5h
+	ciC12, coC12 := d(time.February, 12, 9, 0, 17, 0)   // Thu w2  on time 8h
+	ciC13, coC13 := d(time.February, 13, 10, 15, 18, 0) // Fri w2  late 7.75h
+	ciC14, coC14 := d(time.February, 14, 10, 0, 18, 0)  // Sat w2  late 8h
+	ciC17, coC17 := d(time.February, 17, 9, 0, 17, 0)   // Tue w3  on time 8h
+	ciC18, coC18 := d(time.February, 18, 10, 0, 18, 0)  // Wed w3  late 8h
+	ciC19, coC19 := d(time.February, 19, 10, 30, 18, 0) // Thu w3  late 7.5h
+	ciC20, coC20 := d(time.February, 20, 9, 0, 17, 0)   // Fri w3  on time 8h
+	ciC21, coC21 := d(time.February, 21, 10, 15, 18, 0) // Sat w3  late 7.75h
+	ciC24, coC24 := d(time.February, 24, 10, 0, 18, 0)  // Tue w4  late 8h
+	ciC25, coC25 := d(time.February, 25, 9, 0, 17, 0)   // Wed w4  on time 8h
+	ciC26, coC26 := d(time.February, 26, 10, 30, 18, 0) // Thu w4  late 7.5h
+	ciC27, coC27 := d(time.February, 27, 10, 0, 18, 0)  // Fri w4  late 8h
+	ciC28, coC28 := d(time.February, 28, 9, 0, 17, 0)   // Sat w4  on time 8h
 
-	ciE2, coE2 := d(time.March, 2, 10, 0, 18, 0)  // late
-	ciE3, coE3 := d(time.March, 3, 9, 0, 18, 30)  // 9.5h → 1.5h OT
-	ciE4, coE4 := d(time.March, 4, 10, 30, 18, 0) // late
-	ciE5, coE5 := d(time.March, 5, 9, 0, 18, 0)   // 9h → 1h OT
-	ciE6, coE6 := d(time.March, 6, 9, 0, 17, 0)   // 8h
-	ciE9, coE9 := d(time.March, 9, 9, 0, 18, 0)   // 9h → 1h OT
+	// David — all 20 working days, OT on Tue/Thu/Sat
+	ciD3, coD3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1
+	ciD4, coD4 := d(time.February, 4, 9, 0, 19, 30)    // Wed w1  2.5h OT
+	ciD5, coD5 := d(time.February, 5, 9, 0, 18, 0)     // Thu w1
+	ciD6, coD6 := d(time.February, 6, 9, 0, 20, 0)     // Fri w1  3h OT
+	ciD7, coD7 := d(time.February, 7, 9, 0, 18, 0)     // Sat w1
+	ciD10, coD10 := d(time.February, 10, 9, 0, 19, 0)  // Tue w2  2h OT
+	ciD11, coD11 := d(time.February, 11, 9, 0, 18, 0)  // Wed w2
+	ciD12, coD12 := d(time.February, 12, 9, 0, 19, 30) // Thu w2  2.5h OT
+	ciD13, coD13 := d(time.February, 13, 9, 0, 18, 0)  // Fri w2
+	ciD14, coD14 := d(time.February, 14, 9, 0, 20, 0)  // Sat w2  3h OT
+	ciD17, coD17 := d(time.February, 17, 9, 0, 18, 0)  // Tue w3
+	ciD18, coD18 := d(time.February, 18, 9, 0, 19, 0)  // Wed w3  2h OT
+	ciD19, coD19 := d(time.February, 19, 9, 0, 18, 0)  // Thu w3
+	ciD20, coD20 := d(time.February, 20, 9, 0, 19, 30) // Fri w3  2.5h OT
+	ciD21, coD21 := d(time.February, 21, 9, 0, 18, 0)  // Sat w3
+	ciD24, coD24 := d(time.February, 24, 9, 0, 19, 0)  // Tue w4  2h OT
+	ciD25, coD25 := d(time.February, 25, 9, 0, 18, 0)  // Wed w4
+	ciD26, coD26 := d(time.February, 26, 9, 0, 20, 0)  // Thu w4  3h OT
+	ciD27, coD27 := d(time.February, 27, 9, 0, 18, 0)  // Fri w4
+	ciD28, coD28 := d(time.February, 28, 9, 0, 19, 0)  // Sat w4  2h OT
 
-	ciS2, coS2 := d(time.March, 2, 9, 0, 17, 0)
-	ciS3, coS3 := d(time.March, 3, 9, 0, 17, 0)
-	ciS4, coS4 := d(time.March, 4, 9, 0, 17, 0)
-	ciS5, coS5 := d(time.March, 5, 9, 0, 17, 0)
-	ciS6, coS6 := d(time.March, 6, 9, 0, 17, 0)
-	ciS9, coS9 := d(time.March, 9, 9, 0, 17, 0)
+	// Eve — all 20 working days, late Tue of each week + OT on non-late days
+	ciE3, coE3 := d(time.February, 3, 10, 0, 18, 0)     // Tue w1  late
+	ciE4, coE4 := d(time.February, 4, 9, 0, 18, 30)     // Wed w1  1.5h OT
+	ciE5, coE5 := d(time.February, 5, 10, 30, 18, 0)    // Thu w1  late
+	ciE6, coE6 := d(time.February, 6, 9, 0, 18, 0)      // Fri w1  1h OT
+	ciE7, coE7 := d(time.February, 7, 9, 0, 17, 0)      // Sat w1  8h
+	ciE10, coE10 := d(time.February, 10, 10, 0, 18, 0)  // Tue w2  late
+	ciE11, coE11 := d(time.February, 11, 9, 0, 18, 30)  // Wed w2  1.5h OT
+	ciE12, coE12 := d(time.February, 12, 10, 30, 18, 0) // Thu w2  late
+	ciE13, coE13 := d(time.February, 13, 9, 0, 18, 0)   // Fri w2  1h OT
+	ciE14, coE14 := d(time.February, 14, 9, 0, 17, 0)   // Sat w2  8h
+	ciE17, coE17 := d(time.February, 17, 9, 0, 18, 0)   // Tue w3  1h OT
+	ciE18, coE18 := d(time.February, 18, 9, 0, 18, 30)  // Wed w3  1.5h OT
+	ciE19, coE19 := d(time.February, 19, 10, 0, 18, 0)  // Thu w3  late
+	ciE20, coE20 := d(time.February, 20, 9, 0, 18, 0)   // Fri w3  1h OT
+	ciE21, coE21 := d(time.February, 21, 9, 0, 17, 0)   // Sat w3  8h
+	ciE24, coE24 := d(time.February, 24, 10, 30, 18, 0) // Tue w4  late
+	ciE25, coE25 := d(time.February, 25, 9, 0, 18, 30)  // Wed w4  1.5h OT
+	ciE26, coE26 := d(time.February, 26, 9, 0, 18, 0)   // Thu w4  1h OT
+	ciE27, coE27 := d(time.February, 27, 9, 0, 18, 0)   // Fri w4  1h OT
+	ciE28, coE28 := d(time.February, 28, 9, 0, 17, 0)   // Sat w4  8h
 
-	// Extra-day (holiday/weekend) work in March
-	ciA7Extra, coA7Extra := d(time.March, 7, 9, 0, 19, 0)  // 10h weekend OT
-	ciD8Extra, coD8Extra := d(time.March, 8, 10, 0, 18, 0) // 8h weekend extra day
+	// Staff (sysComp) — all 20 working days, clean on time, no OT
+	ciS3, coS3 := d(time.February, 3, 9, 0, 17, 0)
+	ciS4, coS4 := d(time.February, 4, 9, 0, 17, 0)
+	ciS5, coS5 := d(time.February, 5, 9, 0, 17, 0)
+	ciS6, coS6 := d(time.February, 6, 9, 0, 17, 0)
+	ciS7, coS7 := d(time.February, 7, 9, 0, 17, 0)
+	ciS10, coS10 := d(time.February, 10, 9, 0, 17, 0)
+	ciS11, coS11 := d(time.February, 11, 9, 0, 17, 0)
+	ciS12, coS12 := d(time.February, 12, 9, 0, 17, 0)
+	ciS13, coS13 := d(time.February, 13, 9, 0, 17, 0)
+	ciS14, coS14 := d(time.February, 14, 9, 0, 17, 0)
+	ciS17, coS17 := d(time.February, 17, 9, 0, 17, 0)
+	ciS18, coS18 := d(time.February, 18, 9, 0, 17, 0)
+	ciS19, coS19 := d(time.February, 19, 9, 0, 17, 0)
+	ciS20, coS20 := d(time.February, 20, 9, 0, 17, 0)
+	ciS21, coS21 := d(time.February, 21, 9, 0, 17, 0)
+	ciS24, coS24 := d(time.February, 24, 9, 0, 17, 0)
+	ciS25, coS25 := d(time.February, 25, 9, 0, 17, 0)
+	ciS26, coS26 := d(time.February, 26, 9, 0, 17, 0)
+	ciS27, coS27 := d(time.February, 27, 9, 0, 17, 0)
+	ciS28, coS28 := d(time.February, 28, 9, 0, 17, 0)
 
-	// April data (identical times, just different dates)
-	ciA2Apr, coA2Apr := d(time.April, 2, 9, 0, 19, 0)  // 10h → 2h OT
-	ciA3Apr, coA3Apr := d(time.April, 3, 9, 0, 20, 0)  // 11h → 3h OT
-	ciA4Apr, coA4Apr := d(time.April, 4, 9, 0, 18, 30) // 9.5h → 1.5h OT
-	ciA5Apr, coA5Apr := d(time.April, 5, 9, 0, 19, 0)  // 10h → 2h OT
-	ciA6Apr, coA6Apr := d(time.April, 6, 9, 0, 18, 0)  // 9h → 1h OT
-	ciA9Apr, coA9Apr := d(time.April, 9, 9, 0, 20, 0)  // 11h → 3h OT
-
-	ciB2Apr, coB2Apr := d(time.April, 2, 9, 0, 18, 0)   // 9h → 1h OT
-	ciB3Apr, coB3Apr := d(time.April, 3, 9, 0, 18, 0)   // 9h → 1h OT
-	ciB4Apr, coB4Apr := d(time.April, 4, 10, 30, 18, 0) // late, 7.5h → no OT
-	ciB5Apr, coB5Apr := d(time.April, 5, 9, 0, 17, 0)   // 8h → no OT
-	ciB6Apr, coB6Apr := d(time.April, 6, 9, 0, 18, 0)   // 9h → 1h OT
-	ciB9Apr, coB9Apr := d(time.April, 9, 9, 0, 17, 0)   // 8h → no OT
-
-	ciC2Apr, coC2Apr := d(time.April, 2, 10, 0, 18, 0)  // late, 8h
-	ciC3Apr, coC3Apr := d(time.April, 3, 10, 30, 18, 0) // late, 7.5h
-	ciC4Apr, coC4Apr := d(time.April, 4, 9, 0, 17, 0)   // on_time, 8h
-	ciC5Apr, coC5Apr := d(time.April, 5, 10, 15, 18, 0) // late, 7.75h
-	ciC6Apr, coC6Apr := d(time.April, 6, 10, 0, 18, 0)  // late, 8h
-	ciC9Apr, coC9Apr := d(time.April, 9, 9, 0, 17, 0)   // on_time, 8h
-
-	ciD2Apr, coD2Apr := d(time.April, 2, 9, 0, 18, 0)
-	ciD3Apr, coD3Apr := d(time.April, 3, 9, 0, 19, 30) // 10.5h → 2.5h OT
-	ciD4Apr, coD4Apr := d(time.April, 4, 9, 0, 18, 0)
-	ciD5Apr, coD5Apr := d(time.April, 5, 9, 0, 20, 0) // 11h → 3h OT
-	ciD6Apr, coD6Apr := d(time.April, 6, 9, 0, 18, 0)
-	ciD9Apr, coD9Apr := d(time.April, 9, 9, 0, 19, 0) // 10h → 2h OT
-
-	ciE2Apr, coE2Apr := d(time.April, 2, 10, 0, 18, 0)  // late
-	ciE3Apr, coE3Apr := d(time.April, 3, 9, 0, 18, 30)  // 9.5h → 1.5h OT
-	ciE4Apr, coE4Apr := d(time.April, 4, 10, 30, 18, 0) // late
-	ciE5Apr, coE5Apr := d(time.April, 5, 9, 0, 18, 0)   // 9h → 1h OT
-	ciE6Apr, coE6Apr := d(time.April, 6, 9, 0, 17, 0)   // 8h
-	ciE9Apr, coE9Apr := d(time.April, 9, 9, 0, 18, 0)   // 9h → 1h OT
-
-	ciS2Apr, coS2Apr := d(time.April, 2, 9, 0, 17, 0)
-	ciS3Apr, coS3Apr := d(time.April, 3, 9, 0, 17, 0)
-	ciS4Apr, coS4Apr := d(time.April, 4, 9, 0, 17, 0)
-	ciS5Apr, coS5Apr := d(time.April, 5, 9, 0, 17, 0)
-	ciS6Apr, coS6Apr := d(time.April, 6, 9, 0, 17, 0)
-	ciS9Apr, coS9Apr := d(time.April, 9, 9, 0, 17, 0)
-
-	// Extra-day (holiday/weekend) work in April
-	ciA11Extra, coA11Extra := d(time.April, 11, 9, 0, 18, 30) // 9.5h weekend OT
-	ciE12Extra, coE12Extra := d(time.April, 12, 10, 0, 18, 0) // 8h weekend extra day
+	// Extra weekend work in February
+	ciAFebExtra, coAFebExtra := d(time.February, 1, 9, 0, 19, 0)  // Sun Feb 1 — Alice weekend OT
+	ciDFebExtra, coDFebExtra := d(time.February, 8, 10, 0, 18, 0) // Sun Feb 8 — David weekend extra
 
 	timelogs := []tlSeed{
-		// === MARCH 2026 ===
-		// Alice — OT every day
-		{alice.ID, compA.ID, ciA2, coA2, models.StatusOnTime, ""},
-		{alice.ID, compA.ID, ciA3, coA3, models.StatusOnTime, "Sprint deadline"},
-		{alice.ID, compA.ID, ciA4, coA4, models.StatusOnTime, ""},
-		{alice.ID, compA.ID, ciA5, coA5, models.StatusOnTime, "Client meeting"},
-		{alice.ID, compA.ID, ciA6, coA6, models.StatusOnTime, ""},
-		{alice.ID, compA.ID, ciA9, coA9, models.StatusOnTime, "Sprint deadline"},
-		// Bob — some OT, one late
-		{bob.ID, compA.ID, ciB2, coB2, models.StatusOnTime, ""},
+		// === FEBRUARY 2026 ===
+		// Alice — perfect attendance, OT every working day (0 absent, 0 late)
+		{alice.ID, compA.ID, ciA3, coA3, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA4, coA4, models.StatusOnTime, "Sprint deadline"},
+		{alice.ID, compA.ID, ciA5, coA5, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA6, coA6, models.StatusOnTime, "Client meeting"},
+		{alice.ID, compA.ID, ciA7, coA7, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA10, coA10, models.StatusOnTime, "Sprint planning"},
+		{alice.ID, compA.ID, ciA11, coA11, models.StatusOnTime, "Sprint review"},
+		{alice.ID, compA.ID, ciA12, coA12, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA13, coA13, models.StatusOnTime, "Backlog grooming"},
+		{alice.ID, compA.ID, ciA14, coA14, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA17, coA17, models.StatusOnTime, "Quarter close"},
+		{alice.ID, compA.ID, ciA18, coA18, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA19, coA19, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA20, coA20, models.StatusOnTime, "Standup"},
+		{alice.ID, compA.ID, ciA21, coA21, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA24, coA24, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA25, coA25, models.StatusOnTime, "Release prep"},
+		{alice.ID, compA.ID, ciA26, coA26, models.StatusOnTime, ""},
+		{alice.ID, compA.ID, ciA27, coA27, models.StatusOnTime, "Month end"},
+		{alice.ID, compA.ID, ciA28, coA28, models.StatusOnTime, ""},
+		// Bob — some OT, late every Thu
 		{bob.ID, compA.ID, ciB3, coB3, models.StatusOnTime, ""},
-		{bob.ID, compA.ID, ciB4, coB4, models.StatusLate, "Traffic"},
-		{bob.ID, compA.ID, ciB5, coB5, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB4, coB4, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB5, coB5, models.StatusLate, "Traffic"},
 		{bob.ID, compA.ID, ciB6, coB6, models.StatusOnTime, ""},
-		{bob.ID, compA.ID, ciB9, coB9, models.StatusOnTime, ""},
-		// Carol — late most days, no OT
-		{carol.ID, compA.ID, ciC2, coC2, models.StatusLate, "Traffic"},
-		{carol.ID, compA.ID, ciC3, coC3, models.StatusLate, "Doctor appointment"},
-		{carol.ID, compA.ID, ciC4, coC4, models.StatusOnTime, ""},
-		{carol.ID, compA.ID, ciC5, coC5, models.StatusLate, "Traffic"},
-		{carol.ID, compA.ID, ciC6, coC6, models.StatusLate, ""},
-		{carol.ID, compA.ID, ciC9, coC9, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB7, coB7, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB10, coB10, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB11, coB11, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB12, coB12, models.StatusLate, "Traffic"},
+		{bob.ID, compA.ID, ciB13, coB13, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB14, coB14, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB17, coB17, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB18, coB18, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB19, coB19, models.StatusLate, "Traffic"},
+		{bob.ID, compA.ID, ciB20, coB20, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB21, coB21, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB24, coB24, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB25, coB25, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB26, coB26, models.StatusLate, "Traffic"},
+		{bob.ID, compA.ID, ciB27, coB27, models.StatusOnTime, ""},
+		{bob.ID, compA.ID, ciB28, coB28, models.StatusOnTime, ""},
+		// Carol — mostly late, no OT
+		{carol.ID, compA.ID, ciC3, coC3, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC4, coC4, models.StatusLate, "Doctor appointment"},
+		{carol.ID, compA.ID, ciC5, coC5, models.StatusOnTime, ""},
+		{carol.ID, compA.ID, ciC6, coC6, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC7, coC7, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC10, coC10, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC11, coC11, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC12, coC12, models.StatusOnTime, ""},
+		{carol.ID, compA.ID, ciC13, coC13, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC14, coC14, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC17, coC17, models.StatusOnTime, ""},
+		{carol.ID, compA.ID, ciC18, coC18, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC19, coC19, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC20, coC20, models.StatusOnTime, ""},
+		{carol.ID, compA.ID, ciC21, coC21, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC24, coC24, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC25, coC25, models.StatusOnTime, ""},
+		{carol.ID, compA.ID, ciC26, coC26, models.StatusLate, "Traffic"},
+		{carol.ID, compA.ID, ciC27, coC27, models.StatusLate, ""},
+		{carol.ID, compA.ID, ciC28, coC28, models.StatusOnTime, ""},
 		// David — OT several days
-		{david.ID, compB.ID, ciD2, coD2, models.StatusOnTime, ""},
-		{david.ID, compB.ID, ciD3, coD3, models.StatusOnTime, "Presentation prep"},
-		{david.ID, compB.ID, ciD4, coD4, models.StatusOnTime, ""},
-		{david.ID, compB.ID, ciD5, coD5, models.StatusOnTime, "Quarter close"},
-		{david.ID, compB.ID, ciD6, coD6, models.StatusOnTime, ""},
-		{david.ID, compB.ID, ciD9, coD9, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD3, coD3, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD4, coD4, models.StatusOnTime, "Presentation prep"},
+		{david.ID, compB.ID, ciD5, coD5, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD6, coD6, models.StatusOnTime, "Quarter close"},
+		{david.ID, compB.ID, ciD7, coD7, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD10, coD10, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD11, coD11, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD12, coD12, models.StatusOnTime, "Financial review"},
+		{david.ID, compB.ID, ciD13, coD13, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD14, coD14, models.StatusOnTime, "Month end"},
+		{david.ID, compB.ID, ciD17, coD17, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD18, coD18, models.StatusOnTime, "Strategy meeting"},
+		{david.ID, compB.ID, ciD19, coD19, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD20, coD20, models.StatusOnTime, "Audit prep"},
+		{david.ID, compB.ID, ciD21, coD21, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD24, coD24, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD25, coD25, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD26, coD26, models.StatusOnTime, "Close books"},
+		{david.ID, compB.ID, ciD27, coD27, models.StatusOnTime, ""},
+		{david.ID, compB.ID, ciD28, coD28, models.StatusOnTime, ""},
 		// Eve — mixed: late + some OT
-		{eve.ID, compB.ID, ciE2, coE2, models.StatusLate, "Traffic"},
-		{eve.ID, compB.ID, ciE3, coE3, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE4, coE4, models.StatusLate, ""},
-		{eve.ID, compB.ID, ciE5, coE5, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE3, coE3, models.StatusLate, "Traffic"},
+		{eve.ID, compB.ID, ciE4, coE4, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE5, coE5, models.StatusLate, ""},
 		{eve.ID, compB.ID, ciE6, coE6, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE9, coE9, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE7, coE7, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE10, coE10, models.StatusLate, "Traffic"},
+		{eve.ID, compB.ID, ciE11, coE11, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE12, coE12, models.StatusLate, ""},
+		{eve.ID, compB.ID, ciE13, coE13, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE14, coE14, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE17, coE17, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE18, coE18, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE19, coE19, models.StatusLate, "Traffic"},
+		{eve.ID, compB.ID, ciE20, coE20, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE21, coE21, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE24, coE24, models.StatusLate, ""},
+		{eve.ID, compB.ID, ciE25, coE25, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE26, coE26, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE27, coE27, models.StatusOnTime, ""},
+		{eve.ID, compB.ID, ciE28, coE28, models.StatusOnTime, ""},
 		// staff@admin.com — clean, on time, no OT
-		{staff.ID, sysComp.ID, ciS2, coS2, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS3, coS3, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS4, coS4, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS5, coS5, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS6, coS6, models.StatusOnTime, ""},
-		{staff.ID, sysComp.ID, ciS9, coS9, models.StatusOnTime, ""},
-		// Extra-day work + absent sample
-		{alice.ID, compA.ID, ciA7Extra, coA7Extra, models.StatusHoliday, "Weekend deployment"},
-		{david.ID, compB.ID, ciD8Extra, coD8Extra, models.StatusHoliday, "Weekend stock count"},
-		{bob.ID, compA.ID, nil, nil, models.StatusAbsent, "Absent on 2026-03-10"},
-
-		// === APRIL 2026 (identical to March) ===
-		// Alice — OT every day
-		{alice.ID, compA.ID, ciA2Apr, coA2Apr, models.StatusOnTime, ""},
-		{alice.ID, compA.ID, ciA3Apr, coA3Apr, models.StatusOnTime, "Sprint deadline"},
-		{alice.ID, compA.ID, ciA4Apr, coA4Apr, models.StatusOnTime, ""},
-		{alice.ID, compA.ID, ciA5Apr, coA5Apr, models.StatusOnTime, "Client meeting"},
-		{alice.ID, compA.ID, ciA6Apr, coA6Apr, models.StatusOnTime, ""},
-		{alice.ID, compA.ID, ciA9Apr, coA9Apr, models.StatusOnTime, "Sprint deadline"},
-		// Bob — some OT, one late
-		{bob.ID, compA.ID, ciB2Apr, coB2Apr, models.StatusOnTime, ""},
-		{bob.ID, compA.ID, ciB3Apr, coB3Apr, models.StatusOnTime, ""},
-		{bob.ID, compA.ID, ciB4Apr, coB4Apr, models.StatusLate, "Traffic"},
-		{bob.ID, compA.ID, ciB5Apr, coB5Apr, models.StatusOnTime, ""},
-		{bob.ID, compA.ID, ciB6Apr, coB6Apr, models.StatusOnTime, ""},
-		{bob.ID, compA.ID, ciB9Apr, coB9Apr, models.StatusOnTime, ""},
-		// Carol — late most days, no OT
-		{carol.ID, compA.ID, ciC2Apr, coC2Apr, models.StatusLate, "Traffic"},
-		{carol.ID, compA.ID, ciC3Apr, coC3Apr, models.StatusLate, "Doctor appointment"},
-		{carol.ID, compA.ID, ciC4Apr, coC4Apr, models.StatusOnTime, ""},
-		{carol.ID, compA.ID, ciC5Apr, coC5Apr, models.StatusLate, "Traffic"},
-		{carol.ID, compA.ID, ciC6Apr, coC6Apr, models.StatusLate, ""},
-		{carol.ID, compA.ID, ciC9Apr, coC9Apr, models.StatusOnTime, ""},
-		// David — OT several days
-		{david.ID, compB.ID, ciD2Apr, coD2Apr, models.StatusOnTime, ""},
-		{david.ID, compB.ID, ciD3Apr, coD3Apr, models.StatusOnTime, "Presentation prep"},
-		{david.ID, compB.ID, ciD4Apr, coD4Apr, models.StatusOnTime, ""},
-		{david.ID, compB.ID, ciD5Apr, coD5Apr, models.StatusOnTime, "Quarter close"},
-		{david.ID, compB.ID, ciD6Apr, coD6Apr, models.StatusOnTime, ""},
-		{david.ID, compB.ID, ciD9Apr, coD9Apr, models.StatusOnTime, ""},
-		// Eve — mixed: late + some OT
-		{eve.ID, compB.ID, ciE2Apr, coE2Apr, models.StatusLate, "Traffic"},
-		{eve.ID, compB.ID, ciE3Apr, coE3Apr, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE4Apr, coE4Apr, models.StatusLate, ""},
-		{eve.ID, compB.ID, ciE5Apr, coE5Apr, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE6Apr, coE6Apr, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE9Apr, coE9Apr, models.StatusOnTime, ""},
-		// staff@admin.com — clean, on time, no OT
-		{staff.ID, sysComp.ID, ciS2Apr, coS2Apr, models.StatusOnTime, ""},
-		{staff.ID, sysComp.ID, ciS3Apr, coS3Apr, models.StatusOnTime, ""},
-		{staff.ID, sysComp.ID, ciS4Apr, coS4Apr, models.StatusOnTime, ""},
-		{staff.ID, sysComp.ID, ciS5Apr, coS5Apr, models.StatusOnTime, ""},
-		{staff.ID, sysComp.ID, ciS6Apr, coS6Apr, models.StatusOnTime, ""},
-		{staff.ID, sysComp.ID, ciS9Apr, coS9Apr, models.StatusOnTime, ""},
-		// Extra-day work + absent sample
-		{alice.ID, compA.ID, ciA11Extra, coA11Extra, models.StatusHoliday, "Weekend migration"},
-		{eve.ID, compB.ID, ciE12Extra, coE12Extra, models.StatusHoliday, "Weekend support"},
-		{carol.ID, compA.ID, nil, nil, models.StatusAbsent, "Absent on 2026-04-10"},
+		{staff.ID, sysComp.ID, ciS7, coS7, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS10, coS10, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS11, coS11, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS12, coS12, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS13, coS13, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS14, coS14, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS17, coS17, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS18, coS18, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS19, coS19, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS20, coS20, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS21, coS21, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS24, coS24, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS25, coS25, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS26, coS26, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS27, coS27, models.StatusOnTime, ""},
+		{staff.ID, sysComp.ID, ciS28, coS28, models.StatusOnTime, ""},
+		// Extra weekend work
+		{alice.ID, compA.ID, ciAFebExtra, coAFebExtra, models.StatusHoliday, "Weekend deployment"},
+		{david.ID, compB.ID, ciDFebExtra, coDFebExtra, models.StatusHoliday, "Weekend stock count"},
 	}
 
 	for _, tl := range timelogs {
