@@ -443,6 +443,7 @@ func main() {
 		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, bankBBL.BankName, "Carol Davis", "3456789012"},
 		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, bankKTB.BankName, "David Wilson", "4567890123"},
 		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, bankBAY.BankName, "Eve Brown", "5678901234"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, bankBBL.BankName, "Frank Garcia", "6789012345"},
 	}
 
 	effDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -473,12 +474,13 @@ func main() {
 
 	// --- TimeLogs for March & April 2026 (payroll cycle test data with identical data) ---
 	// Fetch employees by email so we can reference their IDs
-	var alice, bob, carol, david, eve, staff models.Employees
+	var alice, bob, carol, david, eve, frank, staff models.Employees
 	config.DB.Unscoped().Where("email = ?", "alice@techa.com").First(&alice)
 	config.DB.Unscoped().Where("email = ?", "bob@techa.com").First(&bob)
 	config.DB.Unscoped().Where("email = ?", "carol@techa.com").First(&carol)
 	config.DB.Unscoped().Where("email = ?", "david@bizgroup.com").First(&david)
 	config.DB.Unscoped().Where("email = ?", "eve@bizgroup.com").First(&eve)
+	config.DB.Unscoped().Where("email = ?", "frank@bizgroup.com").First(&frank)
 	config.DB.Unscoped().Where("email = ?", "staff@admin.com").First(&staff)
 
 	tp := func(t time.Time) *time.Time { return &t }
@@ -553,26 +555,26 @@ func main() {
 	ciB28, coB28 := d(time.February, 28, 9, 0, 18, 0)   // Sat w4  9h → 1h OT
 
 	// Carol — 20 working days: 4 absent + some on-time + some late
-	ciC3, coC3 := d(time.February, 3, 10, 0, 18, 0)      // Tue w1  on time 8h
-	var ciC4, coC4 *time.Time                             // Wed w1  ABSENT
-	ciC5, coC5 := d(time.February, 5, 9, 0, 17, 0)       // Thu w1  on time 8h
-	ciC6, coC6 := d(time.February, 6, 10, 15, 18, 0)     // Fri w1  on time 7.75h
-	var ciC7, coC7 *time.Time                             // Sat w1  ABSENT
-	ciC10, coC10 := d(time.February, 10, 10, 0, 18, 0)   // Tue w2  on time 8h
-	ciC11, coC11 := d(time.February, 11, 10, 30, 18, 0)  // Wed w2  on time 7.5h
-	ciC12, coC12 := d(time.February, 12, 9, 0, 17, 0)    // Thu w2  on time 8h
-	var ciC13, coC13 *time.Time                           // Fri w2  ABSENT
-	ciC14, coC14 := d(time.February, 14, 10, 0, 18, 0)   // Sat w2  on time 8h
-	ciC17, coC17 := d(time.February, 17, 9, 0, 17, 0)    // Tue w3  on time 8h
-	ciC18, coC18 := d(time.February, 18, 10, 0, 18, 0)   // Wed w3  on time 8h
-	ciC19, coC19 := d(time.February, 19, 10, 30, 18, 0)  // Thu w3  on time 7.5h
-	ciC20, coC20 := d(time.February, 20, 9, 0, 17, 0)    // Fri w3  on time 8h
-	ciC21, coC21 := d(time.February, 21, 10, 15, 18, 0)  // Sat w3  on time 7.75h
-	var ciC24, coC24 *time.Time                           // Tue w4  ABSENT
-	ciC25, coC25 := d(time.February, 25, 9, 0, 17, 0)    // Wed w4  on time 8h
-	ciC26, coC26 := d(time.February, 26, 10, 30, 18, 0)  // Thu w4  on time 7.5h
-	ciC27, coC27 := d(time.February, 27, 10, 0, 18, 0)   // Fri w4  on time 8h
-	ciC28, coC28 := d(time.February, 28, 9, 0, 17, 0)    // Sat w4  on time 8h
+	ciC3, coC3 := d(time.February, 3, 10, 0, 18, 0)     // Tue w1  on time 8h
+	var ciC4, coC4 *time.Time                           // Wed w1  ABSENT
+	ciC5, coC5 := d(time.February, 5, 9, 0, 17, 0)      // Thu w1  on time 8h
+	ciC6, coC6 := d(time.February, 6, 10, 15, 18, 0)    // Fri w1  on time 7.75h
+	var ciC7, coC7 *time.Time                           // Sat w1  ABSENT
+	ciC10, coC10 := d(time.February, 10, 10, 0, 18, 0)  // Tue w2  on time 8h
+	ciC11, coC11 := d(time.February, 11, 10, 30, 18, 0) // Wed w2  on time 7.5h
+	ciC12, coC12 := d(time.February, 12, 9, 0, 17, 0)   // Thu w2  on time 8h
+	var ciC13, coC13 *time.Time                         // Fri w2  ABSENT
+	ciC14, coC14 := d(time.February, 14, 10, 0, 18, 0)  // Sat w2  on time 8h
+	ciC17, coC17 := d(time.February, 17, 9, 0, 17, 0)   // Tue w3  on time 8h
+	ciC18, coC18 := d(time.February, 18, 10, 0, 18, 0)  // Wed w3  on time 8h
+	ciC19, coC19 := d(time.February, 19, 10, 30, 18, 0) // Thu w3  on time 7.5h
+	ciC20, coC20 := d(time.February, 20, 9, 0, 17, 0)   // Fri w3  on time 8h
+	ciC21, coC21 := d(time.February, 21, 10, 15, 18, 0) // Sat w3  on time 7.75h
+	var ciC24, coC24 *time.Time                         // Tue w4  ABSENT
+	ciC25, coC25 := d(time.February, 25, 9, 0, 17, 0)   // Wed w4  on time 8h
+	ciC26, coC26 := d(time.February, 26, 10, 30, 18, 0) // Thu w4  on time 7.5h
+	ciC27, coC27 := d(time.February, 27, 10, 0, 18, 0)  // Fri w4  on time 8h
+	ciC28, coC28 := d(time.February, 28, 9, 0, 17, 0)   // Sat w4  on time 8h
 
 	// David — all 20 working days, OT on Tue/Thu/Sat
 	ciD3, coD3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1
@@ -596,27 +598,49 @@ func main() {
 	ciD27, coD27 := d(time.February, 27, 9, 0, 18, 0)  // Fri w4
 	ciD28, coD28 := d(time.February, 28, 9, 0, 19, 0)  // Sat w4  2h OT
 
-	// Eve — all 20 working days, late Tue of each week + OT on non-late days
-	ciE3, coE3 := d(time.February, 3, 10, 0, 18, 0)     // Tue w1  late
-	ciE4, coE4 := d(time.February, 4, 9, 0, 18, 30)     // Wed w1  1.5h OT
-	ciE5, coE5 := d(time.February, 5, 10, 30, 18, 0)    // Thu w1  late
-	ciE6, coE6 := d(time.February, 6, 9, 0, 18, 0)      // Fri w1  1h OT
-	ciE7, coE7 := d(time.February, 7, 9, 0, 17, 0)      // Sat w1  8h
-	ciE10, coE10 := d(time.February, 10, 10, 0, 18, 0)  // Tue w2  late
-	ciE11, coE11 := d(time.February, 11, 9, 0, 18, 30)  // Wed w2  1.5h OT
-	ciE12, coE12 := d(time.February, 12, 10, 30, 18, 0) // Thu w2  late
-	ciE13, coE13 := d(time.February, 13, 9, 0, 18, 0)   // Fri w2  1h OT
-	ciE14, coE14 := d(time.February, 14, 9, 0, 17, 0)   // Sat w2  8h
-	ciE17, coE17 := d(time.February, 17, 9, 0, 18, 0)   // Tue w3  1h OT
-	ciE18, coE18 := d(time.February, 18, 9, 0, 18, 30)  // Wed w3  1.5h OT
-	ciE19, coE19 := d(time.February, 19, 10, 0, 18, 0)  // Thu w3  late
-	ciE20, coE20 := d(time.February, 20, 9, 0, 18, 0)   // Fri w3  1h OT
-	ciE21, coE21 := d(time.February, 21, 9, 0, 17, 0)   // Sat w3  8h
-	ciE24, coE24 := d(time.February, 24, 10, 30, 18, 0) // Tue w4  late
-	ciE25, coE25 := d(time.February, 25, 9, 0, 18, 30)  // Wed w4  1.5h OT
-	ciE26, coE26 := d(time.February, 26, 9, 0, 18, 0)   // Thu w4  1h OT
-	ciE27, coE27 := d(time.February, 27, 9, 0, 18, 0)   // Fri w4  1h OT
-	ciE28, coE28 := d(time.February, 28, 9, 0, 17, 0)   // Sat w4  8h
+	// Eve — all 20 working days, clean on-time, some OT
+	ciE3, coE3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1  on time
+	ciE4, coE4 := d(time.February, 4, 9, 0, 18, 30)    // Wed w1  1.5h OT
+	ciE5, coE5 := d(time.February, 5, 9, 0, 18, 0)     // Thu w1  on time
+	ciE6, coE6 := d(time.February, 6, 9, 0, 18, 0)     // Fri w1  1h OT
+	ciE7, coE7 := d(time.February, 7, 9, 0, 17, 0)     // Sat w1  8h
+	ciE10, coE10 := d(time.February, 10, 9, 0, 18, 0)  // Tue w2  on time
+	ciE11, coE11 := d(time.February, 11, 9, 0, 18, 30) // Wed w2  1.5h OT
+	ciE12, coE12 := d(time.February, 12, 9, 0, 18, 0)  // Thu w2  on time
+	ciE13, coE13 := d(time.February, 13, 9, 0, 18, 0)  // Fri w2  1h OT
+	ciE14, coE14 := d(time.February, 14, 9, 0, 17, 0)  // Sat w2  8h
+	ciE17, coE17 := d(time.February, 17, 9, 0, 18, 0)  // Tue w3  on time
+	ciE18, coE18 := d(time.February, 18, 9, 0, 18, 30) // Wed w3  1.5h OT
+	ciE19, coE19 := d(time.February, 19, 9, 0, 18, 0)  // Thu w3  on time
+	ciE20, coE20 := d(time.February, 20, 9, 0, 18, 0)  // Fri w3  1h OT
+	ciE21, coE21 := d(time.February, 21, 9, 0, 17, 0)  // Sat w3  8h
+	ciE24, coE24 := d(time.February, 24, 9, 0, 18, 30) // Tue w4  on time + OT
+	ciE25, coE25 := d(time.February, 25, 9, 0, 18, 30) // Wed w4  1.5h OT
+	ciE26, coE26 := d(time.February, 26, 9, 0, 18, 0)  // Thu w4  1h OT
+	ciE27, coE27 := d(time.February, 27, 9, 0, 18, 0)  // Fri w4  1h OT
+	ciE28, coE28 := d(time.February, 28, 9, 0, 17, 0)  // Sat w4  8h
+
+	// Frank — all 20 working days, clean on-time, some OT
+	ciFk3, coFk3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1  on time
+	ciFk4, coFk4 := d(time.February, 4, 9, 0, 18, 30)    // Wed w1  1.5h OT
+	ciFk5, coFk5 := d(time.February, 5, 9, 0, 18, 0)     // Thu w1  on time
+	ciFk6, coFk6 := d(time.February, 6, 9, 0, 18, 30)    // Fri w1  1.5h OT
+	ciFk7, coFk7 := d(time.February, 7, 9, 0, 17, 0)     // Sat w1  8h
+	ciFk10, coFk10 := d(time.February, 10, 9, 0, 18, 0)  // Tue w2  on time
+	ciFk11, coFk11 := d(time.February, 11, 9, 0, 18, 0)  // Wed w2  on time
+	ciFk12, coFk12 := d(time.February, 12, 9, 0, 19, 0)  // Thu w2  2h OT
+	ciFk13, coFk13 := d(time.February, 13, 9, 0, 18, 0)  // Fri w2  on time
+	ciFk14, coFk14 := d(time.February, 14, 9, 0, 17, 0)  // Sat w2  8h
+	ciFk17, coFk17 := d(time.February, 17, 9, 0, 18, 0)  // Tue w3  on time
+	ciFk18, coFk18 := d(time.February, 18, 9, 0, 18, 30) // Wed w3  1.5h OT
+	ciFk19, coFk19 := d(time.February, 19, 9, 0, 18, 0)  // Thu w3  on time
+	ciFk20, coFk20 := d(time.February, 20, 9, 0, 19, 0)  // Fri w3  2h OT
+	ciFk21, coFk21 := d(time.February, 21, 9, 0, 17, 0)  // Sat w3  8h
+	ciFk24, coFk24 := d(time.February, 24, 9, 0, 18, 0)  // Tue w4  on time
+	ciFk25, coFk25 := d(time.February, 25, 9, 0, 18, 30) // Wed w4  1.5h OT
+	ciFk26, coFk26 := d(time.February, 26, 9, 0, 18, 0)  // Thu w4  on time
+	ciFk27, coFk27 := d(time.February, 27, 9, 0, 18, 30) // Fri w4  1.5h OT
+	ciFk28, coFk28 := d(time.February, 28, 9, 0, 17, 0)  // Sat w4  8h
 
 	// Staff (sysComp) — all 20 working days, clean on time, no OT
 	ciS3, coS3 := d(time.February, 3, 9, 0, 17, 0)
@@ -730,27 +754,48 @@ func main() {
 		{david.ID, compB.ID, ciD26, coD26, models.StatusOnTime, "Close books"},
 		{david.ID, compB.ID, ciD27, coD27, models.StatusOnTime, ""},
 		{david.ID, compB.ID, ciD28, coD28, models.StatusOnTime, ""},
-		// Eve — mixed: late + some OT
-		{eve.ID, compB.ID, ciE3, coE3, models.StatusLate, "Traffic"},
+		// Eve — clean, on time
+		{eve.ID, compB.ID, ciE3, coE3, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE4, coE4, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE5, coE5, models.StatusLate, ""},
+		{eve.ID, compB.ID, ciE5, coE5, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE6, coE6, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE7, coE7, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE10, coE10, models.StatusLate, "Traffic"},
+		{eve.ID, compB.ID, ciE10, coE10, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE11, coE11, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE12, coE12, models.StatusLate, ""},
+		{eve.ID, compB.ID, ciE12, coE12, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE13, coE13, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE14, coE14, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE17, coE17, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE18, coE18, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE19, coE19, models.StatusLate, "Traffic"},
+		{eve.ID, compB.ID, ciE19, coE19, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE20, coE20, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE21, coE21, models.StatusOnTime, ""},
-		{eve.ID, compB.ID, ciE24, coE24, models.StatusLate, ""},
+		{eve.ID, compB.ID, ciE24, coE24, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE25, coE25, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE26, coE26, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE27, coE27, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE28, coE28, models.StatusOnTime, ""},
+		// Frank — clean, on time
+		{frank.ID, compB.ID, ciFk3, coFk3, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk4, coFk4, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk5, coFk5, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk6, coFk6, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk7, coFk7, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk10, coFk10, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk11, coFk11, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk12, coFk12, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk13, coFk13, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk14, coFk14, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk17, coFk17, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk18, coFk18, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk19, coFk19, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk20, coFk20, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk21, coFk21, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk24, coFk24, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk25, coFk25, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk26, coFk26, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk27, coFk27, models.StatusOnTime, ""},
+		{frank.ID, compB.ID, ciFk28, coFk28, models.StatusOnTime, ""},
 		// staff@admin.com — clean, on time, no OT
 		{staff.ID, sysComp.ID, ciS3, coS3, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS4, coS4, models.StatusOnTime, ""},
@@ -799,6 +844,11 @@ func main() {
 			config.DB.Model(&models.DayOff{}).Where("companies_id = ? AND weekday = ?", tl.compID, int(tl.checkIn.Weekday())).Count(&dayOffCount)
 			if holidayCount > 0 || dayOffCount > 0 {
 				log.Status = models.StatusHoliday
+			} else {
+				// Use status from tlSeed if it's late, absent, or leave
+				if tl.legacy == models.StatusLate || tl.legacy == models.StatusAbsent || tl.legacy == models.StatusLeave {
+					log.Status = tl.legacy
+				}
 			}
 		}
 		// Use check_in as unique key to avoid duplicate rows on re-run
@@ -856,6 +906,7 @@ func main() {
 		{david, dtPfB.ID, 2000, compB.ID},     // David: Provident Fund ฿2,000
 		{eve, dtPfB.ID, 1280, compB.ID},       // Eve: Provident Fund ฿1,280
 		{eve, dtLoanB.ID, 2000, compB.ID},     // Eve: Loan Repayment ฿2,000
+		{frank, dtPfB.ID, 1400, compB.ID},     // Frank: Provident Fund ฿1,400
 		{staff, dtPfSys.ID, 1600, sysComp.ID}, // staff@admin.com: Provident Fund ฿1,600
 	}
 	for _, s := range edSeeds {

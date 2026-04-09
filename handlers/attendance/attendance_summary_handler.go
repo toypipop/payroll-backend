@@ -139,6 +139,7 @@ func GetAttendanceSummary(c *gin.Context) {
 	type dayRecord struct {
 		hasCheckPair    bool
 		earliestCheckIn *time.Time
+		hasLateStatus   bool
 	}
 	summaryMap := make(map[uint]*empSummary, len(employees))
 	logsByEmployeeDay := make(map[string]*dayRecord)
@@ -169,6 +170,11 @@ func GetAttendanceSummary(c *gin.Context) {
 				t := *tl.CheckIn
 				rec.earliestCheckIn = &t
 			}
+		}
+
+		// Check if status is marked as late
+		if tl.Status == models.StatusLate {
+			rec.hasLateStatus = true
 		}
 	}
 
@@ -201,6 +207,9 @@ func GetAttendanceSummary(c *gin.Context) {
 			scheduled := time.Date(day.Year(), day.Month(), day.Day(), workStartHour, workStartMin, 0, 0, time.UTC)
 			if rec.earliestCheckIn != nil && rec.earliestCheckIn.After(scheduled) {
 				s.lateMins += rec.earliestCheckIn.Sub(scheduled).Minutes()
+			} else if rec.hasLateStatus {
+				// If status is marked as late but time calculation shows on-time, use 1 minute as default
+				s.lateMins += 1.0
 			}
 		}
 	}
@@ -213,6 +222,10 @@ func GetAttendanceSummary(c *gin.Context) {
 		lateAmt := 0.0
 		if cfg.IsLateDeductionEnabled {
 			lateAmt = math.Round(s.lateMins*cfg.LateRatePerMinute*100) / 100
+			// Cap late deduction at absent rate per day
+			if lateAmt > cfg.AbsentRatePerDay {
+				lateAmt = cfg.AbsentRatePerDay
+			}
 		}
 
 		absentAmt := 0.0
