@@ -174,10 +174,12 @@ func GetEarningSummary(c *gin.Context) {
 		startHour, startMin := 9, 0
 		endHour, endMin := 18, 0
 		if cfg.WorkStartTime != nil {
-			startHour, startMin = cfg.WorkStartTime.Hour(), cfg.WorkStartTime.Minute()
+			utcTime := cfg.WorkStartTime.UTC()
+			startHour, startMin = utcTime.Hour(), utcTime.Minute()
 		}
 		if cfg.WorkEndTime != nil {
-			endHour, endMin = cfg.WorkEndTime.Hour(), cfg.WorkEndTime.Minute()
+			utcTime := cfg.WorkEndTime.UTC()
+			endHour, endMin = utcTime.Hour(), utcTime.Minute()
 		}
 
 		for day := dayStart(fromDate); !day.After(dayStart(toDate)); day = day.AddDate(0, 0, 1) {

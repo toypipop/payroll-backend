@@ -185,8 +185,9 @@ func GetAttendanceSummary(c *gin.Context) {
 		workStartHour := 9
 		workStartMin := 0
 		if cfg.WorkStartTime != nil {
-			workStartHour = cfg.WorkStartTime.Hour()
-			workStartMin = cfg.WorkStartTime.Minute()
+			utcTime := cfg.WorkStartTime.UTC()
+			workStartHour = utcTime.Hour()
+			workStartMin = utcTime.Minute()
 		}
 
 		for day := dayStart(fromDate); !day.After(dayStart(toDate)); day = day.AddDate(0, 0, 1) {

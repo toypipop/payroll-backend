@@ -101,39 +101,42 @@ func main() {
 		LateRatePerMinute:         5.0,
 		AbsentRatePerDay:          300.0,
 		WorkStartTime:             parseTime(9, 0),
-		WorkEndTime:               parseTime(18, 0),
+		WorkEndTime:               parseTime(17, 0),
 		OvertimeRatePerMinute:     5.0,
 		ExtraRatePerDay:           300.0,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
-	config.DB.Where(models.AttendanceConfig{CompaniesID: sysComp.ID}).Assign(attConfigSys).FirstOrCreate(&attConfigSys)
+	config.DB.Unscoped().Delete(&models.AttendanceConfig{}, "companies_id = ?", sysComp.ID)
+	config.DB.Create(&attConfigSys)
 
 	attConfigA := models.AttendanceConfig{
 		CompaniesID:               compA.ID,
 		LateRatePerMinute:         5.0,
 		AbsentRatePerDay:          300.0,
 		WorkStartTime:             parseTime(9, 0),
-		WorkEndTime:               parseTime(18, 0),
+		WorkEndTime:               parseTime(17, 0),
 		OvertimeRatePerMinute:     5.0,
 		ExtraRatePerDay:           300.0,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
-	config.DB.Where(models.AttendanceConfig{CompaniesID: compA.ID}).Assign(attConfigA).FirstOrCreate(&attConfigA)
+	config.DB.Unscoped().Delete(&models.AttendanceConfig{}, "companies_id = ?", compA.ID)
+	config.DB.Create(&attConfigA)
 
 	attConfigB := models.AttendanceConfig{
 		CompaniesID:               compB.ID,
 		LateRatePerMinute:         5.0,
 		AbsentRatePerDay:          300.0,
 		WorkStartTime:             parseTime(9, 0),
-		WorkEndTime:               parseTime(18, 0),
+		WorkEndTime:               parseTime(17, 0),
 		OvertimeRatePerMinute:     5.0,
 		ExtraRatePerDay:           300.0,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
-	config.DB.Where(models.AttendanceConfig{CompaniesID: compB.ID}).Assign(attConfigB).FirstOrCreate(&attConfigB)
+	config.DB.Unscoped().Delete(&models.AttendanceConfig{}, "companies_id = ?", compB.ID)
+	config.DB.Create(&attConfigB)
 
 	// Initialize global banks
 	banks := []models.Bank{
@@ -510,140 +513,133 @@ func main() {
 	// Day-offs: Sunday (0) + Monday (1)
 	// Working days (Tue–Sat): 3,4,5,6,7 / 10,11,12,13,14 / 17,18,19,20,21 / 24,25,26,27,28
 
-	// Alice — all 20 working days, on time, OT every day
-	ciA3, coA3 := d(time.February, 3, 9, 0, 19, 0)     // Tue w1  10h → 2h OT
-	ciA4, coA4 := d(time.February, 4, 9, 0, 20, 0)     // Wed w1  11h → 3h OT
-	ciA5, coA5 := d(time.February, 5, 9, 0, 18, 30)    // Thu w1  9.5h → 1.5h OT
-	ciA6, coA6 := d(time.February, 6, 9, 0, 19, 0)     // Fri w1  10h → 2h OT
-	ciA7, coA7 := d(time.February, 7, 9, 0, 18, 0)     // Sat w1  9h → 1h OT
-	ciA10, coA10 := d(time.February, 10, 9, 0, 20, 0)  // Tue w2  11h → 3h OT
-	ciA11, coA11 := d(time.February, 11, 9, 0, 19, 0)  // Wed w2  10h → 2h OT
-	ciA12, coA12 := d(time.February, 12, 9, 0, 18, 30) // Thu w2  9.5h → 1.5h OT
-	ciA13, coA13 := d(time.February, 13, 9, 0, 19, 0)  // Fri w2  10h → 2h OT
-	ciA14, coA14 := d(time.February, 14, 9, 0, 18, 0)  // Sat w2  9h → 1h OT
-	ciA17, coA17 := d(time.February, 17, 9, 0, 20, 0)  // Tue w3  11h → 3h OT
-	ciA18, coA18 := d(time.February, 18, 9, 0, 19, 0)  // Wed w3  10h → 2h OT
-	ciA19, coA19 := d(time.February, 19, 9, 0, 18, 30) // Thu w3  9.5h → 1.5h OT
-	ciA20, coA20 := d(time.February, 20, 9, 0, 19, 0)  // Fri w3  10h → 2h OT
-	ciA21, coA21 := d(time.February, 21, 9, 0, 18, 0)  // Sat w3  9h → 1h OT
-	ciA24, coA24 := d(time.February, 24, 9, 0, 19, 0)  // Tue w4  10h → 2h OT
-	ciA25, coA25 := d(time.February, 25, 9, 0, 20, 0)  // Wed w4  11h → 3h OT
-	ciA26, coA26 := d(time.February, 26, 9, 0, 18, 30) // Thu w4  9.5h → 1.5h OT
-	ciA27, coA27 := d(time.February, 27, 9, 0, 19, 0)  // Fri w4  10h → 2h OT
-	ciA28, coA28 := d(time.February, 28, 9, 0, 18, 0)  // Sat w4  9h → 1h OT
+	// Alice — all 20 working days, perfect attendance (9-5, no OT, no late)
+	ciA4, coA4 := d(time.February, 4, 9, 0, 17, 0)    // Wed w1  normal
+	ciA5, coA5 := d(time.February, 5, 9, 0, 17, 0)    // Thu w1  normal
+	ciA6, coA6 := d(time.February, 6, 9, 0, 17, 0)    // Fri w1  normal
+	ciA7, coA7 := d(time.February, 7, 9, 0, 17, 0)    // Sat w1  normal
+	ciA10, coA10 := d(time.February, 10, 9, 0, 17, 0) // Tue w2  normal
+	ciA11, coA11 := d(time.February, 11, 9, 0, 17, 0) // Wed w2  normal
+	ciA12, coA12 := d(time.February, 12, 9, 0, 17, 0) // Thu w2  normal
+	ciA13, coA13 := d(time.February, 13, 9, 0, 17, 0) // Fri w2  normal
+	ciA14, coA14 := d(time.February, 14, 9, 0, 17, 0) // Sat w2  normal
+	ciA17, coA17 := d(time.February, 17, 9, 0, 17, 0) // Tue w3  normal
+	ciA18, coA18 := d(time.February, 18, 9, 0, 17, 0) // Wed w3  normal
+	ciA19, coA19 := d(time.February, 19, 9, 0, 17, 0) // Thu w3  normal
+	ciA20, coA20 := d(time.February, 20, 9, 0, 17, 0) // Fri w3  normal
+	ciA21, coA21 := d(time.February, 21, 9, 0, 17, 0) // Sat w3  normal
+	ciA24, coA24 := d(time.February, 24, 9, 0, 17, 0) // Tue w4  normal
+	ciA25, coA25 := d(time.February, 25, 9, 0, 17, 0) // Wed w4  normal
+	ciA26, coA26 := d(time.February, 26, 9, 0, 17, 0) // Thu w4  normal
+	ciA27, coA27 := d(time.February, 27, 9, 0, 17, 0) // Fri w4  normal
+	ciA28, coA28 := d(time.February, 28, 9, 0, 17, 0) // Sat w4  normal
 
-	// Bob — all 20 working days, late every Thu (5,12,19,26), OT on Tue/Wed/Sat
-	ciB3, coB3 := d(time.February, 3, 9, 0, 18, 0)      // Tue w1  9h → 1h OT
-	ciB4, coB4 := d(time.February, 4, 9, 0, 18, 0)      // Wed w1  9h → 1h OT
-	ciB5, coB5 := d(time.February, 5, 10, 30, 18, 0)    // Thu w1  late 7.5h
-	ciB6, coB6 := d(time.February, 6, 9, 0, 17, 0)      // Fri w1  8h
-	ciB7, coB7 := d(time.February, 7, 9, 0, 18, 0)      // Sat w1  9h → 1h OT
-	ciB10, coB10 := d(time.February, 10, 9, 0, 18, 0)   // Tue w2  9h → 1h OT
-	ciB11, coB11 := d(time.February, 11, 9, 0, 18, 0)   // Wed w2  9h → 1h OT
-	ciB12, coB12 := d(time.February, 12, 10, 30, 18, 0) // Thu w2  late 7.5h
-	ciB13, coB13 := d(time.February, 13, 9, 0, 17, 0)   // Fri w2  8h
-	ciB14, coB14 := d(time.February, 14, 9, 0, 18, 0)   // Sat w2  9h → 1h OT
-	ciB17, coB17 := d(time.February, 17, 9, 0, 17, 0)   // Tue w3  8h
-	ciB18, coB18 := d(time.February, 18, 9, 0, 18, 0)   // Wed w3  9h → 1h OT
-	ciB19, coB19 := d(time.February, 19, 10, 30, 18, 0) // Thu w3  late 7.5h
-	ciB20, coB20 := d(time.February, 20, 9, 0, 17, 0)   // Fri w3  8h
-	ciB21, coB21 := d(time.February, 21, 9, 0, 18, 0)   // Sat w3  9h → 1h OT
-	ciB24, coB24 := d(time.February, 24, 9, 0, 18, 0)   // Tue w4  9h → 1h OT
-	ciB25, coB25 := d(time.February, 25, 9, 0, 17, 0)   // Wed w4  8h
-	ciB26, coB26 := d(time.February, 26, 10, 30, 18, 0) // Thu w4  late 7.5h
-	ciB27, coB27 := d(time.February, 27, 9, 0, 17, 0)   // Fri w4  8h
-	ciB28, coB28 := d(time.February, 28, 9, 0, 18, 0)   // Sat w4  9h → 1h OT
+	// Bob — all 20 working days, late every Thu (5,12,19,26) only, no OT
+	ciB4, coB4 := d(time.February, 4, 9, 0, 17, 0)      // Wed w1  normal
+	ciB5, coB5 := d(time.February, 5, 10, 30, 17, 0)    // Thu w1  late 6.5h
+	ciB6, coB6 := d(time.February, 6, 9, 0, 17, 0)      // Fri w1  normal
+	ciB7, coB7 := d(time.February, 7, 9, 0, 17, 0)      // Sat w1  normal
+	ciB10, coB10 := d(time.February, 10, 9, 0, 17, 0)   // Tue w2  normal
+	ciB11, coB11 := d(time.February, 11, 9, 0, 17, 0)   // Wed w2  normal
+	ciB12, coB12 := d(time.February, 12, 10, 30, 17, 0) // Thu w2  late 6.5h
+	ciB13, coB13 := d(time.February, 13, 9, 0, 17, 0)   // Fri w2  normal
+	ciB14, coB14 := d(time.February, 14, 9, 0, 17, 0)   // Sat w2  normal
+	ciB17, coB17 := d(time.February, 17, 9, 0, 17, 0)   // Tue w3  normal
+	ciB18, coB18 := d(time.February, 18, 9, 0, 17, 0)   // Wed w3  normal
+	ciB19, coB19 := d(time.February, 19, 10, 30, 17, 0) // Thu w3  late 6.5h
+	ciB20, coB20 := d(time.February, 20, 9, 0, 17, 0)   // Fri w3  normal
+	ciB21, coB21 := d(time.February, 21, 9, 0, 17, 0)   // Sat w3  normal
+	ciB24, coB24 := d(time.February, 24, 9, 0, 17, 0)   // Tue w4  normal
+	ciB25, coB25 := d(time.February, 25, 9, 0, 17, 0)   // Wed w4  normal
+	ciB26, coB26 := d(time.February, 26, 10, 30, 17, 0) // Thu w4  late 6.5h
+	ciB27, coB27 := d(time.February, 27, 9, 0, 17, 0)   // Fri w4  normal
+	ciB28, coB28 := d(time.February, 28, 9, 0, 17, 0)   // Sat w4  normal
 
 	// Carol — 20 working days: 4 absent + some on-time + some late
-	ciC3, coC3 := d(time.February, 3, 10, 0, 18, 0)     // Tue w1  on time 8h
 	var ciC4, coC4 *time.Time                           // Wed w1  ABSENT
 	ciC5, coC5 := d(time.February, 5, 9, 0, 17, 0)      // Thu w1  on time 8h
-	ciC6, coC6 := d(time.February, 6, 10, 15, 18, 0)    // Fri w1  on time 7.75h
+	ciC6, coC6 := d(time.February, 6, 10, 15, 17, 0)    // Fri w1  late arrival
 	var ciC7, coC7 *time.Time                           // Sat w1  ABSENT
-	ciC10, coC10 := d(time.February, 10, 10, 0, 18, 0)  // Tue w2  on time 8h
-	ciC11, coC11 := d(time.February, 11, 10, 30, 18, 0) // Wed w2  on time 7.5h
+	ciC10, coC10 := d(time.February, 10, 10, 0, 17, 0)  // Tue w2  late arrival
+	ciC11, coC11 := d(time.February, 11, 10, 30, 17, 0) // Wed w2  late arrival
 	ciC12, coC12 := d(time.February, 12, 9, 0, 17, 0)   // Thu w2  on time 8h
 	var ciC13, coC13 *time.Time                         // Fri w2  ABSENT
-	ciC14, coC14 := d(time.February, 14, 10, 0, 18, 0)  // Sat w2  on time 8h
+	ciC14, coC14 := d(time.February, 14, 10, 0, 17, 0)  // Sat w2  late arrival
 	ciC17, coC17 := d(time.February, 17, 9, 0, 17, 0)   // Tue w3  on time 8h
-	ciC18, coC18 := d(time.February, 18, 10, 0, 18, 0)  // Wed w3  on time 8h
-	ciC19, coC19 := d(time.February, 19, 10, 30, 18, 0) // Thu w3  on time 7.5h
+	ciC18, coC18 := d(time.February, 18, 10, 0, 17, 0)  // Wed w3  late arrival
+	ciC19, coC19 := d(time.February, 19, 10, 30, 17, 0) // Thu w3  late arrival
 	ciC20, coC20 := d(time.February, 20, 9, 0, 17, 0)   // Fri w3  on time 8h
-	ciC21, coC21 := d(time.February, 21, 10, 15, 18, 0) // Sat w3  on time 7.75h
+	ciC21, coC21 := d(time.February, 21, 10, 15, 17, 0) // Sat w3  late arrival
 	var ciC24, coC24 *time.Time                         // Tue w4  ABSENT
 	ciC25, coC25 := d(time.February, 25, 9, 0, 17, 0)   // Wed w4  on time 8h
-	ciC26, coC26 := d(time.February, 26, 10, 30, 18, 0) // Thu w4  on time 7.5h
-	ciC27, coC27 := d(time.February, 27, 10, 0, 18, 0)  // Fri w4  on time 8h
+	ciC26, coC26 := d(time.February, 26, 10, 30, 17, 0) // Thu w4  late arrival
+	ciC27, coC27 := d(time.February, 27, 10, 0, 17, 0)  // Fri w4  late arrival
 	ciC28, coC28 := d(time.February, 28, 9, 0, 17, 0)   // Sat w4  on time 8h
 
-	// David — all 20 working days, OT on Tue/Thu/Sat
-	ciD3, coD3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1
-	ciD4, coD4 := d(time.February, 4, 9, 0, 19, 30)    // Wed w1  2.5h OT
-	ciD5, coD5 := d(time.February, 5, 9, 0, 18, 0)     // Thu w1
-	ciD6, coD6 := d(time.February, 6, 9, 0, 20, 0)     // Fri w1  3h OT
-	ciD7, coD7 := d(time.February, 7, 9, 0, 18, 0)     // Sat w1
-	ciD10, coD10 := d(time.February, 10, 9, 0, 19, 0)  // Tue w2  2h OT
-	ciD11, coD11 := d(time.February, 11, 9, 0, 18, 0)  // Wed w2
-	ciD12, coD12 := d(time.February, 12, 9, 0, 19, 30) // Thu w2  2.5h OT
-	ciD13, coD13 := d(time.February, 13, 9, 0, 18, 0)  // Fri w2
-	ciD14, coD14 := d(time.February, 14, 9, 0, 20, 0)  // Sat w2  3h OT
-	ciD17, coD17 := d(time.February, 17, 9, 0, 18, 0)  // Tue w3
-	ciD18, coD18 := d(time.February, 18, 9, 0, 19, 0)  // Wed w3  2h OT
-	ciD19, coD19 := d(time.February, 19, 9, 0, 18, 0)  // Thu w3
-	ciD20, coD20 := d(time.February, 20, 9, 0, 19, 30) // Fri w3  2.5h OT
-	ciD21, coD21 := d(time.February, 21, 9, 0, 18, 0)  // Sat w3
-	ciD24, coD24 := d(time.February, 24, 9, 0, 19, 0)  // Tue w4  2h OT
-	ciD25, coD25 := d(time.February, 25, 9, 0, 18, 0)  // Wed w4
-	ciD26, coD26 := d(time.February, 26, 9, 0, 20, 0)  // Thu w4  3h OT
-	ciD27, coD27 := d(time.February, 27, 9, 0, 18, 0)  // Fri w4
-	ciD28, coD28 := d(time.February, 28, 9, 0, 19, 0)  // Sat w4  2h OT
+	// David — all 20 working days, normal hours (9-5, no OT)
+	ciD4, coD4 := d(time.February, 4, 9, 0, 17, 0)    // Wed w1  normal
+	ciD5, coD5 := d(time.February, 5, 9, 0, 17, 0)    // Thu w1  normal
+	ciD6, coD6 := d(time.February, 6, 9, 0, 17, 0)    // Fri w1  normal
+	ciD7, coD7 := d(time.February, 7, 9, 0, 17, 0)    // Sat w1  normal
+	ciD10, coD10 := d(time.February, 10, 9, 0, 17, 0) // Tue w2  normal
+	ciD11, coD11 := d(time.February, 11, 9, 0, 17, 0) // Wed w2  normal
+	ciD12, coD12 := d(time.February, 12, 9, 0, 17, 0) // Thu w2  normal
+	ciD13, coD13 := d(time.February, 13, 9, 0, 17, 0) // Fri w2  normal
+	ciD14, coD14 := d(time.February, 14, 9, 0, 17, 0) // Sat w2  normal
+	ciD17, coD17 := d(time.February, 17, 9, 0, 17, 0) // Tue w3  normal
+	ciD18, coD18 := d(time.February, 18, 9, 0, 17, 0) // Wed w3  normal
+	ciD19, coD19 := d(time.February, 19, 9, 0, 17, 0) // Thu w3  normal
+	ciD20, coD20 := d(time.February, 20, 9, 0, 17, 0) // Fri w3  normal
+	ciD21, coD21 := d(time.February, 21, 9, 0, 17, 0) // Sat w3  normal
+	ciD24, coD24 := d(time.February, 24, 9, 0, 17, 0) // Tue w4  normal
+	ciD25, coD25 := d(time.February, 25, 9, 0, 17, 0) // Wed w4  normal
+	ciD26, coD26 := d(time.February, 26, 9, 0, 17, 0) // Thu w4  normal
+	ciD27, coD27 := d(time.February, 27, 9, 0, 17, 0) // Fri w4  normal
+	ciD28, coD28 := d(time.February, 28, 9, 0, 17, 0) // Sat w4  normal
 
-	// Eve — all 20 working days, clean on-time, some OT
-	ciE3, coE3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1  on time
-	ciE4, coE4 := d(time.February, 4, 9, 0, 18, 30)    // Wed w1  1.5h OT
-	ciE5, coE5 := d(time.February, 5, 9, 0, 18, 0)     // Thu w1  on time
-	ciE6, coE6 := d(time.February, 6, 9, 0, 18, 0)     // Fri w1  1h OT
-	ciE7, coE7 := d(time.February, 7, 9, 0, 17, 0)     // Sat w1  8h
-	ciE10, coE10 := d(time.February, 10, 9, 0, 18, 0)  // Tue w2  on time
+	// Eve — OT some days (roughly 6 days with OT spread throughout)
+	ciE4, coE4 := d(time.February, 4, 9, 0, 18, 0)     // Wed w1  1h OT
+	ciE5, coE5 := d(time.February, 5, 9, 0, 17, 0)     // Thu w1  normal
+	ciE6, coE6 := d(time.February, 6, 9, 0, 18, 30)    // Fri w1  1.5h OT
+	ciE7, coE7 := d(time.February, 7, 9, 0, 17, 0)     // Sat w1  normal
+	ciE10, coE10 := d(time.February, 10, 9, 0, 17, 0)  // Tue w2  normal
 	ciE11, coE11 := d(time.February, 11, 9, 0, 18, 30) // Wed w2  1.5h OT
-	ciE12, coE12 := d(time.February, 12, 9, 0, 18, 0)  // Thu w2  on time
+	ciE12, coE12 := d(time.February, 12, 9, 0, 17, 0)  // Thu w2  normal
 	ciE13, coE13 := d(time.February, 13, 9, 0, 18, 0)  // Fri w2  1h OT
-	ciE14, coE14 := d(time.February, 14, 9, 0, 17, 0)  // Sat w2  8h
-	ciE17, coE17 := d(time.February, 17, 9, 0, 18, 0)  // Tue w3  on time
+	ciE14, coE14 := d(time.February, 14, 9, 0, 17, 0)  // Sat w2  normal
+	ciE17, coE17 := d(time.February, 17, 9, 0, 17, 0)  // Tue w3  normal
 	ciE18, coE18 := d(time.February, 18, 9, 0, 18, 30) // Wed w3  1.5h OT
-	ciE19, coE19 := d(time.February, 19, 9, 0, 18, 0)  // Thu w3  on time
+	ciE19, coE19 := d(time.February, 19, 9, 0, 17, 0)  // Thu w3  normal
 	ciE20, coE20 := d(time.February, 20, 9, 0, 18, 0)  // Fri w3  1h OT
-	ciE21, coE21 := d(time.February, 21, 9, 0, 17, 0)  // Sat w3  8h
-	ciE24, coE24 := d(time.February, 24, 9, 0, 18, 30) // Tue w4  on time + OT
-	ciE25, coE25 := d(time.February, 25, 9, 0, 18, 30) // Wed w4  1.5h OT
-	ciE26, coE26 := d(time.February, 26, 9, 0, 18, 0)  // Thu w4  1h OT
-	ciE27, coE27 := d(time.February, 27, 9, 0, 18, 0)  // Fri w4  1h OT
-	ciE28, coE28 := d(time.February, 28, 9, 0, 17, 0)  // Sat w4  8h
+	ciE21, coE21 := d(time.February, 21, 9, 0, 17, 0)  // Sat w3  normal
+	ciE24, coE24 := d(time.February, 24, 9, 0, 17, 0)  // Tue w4  normal
+	ciE25, coE25 := d(time.February, 25, 9, 0, 18, 0)  // Wed w4  1h OT
+	ciE26, coE26 := d(time.February, 26, 9, 0, 17, 0)  // Thu w4  normal
+	ciE27, coE27 := d(time.February, 27, 9, 0, 17, 0)  // Fri w4  normal
+	ciE28, coE28 := d(time.February, 28, 9, 0, 17, 0)  // Sat w4  normal
 
-	// Frank — all 20 working days, clean on-time, some OT
-	ciFk3, coFk3 := d(time.February, 3, 9, 0, 18, 0)     // Tue w1  on time
-	ciFk4, coFk4 := d(time.February, 4, 9, 0, 18, 30)    // Wed w1  1.5h OT
-	ciFk5, coFk5 := d(time.February, 5, 9, 0, 18, 0)     // Thu w1  on time
-	ciFk6, coFk6 := d(time.February, 6, 9, 0, 18, 30)    // Fri w1  1.5h OT
-	ciFk7, coFk7 := d(time.February, 7, 9, 0, 17, 0)     // Sat w1  8h
-	ciFk10, coFk10 := d(time.February, 10, 9, 0, 18, 0)  // Tue w2  on time
-	ciFk11, coFk11 := d(time.February, 11, 9, 0, 18, 0)  // Wed w2  on time
-	ciFk12, coFk12 := d(time.February, 12, 9, 0, 19, 0)  // Thu w2  2h OT
-	ciFk13, coFk13 := d(time.February, 13, 9, 0, 18, 0)  // Fri w2  on time
-	ciFk14, coFk14 := d(time.February, 14, 9, 0, 17, 0)  // Sat w2  8h
-	ciFk17, coFk17 := d(time.February, 17, 9, 0, 18, 0)  // Tue w3  on time
-	ciFk18, coFk18 := d(time.February, 18, 9, 0, 18, 30) // Wed w3  1.5h OT
-	ciFk19, coFk19 := d(time.February, 19, 9, 0, 18, 0)  // Thu w3  on time
-	ciFk20, coFk20 := d(time.February, 20, 9, 0, 19, 0)  // Fri w3  2h OT
-	ciFk21, coFk21 := d(time.February, 21, 9, 0, 17, 0)  // Sat w3  8h
-	ciFk24, coFk24 := d(time.February, 24, 9, 0, 18, 0)  // Tue w4  on time
-	ciFk25, coFk25 := d(time.February, 25, 9, 0, 18, 30) // Wed w4  1.5h OT
-	ciFk26, coFk26 := d(time.February, 26, 9, 0, 18, 0)  // Thu w4  on time
-	ciFk27, coFk27 := d(time.February, 27, 9, 0, 18, 30) // Fri w4  1.5h OT
-	ciFk28, coFk28 := d(time.February, 28, 9, 0, 17, 0)  // Sat w4  8h
+	// Frank — normal 9-5 most days, extra work on holidays (2-4 days)
+	ciFk4, coFk4 := d(time.February, 4, 9, 0, 17, 0)    // Wed w1  normal
+	ciFk5, coFk5 := d(time.February, 5, 9, 0, 17, 0)    // Thu w1  normal
+	ciFk6, coFk6 := d(time.February, 6, 9, 0, 17, 0)    // Fri w1  normal
+	ciFk7, coFk7 := d(time.February, 7, 9, 0, 17, 0)    // Sat w1  normal
+	ciFk10, coFk10 := d(time.February, 10, 9, 0, 17, 0) // Tue w2  normal
+	ciFk11, coFk11 := d(time.February, 11, 9, 0, 17, 0) // Wed w2  normal
+	ciFk12, coFk12 := d(time.February, 12, 9, 0, 17, 0) // Thu w2  normal
+	ciFk13, coFk13 := d(time.February, 13, 9, 0, 17, 0) // Fri w2  normal
+	ciFk14, coFk14 := d(time.February, 14, 9, 0, 17, 0) // Sat w2  normal
+	ciFk17, coFk17 := d(time.February, 17, 9, 0, 17, 0) // Tue w3  normal
+	ciFk18, coFk18 := d(time.February, 18, 9, 0, 17, 0) // Wed w3  normal
+	ciFk19, coFk19 := d(time.February, 19, 9, 0, 17, 0) // Thu w3  normal
+	ciFk20, coFk20 := d(time.February, 20, 9, 0, 17, 0) // Fri w3  normal
+	ciFk21, coFk21 := d(time.February, 21, 9, 0, 17, 0) // Sat w3  normal
+	ciFk24, coFk24 := d(time.February, 24, 9, 0, 17, 0) // Tue w4  normal
+	ciFk25, coFk25 := d(time.February, 25, 9, 0, 17, 0) // Wed w4  normal
+	ciFk26, coFk26 := d(time.February, 26, 9, 0, 17, 0) // Thu w4  normal
+	ciFk27, coFk27 := d(time.February, 27, 9, 0, 17, 0) // Fri w4  normal
+	ciFk28, coFk28 := d(time.February, 28, 9, 0, 17, 0) // Sat w4  normal
 
 	// Staff (sysComp) — all 20 working days, clean on time, no OT
-	ciS3, coS3 := d(time.February, 3, 9, 0, 17, 0)
 	ciS4, coS4 := d(time.February, 4, 9, 0, 17, 0)
 	ciS5, coS5 := d(time.February, 5, 9, 0, 17, 0)
 	ciS6, coS6 := d(time.February, 6, 9, 0, 17, 0)
@@ -664,14 +660,14 @@ func main() {
 	ciS27, coS27 := d(time.February, 27, 9, 0, 17, 0)
 	ciS28, coS28 := d(time.February, 28, 9, 0, 17, 0)
 
-	// Extra weekend work in February
-	ciAFebExtra, coAFebExtra := d(time.February, 1, 9, 0, 19, 0)  // Sun Feb 1 — Alice weekend OT
-	ciDFebExtra, coDFebExtra := d(time.February, 8, 10, 0, 18, 0) // Sun Feb 8 — David weekend extra
+	// Extra weekend work in February — Frank only
+	ciFkFebExtra1, coFkFebExtra1 := d(time.February, 1, 10, 0, 17, 0) // Sun Feb 1 — Frank holiday work
+	ciFkFebExtra2, coFkFebExtra2 := d(time.February, 15, 9, 0, 17, 0) // Sun Feb 15 — Frank holiday work
+	ciFkFebExtra3, coFkFebExtra3 := d(time.February, 22, 9, 0, 17, 0) // Sun Feb 22 — Frank holiday work
 
 	timelogs := []tlSeed{
 		// === FEBRUARY 2026 ===
 		// Alice — perfect attendance, OT every working day (0 absent, 0 late)
-		{alice.ID, compA.ID, ciA3, coA3, models.StatusOnTime, ""},
 		{alice.ID, compA.ID, ciA4, coA4, models.StatusOnTime, "Sprint deadline"},
 		{alice.ID, compA.ID, ciA5, coA5, models.StatusOnTime, ""},
 		{alice.ID, compA.ID, ciA6, coA6, models.StatusOnTime, "Client meeting"},
@@ -692,7 +688,6 @@ func main() {
 		{alice.ID, compA.ID, ciA27, coA27, models.StatusOnTime, "Month end"},
 		{alice.ID, compA.ID, ciA28, coA28, models.StatusOnTime, ""},
 		// Bob — some OT, late every Thu
-		{bob.ID, compA.ID, ciB3, coB3, models.StatusOnTime, ""},
 		{bob.ID, compA.ID, ciB4, coB4, models.StatusOnTime, ""},
 		{bob.ID, compA.ID, ciB5, coB5, models.StatusLate, "Traffic"},
 		{bob.ID, compA.ID, ciB6, coB6, models.StatusOnTime, ""},
@@ -713,7 +708,6 @@ func main() {
 		{bob.ID, compA.ID, ciB27, coB27, models.StatusOnTime, ""},
 		{bob.ID, compA.ID, ciB28, coB28, models.StatusOnTime, ""},
 		// Carol — 4 absent, rest on-time
-		{carol.ID, compA.ID, ciC3, coC3, models.StatusOnTime, ""},
 		{carol.ID, compA.ID, ciC4, coC4, models.StatusAbsent, "Unexcused absence"},
 		{carol.ID, compA.ID, ciC5, coC5, models.StatusOnTime, ""},
 		{carol.ID, compA.ID, ciC6, coC6, models.StatusOnTime, ""},
@@ -734,7 +728,6 @@ func main() {
 		{carol.ID, compA.ID, ciC27, coC27, models.StatusOnTime, ""},
 		{carol.ID, compA.ID, ciC28, coC28, models.StatusOnTime, ""},
 		// David — OT several days
-		{david.ID, compB.ID, ciD3, coD3, models.StatusOnTime, ""},
 		{david.ID, compB.ID, ciD4, coD4, models.StatusOnTime, "Presentation prep"},
 		{david.ID, compB.ID, ciD5, coD5, models.StatusOnTime, ""},
 		{david.ID, compB.ID, ciD6, coD6, models.StatusOnTime, "Quarter close"},
@@ -755,7 +748,6 @@ func main() {
 		{david.ID, compB.ID, ciD27, coD27, models.StatusOnTime, ""},
 		{david.ID, compB.ID, ciD28, coD28, models.StatusOnTime, ""},
 		// Eve — clean, on time
-		{eve.ID, compB.ID, ciE3, coE3, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE4, coE4, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE5, coE5, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE6, coE6, models.StatusOnTime, ""},
@@ -776,7 +768,6 @@ func main() {
 		{eve.ID, compB.ID, ciE27, coE27, models.StatusOnTime, ""},
 		{eve.ID, compB.ID, ciE28, coE28, models.StatusOnTime, ""},
 		// Frank — clean, on time
-		{frank.ID, compB.ID, ciFk3, coFk3, models.StatusOnTime, ""},
 		{frank.ID, compB.ID, ciFk4, coFk4, models.StatusOnTime, ""},
 		{frank.ID, compB.ID, ciFk5, coFk5, models.StatusOnTime, ""},
 		{frank.ID, compB.ID, ciFk6, coFk6, models.StatusOnTime, ""},
@@ -797,7 +788,6 @@ func main() {
 		{frank.ID, compB.ID, ciFk27, coFk27, models.StatusOnTime, ""},
 		{frank.ID, compB.ID, ciFk28, coFk28, models.StatusOnTime, ""},
 		// staff@admin.com — clean, on time, no OT
-		{staff.ID, sysComp.ID, ciS3, coS3, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS4, coS4, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS5, coS5, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS6, coS6, models.StatusOnTime, ""},
@@ -817,9 +807,10 @@ func main() {
 		{staff.ID, sysComp.ID, ciS26, coS26, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS27, coS27, models.StatusOnTime, ""},
 		{staff.ID, sysComp.ID, ciS28, coS28, models.StatusOnTime, ""},
-		// Extra weekend work
-		{alice.ID, compA.ID, ciAFebExtra, coAFebExtra, models.StatusHoliday, "Weekend deployment"},
-		{david.ID, compB.ID, ciDFebExtra, coDFebExtra, models.StatusHoliday, "Weekend stock count"},
+		// Extra weekend work — Frank only
+		{frank.ID, compB.ID, ciFkFebExtra1, coFkFebExtra1, models.StatusHoliday, "Holiday work"},
+		{frank.ID, compB.ID, ciFkFebExtra2, coFkFebExtra2, models.StatusHoliday, "Holiday work"},
+		{frank.ID, compB.ID, ciFkFebExtra3, coFkFebExtra3, models.StatusHoliday, "Holiday work"},
 	}
 
 	for _, tl := range timelogs {
