@@ -140,7 +140,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			emp.ID, cycle.StartDate, cycle.EndDate,
 		).Find(&timeLogs)
 
-		// Resolve work end time from config (default 18:00)
+		// Resolve work times from config
 		endHour, endMin := 18, 0
 		if attendanceConfig.WorkEndTime != nil {
 			utcEnd := attendanceConfig.WorkEndTime.UTC()
@@ -152,6 +152,12 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			startHour, startMin = utcStart.Hour(), utcStart.Minute()
 		}
 
+		// Build day → check-pair map while computing OT and extra days
+		type logDayRecord struct {
+			hasCheckPair    bool
+			earliestCheckIn time.Time
+		}
+		logsByDay := make(map[string]*logDayRecord)
 		totalOTMins := 0.0
 		extraDays := 0
 		for _, log := range timeLogs {
@@ -167,14 +173,24 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 				continue
 			}
 
-			// Overtime: minutes worked beyond scheduled end
+			// Track earliest check-in per day for late detection
+			rec := logsByDay[dateStr]
+			if rec == nil {
+				rec = &logDayRecord{earliestCheckIn: log.CheckIn.UTC()}
+				logsByDay[dateStr] = rec
+			}
+			rec.hasCheckPair = true
+			if log.CheckIn.UTC().Before(rec.earliestCheckIn) {
+				rec.earliestCheckIn = log.CheckIn.UTC()
+			}
+
+			// OT: minutes worked beyond scheduled end
 			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMin, 0, 0, time.UTC)
 			if endHour < startHour || (endHour == startHour && endMin <= startMin) {
 				scheduledEnd = scheduledEnd.AddDate(0, 0, 1)
 			}
-			checkOut := log.CheckOut.UTC()
-			if checkOut.After(scheduledEnd) {
-				totalOTMins += checkOut.Sub(scheduledEnd).Minutes()
+			if log.CheckOut.UTC().After(scheduledEnd) {
+				totalOTMins += log.CheckOut.UTC().Sub(scheduledEnd).Minutes()
 			}
 		}
 
@@ -226,44 +242,43 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			deductionItems = append(deductionItems, deductionItem{name: cd.DeductionType.Name, amount: cd.Amount, deductionTypeID: &dtID})
 		}
 
-		var unpaidLeaves []models.LeaveRequest
+		// Load ALL approved leaves: build skip-day set + compute unpaid days
+		var approvedLeaves []models.LeaveRequest
 		config.DB.Where(
-			"employees_id = ? AND leave_type = ? AND status = ? AND start_date <= ? AND end_date >= ?",
-			emp.ID, models.LeaveTypeUnpaid, models.LeaveStatusApproved, cycle.EndDate, cycle.StartDate,
-		).Find(&unpaidLeaves)
-
+			"employees_id = ? AND status = ? AND start_date <= ? AND end_date >= ?",
+			emp.ID, models.LeaveStatusApproved, cycle.EndDate, cycle.StartDate,
+		).Find(&approvedLeaves)
+		leaveSet := make(map[string]bool)
 		totalUnpaidDays := 0.0
-		for _, leave := range unpaidLeaves {
-			totalUnpaidDays += leave.TotalDays
+		for _, lv := range approvedLeaves {
+			if lv.LeaveType == models.LeaveTypeUnpaid {
+				totalUnpaidDays += lv.TotalDays
+			}
+			for d := lv.StartDate.Truncate(24 * time.Hour); !d.After(lv.EndDate.Truncate(24 * time.Hour)); d = d.AddDate(0, 0, 1) {
+				leaveSet[d.Format("2006-01-02")] = true
+			}
 		}
 		unpaidLeaveDeduction := math.Round(totalUnpaidDays*(baseSalary/30)*100) / 100
 
-		var attendanceLogs []models.TimeLog
-		config.DB.Where(
-			"employees_id = ? AND ((check_in >= ? AND check_in <= ?) OR (status = ? AND check_in IS NULL AND created_at >= ? AND created_at <= ?))",
-			emp.ID, cycle.StartDate, cycle.EndDate, models.StatusAbsent, cycle.StartDate, cycle.EndDate,
-		).Find(&attendanceLogs)
-
+		// Day-by-day absent/late detection — same logic as deduction summary
 		totalLateMins := 0.0
 		totalAbsentDays := 0
-		workStartHour := 9
-		workStartMin := 0
-		if attendanceConfig.WorkStartTime != nil {
-			workStartHour = attendanceConfig.WorkStartTime.Hour()
-			workStartMin = attendanceConfig.WorkStartTime.Minute()
-		}
-
-		for _, log := range attendanceLogs {
-			switch log.Status {
-			case models.StatusAbsent:
+		for d := cycle.StartDate.Truncate(24 * time.Hour); !d.After(cycle.EndDate.Truncate(24 * time.Hour)); d = d.AddDate(0, 0, 1) {
+			dateStr := d.Format("2006-01-02")
+			if holidaySet[dateStr] || dayOffWeekdays[int(d.Weekday())] {
+				continue
+			}
+			if leaveSet[dateStr] {
+				continue
+			}
+			rec := logsByDay[dateStr]
+			if rec == nil || !rec.hasCheckPair {
 				totalAbsentDays++
-			case models.StatusLate:
-				if log.CheckIn != nil {
-					scheduled := time.Date(log.CheckIn.Year(), log.CheckIn.Month(), log.CheckIn.Day(), workStartHour, workStartMin, 0, 0, log.CheckIn.Location())
-					if log.CheckIn.After(scheduled) {
-						totalLateMins += log.CheckIn.Sub(scheduled).Minutes()
-					}
-				}
+				continue
+			}
+			scheduled := time.Date(d.Year(), d.Month(), d.Day(), startHour, startMin, 0, 0, time.UTC)
+			if rec.earliestCheckIn.After(scheduled) {
+				totalLateMins += rec.earliestCheckIn.Sub(scheduled).Minutes()
 			}
 		}
 
@@ -271,6 +286,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		absentDeduction := 0.0
 		if attendanceConfig.IsLateDeductionEnabled {
 			lateDeduction = math.Round(totalLateMins*attendanceConfig.LateRatePerMinute*100) / 100
+			if lateDeduction > attendanceConfig.AbsentRatePerDay {
+				lateDeduction = attendanceConfig.AbsentRatePerDay
+			}
 		}
 		if attendanceConfig.IsAbsentDeductionEnabled {
 			absentDeduction = math.Round(float64(totalAbsentDays)*attendanceConfig.AbsentRatePerDay*100) / 100
