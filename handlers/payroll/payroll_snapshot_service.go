@@ -52,11 +52,27 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		return 0, 0, err
 	}
 
-	attendanceConfig := models.AttendanceConfig{
-		IsLateDeductionEnabled:   true,
-		IsAbsentDeductionEnabled: true,
+	var attendanceConfig models.AttendanceConfig
+	if err := config.DB.Where("companies_id = ?", companiesID).Order("id DESC").First(&attendanceConfig).Error; err != nil {
+		// No config found — default to enabled so payroll still runs
+		attendanceConfig.IsLateDeductionEnabled = true
+		attendanceConfig.IsAbsentDeductionEnabled = true
 	}
-	config.DB.Where("companies_id = ?", companiesID).First(&attendanceConfig)
+
+	// Pre-load holidays and day-offs for extra day detection
+	var holidays []models.Holiday
+	config.DB.Where("companies_id = ? AND date >= ? AND date <= ?", companiesID, cycle.StartDate, cycle.EndDate).Find(&holidays)
+	holidaySet := make(map[string]bool, len(holidays))
+	for _, h := range holidays {
+		holidaySet[h.Date.Format("2006-01-02")] = true
+	}
+
+	var dayOffs []models.DayOff
+	config.DB.Where("companies_id = ?", companiesID).Find(&dayOffs)
+	dayOffWeekdays := make(map[int]bool, len(dayOffs))
+	for _, d := range dayOffs {
+		dayOffWeekdays[d.Weekday] = true
+	}
 
 	processedCount := 0
 	skippedCount := 0
@@ -65,7 +81,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 	for _, emp := range employees {
 		var salaryRecord models.SalariesStructure
 		if err := config.DB.
-			Where("employees_id = ? AND effective_date <= ? AND is_enabled = ?", emp.ID, cycle.EndDate, true).
+			Where("employees_id = ? AND effective_date <= ?", emp.ID, cycle.EndDate).
 			Order("effective_date DESC, created_at DESC").
 			First(&salaryRecord).Error; err != nil {
 			skippedCount++
@@ -124,20 +140,57 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			emp.ID, cycle.StartDate, cycle.EndDate,
 		).Find(&timeLogs)
 
-		totalOTHours := 0.0
+		// Resolve work end time from config (default 18:00)
+		endHour, endMin := 18, 0
+		if attendanceConfig.WorkEndTime != nil {
+			utcEnd := attendanceConfig.WorkEndTime.UTC()
+			endHour, endMin = utcEnd.Hour(), utcEnd.Minute()
+		}
+		startHour, startMin := 9, 0
+		if attendanceConfig.WorkStartTime != nil {
+			utcStart := attendanceConfig.WorkStartTime.UTC()
+			startHour, startMin = utcStart.Hour(), utcStart.Minute()
+		}
+
+		totalOTMins := 0.0
+		extraDays := 0
 		for _, log := range timeLogs {
 			if log.CheckIn == nil || log.CheckOut == nil {
 				continue
 			}
-			workedHours := log.CheckOut.Sub(*log.CheckIn).Hours()
-			if ot := workedHours - 8.0; ot > 0 {
-				totalOTHours += ot
+			day := log.CheckIn.UTC().Truncate(24 * time.Hour)
+			dateStr := day.Format("2006-01-02")
+			isExtraDay := holidaySet[dateStr] || dayOffWeekdays[int(day.Weekday())]
+
+			if isExtraDay {
+				extraDays++
+				continue
+			}
+
+			// Overtime: minutes worked beyond scheduled end
+			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMin, 0, 0, time.UTC)
+			if endHour < startHour || (endHour == startHour && endMin <= startMin) {
+				scheduledEnd = scheduledEnd.AddDate(0, 0, 1)
+			}
+			checkOut := log.CheckOut.UTC()
+			if checkOut.After(scheduledEnd) {
+				totalOTMins += checkOut.Sub(scheduledEnd).Minutes()
 			}
 		}
-		hourlyRate := baseSalary / (30 * 8)
-		otAmount := math.Round(totalOTHours*hourlyRate*1.5*100) / 100
+
+		otAmount := 0.0
+		if attendanceConfig.IsOvertimeEarningsEnabled {
+			otAmount = math.Round(totalOTMins*attendanceConfig.OvertimeRatePerMinute*100) / 100
+		}
 		taxableBase += otAmount
 		ssoBase += otAmount
+
+		extraAmount := 0.0
+		if attendanceConfig.IsExtraEarningsEnabled {
+			extraAmount = math.Round(float64(extraDays)*attendanceConfig.ExtraRatePerDay*100) / 100
+		}
+		taxableBase += extraAmount
+		ssoBase += extraAmount
 
 		var empDeductions []models.EmployeeDeduction
 		config.DB.Preload("DeductionType").Where("employees_id = ?", emp.ID).Find(&empDeductions)
@@ -234,7 +287,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		monthlyTax := calculateTaxByMethod(payrollConfig.TaxCalculation, taxableBase, taxDeductible)
 
-		totalEarning := math.Round((baseSalary+additionalEarning+otAmount)*100) / 100
+		totalEarning := math.Round((baseSalary+additionalEarning+otAmount+extraAmount)*100) / 100
 		totalDeduction := math.Round((unpaidLeaveDeduction+additionalDeduction+lateDeduction+absentDeduction)*100) / 100
 		netPay := math.Round((totalEarning-totalDeduction-ssoAmount-monthlyTax)*100) / 100
 
@@ -291,6 +344,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		}
 		if otAmount > 0 {
 			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Overtime", Amount: otAmount, Type: "earning"})
+		}
+		if extraAmount > 0 {
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Extra Day", Amount: extraAmount, Type: "earning"})
 		}
 		for _, di := range deductionItems {
 			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: di.name, Amount: di.amount, Type: "deduction", DeductionTypeID: di.deductionTypeID})

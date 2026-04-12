@@ -211,13 +211,22 @@ func GetEarningSummary(c *gin.Context) {
 		s := summaryMap[emp.ID]
 		cfg := configByCompany[emp.CompaniesID]
 
-		overtimeAmount := 0.0
-		extraAmount := 0.0
-		totalExtraDays := len(s.extraDates)
-
-		if cfg.IsOvertimeEarningsEnabled {
-			overtimeAmount = math.Round(s.overtimeMins*cfg.OvertimeRatePerMinute*100) / 100
+		overtimeMins := s.overtimeMins
+		if !cfg.IsOvertimeEarningsEnabled {
+			overtimeMins = 0
 		}
+
+		totalExtraDays := len(s.extraDates)
+		if !cfg.IsExtraEarningsEnabled {
+			totalExtraDays = 0
+		}
+
+		overtimeAmount := 0.0
+		if cfg.IsOvertimeEarningsEnabled {
+			overtimeAmount = math.Round(overtimeMins*cfg.OvertimeRatePerMinute*100) / 100
+		}
+
+		extraAmount := 0.0
 		if cfg.IsExtraEarningsEnabled {
 			extraAmount = math.Round(float64(totalExtraDays)*cfg.ExtraRatePerDay*100) / 100
 		}
@@ -227,7 +236,7 @@ func GetEarningSummary(c *gin.Context) {
 			EmployeesCode:        emp.EmployeesCode,
 			FullName:             emp.FirstName + " " + emp.LastName,
 			CompanyName:          emp.Companies.Name,
-			TotalOvertimeMinutes: math.Round(s.overtimeMins*100) / 100,
+			TotalOvertimeMinutes: math.Round(overtimeMins*100) / 100,
 			TotalExtraDays:       totalExtraDays,
 			OvertimeAmount:       overtimeAmount,
 			ExtraAmount:          extraAmount,

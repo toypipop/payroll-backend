@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm/clause"
 )
 
 func GetAttendanceConfigs(c *gin.Context) {
@@ -86,38 +85,46 @@ func UpdateAttendanceConfig(c *gin.Context) {
 	workStartTime := parseTimeString(input.WorkStartTime)
 	workEndTime := parseTimeString(input.WorkEndTime)
 
-	err := config.DB.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "companies_id"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
-			"late_rate_per_minute":         input.LateRatePerMinute,
-			"absent_rate_per_day":          input.AbsentRatePerDay,
-			"is_late_deduction_enabled":    input.IsLateDeductionEnabled,
-			"is_absent_deduction_enabled":  input.IsAbsentDeductionEnabled,
-			"work_start_time":              workStartTime,
-			"work_end_time":                workEndTime,
-			"overtime_rate_per_minute":     input.OvertimeRatePerMinute,
-			"extra_rate_per_day":           input.ExtraRatePerDay,
-			"is_overtime_earnings_enabled": input.IsOvertimeEarningsEnabled,
-			"is_extra_earnings_enabled":    input.IsExtraEarningsEnabled,
-			"updated_at":                   time.Now(),
-		}),
-	}).Create(&models.AttendanceConfig{
-		CompaniesID:               input.CompaniesID,
-		LateRatePerMinute:         input.LateRatePerMinute,
-		AbsentRatePerDay:          input.AbsentRatePerDay,
-		IsLateDeductionEnabled:    input.IsLateDeductionEnabled,
-		IsAbsentDeductionEnabled:  input.IsAbsentDeductionEnabled,
-		WorkStartTime:             workStartTime,
-		WorkEndTime:               workEndTime,
-		OvertimeRatePerMinute:     input.OvertimeRatePerMinute,
-		ExtraRatePerDay:           input.ExtraRatePerDay,
-		IsOvertimeEarningsEnabled: input.IsOvertimeEarningsEnabled,
-		IsExtraEarningsEnabled:    input.IsExtraEarningsEnabled,
-	}).Error
+	updates := map[string]interface{}{
+		"late_rate_per_minute":         input.LateRatePerMinute,
+		"absent_rate_per_day":          input.AbsentRatePerDay,
+		"is_late_deduction_enabled":    input.IsLateDeductionEnabled,
+		"is_absent_deduction_enabled":  input.IsAbsentDeductionEnabled,
+		"work_start_time":              workStartTime,
+		"work_end_time":                workEndTime,
+		"overtime_rate_per_minute":     input.OvertimeRatePerMinute,
+		"extra_rate_per_day":           input.ExtraRatePerDay,
+		"is_overtime_earnings_enabled": input.IsOvertimeEarningsEnabled,
+		"is_extra_earnings_enabled":    input.IsExtraEarningsEnabled,
+		"updated_at":                   time.Now(),
+	}
 
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
-		return
+	var existing models.AttendanceConfig
+	if err := config.DB.Where("companies_id = ?", input.CompaniesID).First(&existing).Error; err == nil {
+		// Record exists — update it directly by ID
+		if err := config.DB.Model(&existing).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
+			return
+		}
+	} else {
+		// No record yet — create one
+		newCfg := models.AttendanceConfig{
+			CompaniesID:               input.CompaniesID,
+			LateRatePerMinute:         input.LateRatePerMinute,
+			AbsentRatePerDay:          input.AbsentRatePerDay,
+			IsLateDeductionEnabled:    input.IsLateDeductionEnabled,
+			IsAbsentDeductionEnabled:  input.IsAbsentDeductionEnabled,
+			WorkStartTime:             workStartTime,
+			WorkEndTime:               workEndTime,
+			OvertimeRatePerMinute:     input.OvertimeRatePerMinute,
+			ExtraRatePerDay:           input.ExtraRatePerDay,
+			IsOvertimeEarningsEnabled: input.IsOvertimeEarningsEnabled,
+			IsExtraEarningsEnabled:    input.IsExtraEarningsEnabled,
+		}
+		if err := config.DB.Create(&newCfg).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Configuration saved", "data": input})

@@ -220,10 +220,19 @@ func GetAttendanceSummary(c *gin.Context) {
 		s := summaryMap[emp.ID]
 		cfg := configByCompany[emp.CompaniesID]
 
+		lateMins := s.lateMins
+		if !cfg.IsLateDeductionEnabled {
+			lateMins = 0
+		}
+
+		absentDays := s.absentDays
+		if !cfg.IsAbsentDeductionEnabled {
+			absentDays = 0
+		}
+
 		lateAmt := 0.0
 		if cfg.IsLateDeductionEnabled {
-			lateAmt = math.Round(s.lateMins*cfg.LateRatePerMinute*100) / 100
-			// Cap late deduction at absent rate per day
+			lateAmt = math.Round(lateMins*cfg.LateRatePerMinute*100) / 100
 			if lateAmt > cfg.AbsentRatePerDay {
 				lateAmt = cfg.AbsentRatePerDay
 			}
@@ -231,7 +240,7 @@ func GetAttendanceSummary(c *gin.Context) {
 
 		absentAmt := 0.0
 		if cfg.IsAbsentDeductionEnabled {
-			absentAmt = math.Round(float64(s.absentDays)*cfg.AbsentRatePerDay*100) / 100
+			absentAmt = math.Round(float64(absentDays)*cfg.AbsentRatePerDay*100) / 100
 		}
 
 		result = append(result, AttendanceSummaryRow{
@@ -239,8 +248,8 @@ func GetAttendanceSummary(c *gin.Context) {
 			EmployeesCode: emp.EmployeesCode,
 			FullName:      emp.FirstName + " " + emp.LastName,
 			CompanyName:   emp.Companies.Name,
-			TotalLateMin:  math.Round(s.lateMins*100) / 100,
-			TotalAbsent:   s.absentDays,
+			TotalLateMin:  math.Round(lateMins*100) / 100,
+			TotalAbsent:   absentDays,
 			LateAmount:    lateAmt,
 			AbsentAmount:  absentAmt,
 			TotalAmount:   math.Round((lateAmt+absentAmt)*100) / 100,

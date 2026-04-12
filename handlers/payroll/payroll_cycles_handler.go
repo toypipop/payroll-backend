@@ -31,7 +31,7 @@ func GetPayrollCycles(c *gin.Context) {
 }
 
 func CreatePayrollCycle(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -40,9 +40,10 @@ func CreatePayrollCycle(c *gin.Context) {
 	}
 
 	var input struct {
-		CycleName string    `json:"cycle_name" binding:"required"`
-		StartDate time.Time `json:"start_date" binding:"required"`
-		EndDate   time.Time `json:"end_date" binding:"required"`
+		CycleName   string    `json:"cycle_name" binding:"required"`
+		StartDate   time.Time `json:"start_date" binding:"required"`
+		EndDate     time.Time `json:"end_date" binding:"required"`
+		CompaniesID uint      `json:"companies_id"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -54,8 +55,20 @@ func CreatePayrollCycle(c *gin.Context) {
 		return
 	}
 
+	// Resolve target company — validate access via ApplyScopes
+	targetCompaniesID := currentUser.CompaniesID
+	if input.CompaniesID != 0 {
+		var company models.Companies
+		if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "id", "id")).
+			First(&company, input.CompaniesID).Error; err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to the specified company"})
+			return
+		}
+		targetCompaniesID = company.ID
+	}
+
 	cycle := models.PayrollCycle{
-		CompaniesID: currentUser.CompaniesID,
+		CompaniesID: targetCompaniesID,
 		CycleName:   input.CycleName,
 		StartDate:   input.StartDate,
 		EndDate:     input.EndDate,
