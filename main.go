@@ -6,9 +6,15 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/routes"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using system environment")
+	}
+
 	// 1. Initialize Database Connection
 	config.ConnectDatabase()
 

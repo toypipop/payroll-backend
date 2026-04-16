@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"os"
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"time"
@@ -11,10 +12,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var jwtSecret = []byte("your_super_secret_key_2026")
-
 func GetJWTSecret() []byte {
-	return jwtSecret
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "your_super_secret_key_2026"
+	}
+	return []byte(secret)
 }
 
 type TokenClaims struct {
@@ -60,7 +63,7 @@ func Login(c *gin.Context) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString(GetJWTSecret())
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})

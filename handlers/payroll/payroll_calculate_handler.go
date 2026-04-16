@@ -116,6 +116,7 @@ func GetPayrollTransactions(c *gin.Context) {
 		Preload("Employees.Department").
 		Preload("Employees.Position").
 		Preload("Employees.Companies").
+		Preload("Details").
 		Find(&transactions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
