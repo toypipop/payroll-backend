@@ -39,9 +39,12 @@ func GetCycleEarnings(c *gin.Context) {
 }
 
 func CreateCycleEarning(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	var input models.PayrollCycleEarning
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -60,8 +63,8 @@ func CreateCycleEarning(c *gin.Context) {
 		return
 	}
 
-	// Validate cycle belongs to company
-	if err := repository.EnsurePayrollCycleOpen(input.CycleID, currentUser.CompaniesID); err != nil {
+	cycle, err := repository.EnsurePayrollCycleOpen(input.CycleID, currentUser, dataScope)
+	if err != nil {
 		if err == repository.ErrPayrollCycleNotFound {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
 			return
@@ -75,7 +78,7 @@ func CreateCycleEarning(c *gin.Context) {
 	}
 
 	input.ID = 0
-	input.CompaniesID = currentUser.CompaniesID
+	input.CompaniesID = cycle.CompaniesID
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create cycle earning"})
@@ -87,17 +90,22 @@ func CreateCycleEarning(c *gin.Context) {
 
 func UpdateCycleEarning(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	var item models.PayrollCycleEarning
-	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
-		First(&item).Error; err != nil {
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_earnings.companies_id", "payroll_cycle_earnings.employees_id"),
+	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
-	if err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser.CompaniesID); err != nil {
+
+	if _, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot update earnings in a closed cycle"})
 			return
@@ -130,23 +138,22 @@ func UpdateCycleEarning(c *gin.Context) {
 
 func DeleteCycleEarning(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	result := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
-		First(&models.PayrollCycleEarning{})
-	if result.Error != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
 	var item models.PayrollCycleEarning
-	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).First(&item).Error; err != nil {
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_earnings.companies_id", "payroll_cycle_earnings.employees_id"),
+	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return
 	}
-	if err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser.CompaniesID); err != nil {
+
+	if _, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete earnings in a closed cycle"})
 			return
@@ -159,10 +166,8 @@ func DeleteCycleEarning(c *gin.Context) {
 		return
 	}
 
-	result = config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
-		Delete(&models.PayrollCycleEarning{})
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
+	if err := config.DB.Delete(&item).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})

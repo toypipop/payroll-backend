@@ -107,9 +107,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		var earningItems []earningItem
 		for _, ee := range empEarnings {
 			additionalEarning += ee.Amount
-			if ee.EarningType.IsTaxable {
-				taxableBase += ee.Amount
-			}
+			taxableBase += ee.Amount
 			if ee.EarningType.IsSso {
 				ssoBase += ee.Amount
 			}
@@ -124,9 +122,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		for _, ce := range cycleEarnings {
 			additionalEarning += ce.Amount
-			if ce.EarningType.IsTaxable {
-				taxableBase += ce.Amount
-			}
+			taxableBase += ce.Amount
 			if ce.EarningType.IsSso {
 				ssoBase += ce.Amount
 			}

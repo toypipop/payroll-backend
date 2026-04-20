@@ -990,9 +990,10 @@ func main() {
 
 	// Mock Jan 2026 payroll data for testing
 
-	// Re-fetch Jan 2026 cycles
-	var cycleSysJan models.PayrollCycle
+	// Re-fetch Jan & Feb 2026 cycles for system company
+	var cycleSysJan, cycleSysFeb models.PayrollCycle
 	config.DB.Where("companies_id = ? AND cycle_name = ?", sysComp.ID, "January 2026").First(&cycleSysJan)
+	config.DB.Where("companies_id = ? AND cycle_name = ?", sysComp.ID, "February 2026").First(&cycleSysFeb)
 
 	// Re-fetch earning / deduction type IDs for detail cross-references
 	var etPosA2, etPosB2, etBonusA2, etBonusB2 models.EarningType
@@ -1086,6 +1087,75 @@ func main() {
 		// ── System Company — January 2026 ────────────────────────────────
 		{
 			cycleID: cycleSysJan.ID, emp: staff,
+			salaries: 40000, totalEarning: 40000, totalDeduction: 1600,
+			ssoAmount: 750, taxAmount: 631.67, netPay: 37018.33,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Provident Fund", Amount: 1600, Type: "deduction", DeductionTypeID: uid(dtPfSys2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 631.67, Type: "deduction"},
+			},
+		},
+		// ── Tech Corp — February 2026 ─────────────────────────────────────
+		{
+			cycleID: cycleAFeb.ID, emp: alice,
+			salaries: 45000, totalEarning: 58000, totalDeduction: 1800,
+			ssoAmount: 750, taxAmount: 2471.67, netPay: 52978.33,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Position Allowance", Amount: 5000, Type: "earning", EarningTypeID: uid(etPosA2.ID)},
+				{ItemName: "Bonus", Amount: 8000, Type: "earning", EarningTypeID: uid(etBonusA2.ID)},
+				{ItemName: "Provident Fund", Amount: 1800, Type: "deduction", DeductionTypeID: uid(dtPfA2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 2471.67, Type: "deduction"},
+			},
+		},
+		{
+			cycleID: cycleAFeb.ID, emp: bob,
+			salaries: 30000, totalEarning: 30000, totalDeduction: 4200,
+			ssoAmount: 750, taxAmount: 0, netPay: 25050,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Provident Fund", Amount: 1200, Type: "deduction", DeductionTypeID: uid(dtPfA2.ID)},
+				{ItemName: "Loan Repayment", Amount: 3000, Type: "deduction", DeductionTypeID: uid(dtLoanA2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+			},
+		},
+		{
+			cycleID: cycleAFeb.ID, emp: carol,
+			salaries: 28000, totalEarning: 28000, totalDeduction: 1120,
+			ssoAmount: 750, taxAmount: 52.33, netPay: 26077.67,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Provident Fund", Amount: 1120, Type: "deduction", DeductionTypeID: uid(dtPfA2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 52.33, Type: "deduction"},
+			},
+		},
+		// ── Biz Group — February 2026 ─────────────────────────────────────
+		{
+			cycleID: cycleBFeb.ID, emp: david,
+			salaries: 50000, totalEarning: 63000, totalDeduction: 2000,
+			ssoAmount: 750, taxAmount: 3191.67, netPay: 57058.33,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Position Allowance", Amount: 6000, Type: "earning", EarningTypeID: uid(etPosB2.ID)},
+				{ItemName: "Bonus", Amount: 7000, Type: "earning", EarningTypeID: uid(etBonusB2.ID)},
+				{ItemName: "Provident Fund", Amount: 2000, Type: "deduction", DeductionTypeID: uid(dtPfB2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 3191.67, Type: "deduction"},
+			},
+		},
+		{
+			cycleID: cycleBFeb.ID, emp: eve,
+			salaries: 32000, totalEarning: 35500, totalDeduction: 3280,
+			ssoAmount: 750, taxAmount: 319.33, netPay: 31150.67,
+			details: []models.PayrollTransactionDetail{
+				{ItemName: "Bonus", Amount: 3500, Type: "earning", EarningTypeID: uid(etBonusB2.ID)},
+				{ItemName: "Provident Fund", Amount: 1280, Type: "deduction", DeductionTypeID: uid(dtPfB2.ID)},
+				{ItemName: "Loan Repayment", Amount: 2000, Type: "deduction", DeductionTypeID: uid(dtLoanB2.ID)},
+				{ItemName: "Social Security (SSO)", Amount: 750, Type: "deduction"},
+				{ItemName: "Income Tax", Amount: 319.33, Type: "deduction"},
+			},
+		},
+		// ── System Company — February 2026 ───────────────────────────────
+		{
+			cycleID: cycleSysFeb.ID, emp: staff,
 			salaries: 40000, totalEarning: 40000, totalDeduction: 1600,
 			ssoAmount: 750, taxAmount: 631.67, netPay: 37018.33,
 			details: []models.PayrollTransactionDetail{

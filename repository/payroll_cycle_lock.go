@@ -13,17 +13,21 @@ var (
 	ErrPayrollCycleClosed   = errors.New("payroll cycle is closed")
 )
 
-// EnsurePayrollCycleOpen validates cycle
-func EnsurePayrollCycleOpen(cycleID uint, companiesID uint) error {
+// EnsurePayrollCycleOpen validates the cycle is accessible and open.
+// Uses ApplyScopes so super admins can access cycles from any company.
+// Returns the cycle so callers can use cycle.CompaniesID.
+func EnsurePayrollCycleOpen(cycleID uint, user models.Employees, scope models.DataScope) (*models.PayrollCycle, error) {
 	var cycle models.PayrollCycle
-	if err := config.DB.Where("id = ? AND companies_id = ?", cycleID, companiesID).First(&cycle).Error; err != nil {
+	if err := config.DB.
+		Scopes(ApplyScopes(user, scope, "payroll_cycle.companies_id", "unused")).
+		First(&cycle, cycleID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrPayrollCycleNotFound
+			return nil, ErrPayrollCycleNotFound
 		}
-		return err
+		return nil, err
 	}
 	if cycle.IsClosed {
-		return ErrPayrollCycleClosed
+		return nil, ErrPayrollCycleClosed
 	}
-	return nil
+	return &cycle, nil
 }

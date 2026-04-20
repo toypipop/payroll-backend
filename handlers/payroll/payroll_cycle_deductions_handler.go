@@ -39,9 +39,12 @@ func GetCycleDeductions(c *gin.Context) {
 }
 
 func CreateCycleDeduction(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	var input models.PayrollCycleDeduction
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -49,16 +52,15 @@ func CreateCycleDeduction(c *gin.Context) {
 		return
 	}
 
-	// Validate deduction type exists and belongs to the same company.
+	// Validate deduction type exists
 	var dt models.DeductionType
-	if err := config.DB.Where("id = ? AND companies_id = ?", input.DeductionTypeID, currentUser.CompaniesID).
-		First(&dt).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Deduction type not found or access denied"})
+	if err := config.DB.First(&dt, input.DeductionTypeID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Deduction type not found"})
 		return
 	}
 
-	// Validate cycle belongs to company.
-	if err := repository.EnsurePayrollCycleOpen(input.CycleID, currentUser.CompaniesID); err != nil {
+	cycle, err := repository.EnsurePayrollCycleOpen(input.CycleID, currentUser, dataScope)
+	if err != nil {
 		if err == repository.ErrPayrollCycleNotFound {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
 			return
@@ -72,7 +74,7 @@ func CreateCycleDeduction(c *gin.Context) {
 	}
 
 	input.ID = 0
-	input.CompaniesID = currentUser.CompaniesID
+	input.CompaniesID = cycle.CompaniesID
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create cycle deduction"})
@@ -84,17 +86,22 @@ func CreateCycleDeduction(c *gin.Context) {
 
 func UpdateCycleDeduction(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	var item models.PayrollCycleDeduction
-	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
-		First(&item).Error; err != nil {
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_deductions.companies_id", "payroll_cycle_deductions.employees_id"),
+	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
-	if err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser.CompaniesID); err != nil {
+
+	if _, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot update deductions in a closed cycle"})
 			return
@@ -127,16 +134,22 @@ func UpdateCycleDeduction(c *gin.Context) {
 
 func DeleteCycleDeduction(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 
 	var item models.PayrollCycleDeduction
-	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).First(&item).Error; err != nil {
+	if err := config.DB.Scopes(
+		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_deductions.companies_id", "payroll_cycle_deductions.employees_id"),
+	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return
 	}
-	if err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser.CompaniesID); err != nil {
+
+	if _, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete deductions in a closed cycle"})
 			return
@@ -149,10 +162,8 @@ func DeleteCycleDeduction(c *gin.Context) {
 		return
 	}
 
-	result := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
-		Delete(&models.PayrollCycleDeduction{})
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
+	if err := config.DB.Delete(&item).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
