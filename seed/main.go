@@ -988,6 +988,79 @@ func main() {
 			Assign(ce).FirstOrCreate(&ce)
 	}
 
+	// Additional Feb 2026 cycle variable earnings (sysComp staff + missing compA/compB employees)
+	var cycleSysFeb0 models.PayrollCycle
+	config.DB.Where("companies_id = ? AND cycle_name = ?", sysComp.ID, "February 2026").First(&cycleSysFeb0)
+
+	var etOtSys, etOtA, etOtB models.EarningType
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Overtime (OT)").First(&etOtSys)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Overtime (OT)").First(&etOtA)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Overtime (OT)").First(&etOtB)
+
+	ceSeeds2 := []ceSeed{
+		// System Company — Feb 2026 overtime
+		{cycleSysFeb0.ID, sysComp.ID, staff, etOtSys.ID, 3200},
+		// Tech Corp — Feb 2026 overtime (bob & carol)
+		{cycleAFeb.ID, compA.ID, bob, etOtA.ID, 4500},
+		{cycleAFeb.ID, compA.ID, carol, etOtA.ID, 2500},
+		// Biz Group — Feb 2026 bonus (frank)
+		{cycleBFeb.ID, compB.ID, frank, etBonusB.ID, 5000},
+	}
+	for _, s := range ceSeeds2 {
+		if s.cycleID == 0 || s.emp.ID == 0 || s.earningTypeID == 0 {
+			continue
+		}
+		ce := models.PayrollCycleEarning{
+			CompaniesID:   s.companiesID,
+			CycleID:       s.cycleID,
+			EmployeesID:   s.emp.ID,
+			EarningTypeID: s.earningTypeID,
+			Amount:        s.amount,
+		}
+		config.DB.Where(models.PayrollCycleEarning{CycleID: s.cycleID, EmployeesID: s.emp.ID, EarningTypeID: s.earningTypeID}).
+			Assign(ce).FirstOrCreate(&ce)
+	}
+
+	// --- PayrollCycleDeduction: one-time variable deductions for Feb 2026 (all companies) ---
+	var dtLoanSys0, dtLoanA0, dtLoanB0 models.DeductionType
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Loan Repayment").First(&dtLoanSys0)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Loan Repayment").First(&dtLoanA0)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Loan Repayment").First(&dtLoanB0)
+
+	type cdSeed struct {
+		cycleID         uint
+		companiesID     uint
+		emp             models.Employees
+		deductionTypeID uint
+		amount          float64
+	}
+	cdSeeds := []cdSeed{
+		// System Company — Feb 2026
+		{cycleSysFeb0.ID, sysComp.ID, staff, dtLoanSys0.ID, 2000},
+		// Tech Corp — Feb 2026
+		{cycleAFeb.ID, compA.ID, alice, dtLoanA0.ID, 5000},
+		{cycleAFeb.ID, compA.ID, bob, dtLoanA0.ID, 2000},
+		{cycleAFeb.ID, compA.ID, carol, dtLoanA0.ID, 1500},
+		// Biz Group — Feb 2026
+		{cycleBFeb.ID, compB.ID, david, dtLoanB0.ID, 3000},
+		{cycleBFeb.ID, compB.ID, eve, dtLoanB0.ID, 1500},
+		{cycleBFeb.ID, compB.ID, frank, dtLoanB0.ID, 2500},
+	}
+	for _, s := range cdSeeds {
+		if s.cycleID == 0 || s.emp.ID == 0 || s.deductionTypeID == 0 {
+			continue
+		}
+		cd := models.PayrollCycleDeduction{
+			CompaniesID:     s.companiesID,
+			CycleID:         s.cycleID,
+			EmployeesID:     s.emp.ID,
+			DeductionTypeID: s.deductionTypeID,
+			Amount:          s.amount,
+		}
+		config.DB.Where(models.PayrollCycleDeduction{CycleID: s.cycleID, EmployeesID: s.emp.ID, DeductionTypeID: s.deductionTypeID}).
+			Assign(cd).FirstOrCreate(&cd)
+	}
+
 	// Mock Jan 2026 payroll data for testing
 
 	// Re-fetch Jan & Feb 2026 cycles for system company
