@@ -27,3 +27,6 @@ go.work.sum
 # Local agent/skill cache
 .agents/
 skills-lock.json
+
+# Build errors log
+build-errors.log
