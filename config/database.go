@@ -21,7 +21,7 @@ func getEnv(key, fallback string) string {
 
 func ConnectDatabase() {
 	user := getEnv("DB_USER", "root")
-	password := getEnv("DB_PASSWORD", "1234")
+	password := getEnv("DB_PASSWORD", "")
 	host := getEnv("DB_HOST", "127.0.0.1")
 	port := getEnv("DB_PORT", "3306")
 	dbName := getEnv("DB_NAME", "PayrollDB")

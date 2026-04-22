@@ -135,6 +135,13 @@ Run from repository root.
 - Never hardcode credentials, DSNs, or JWT secrets in new code.
 - Prefer environment variables for all secrets and environment-specific values.
 - Do not commit real credentials or tokens.
+- Avoid returning raw internal errors (`err.Error()`) in API responses for operational/database failures.
+- Avoid `config.DB.Debug()` in normal runtime code; reserve SQL debug logs for temporary troubleshooting.
+
+### Local agent artifacts
+
+- Keep local agent cache files out of source control (`.agents/`, `skills-lock.json`).
+- If working on multiple machines, sync these artifacts privately (or reinstall locally) rather than committing them.
 
 ### Time and monetary values
 

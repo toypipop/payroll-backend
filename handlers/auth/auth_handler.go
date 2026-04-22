@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"payroll-backend/config"
 	"payroll-backend/models"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,12 +14,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func GetJWTSecret() []byte {
+func GetJWTSecret() ([]byte, error) {
 	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "your_super_secret_key_2026"
+	if strings.TrimSpace(secret) == "" {
+		return nil, errors.New("JWT secret is not configured")
 	}
-	return []byte(secret)
+	return []byte(secret), nil
 }
 
 type TokenClaims struct {
@@ -50,6 +52,12 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	jwtSecret, err := GetJWTSecret()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication service is not configured"})
+		return
+	}
+
 	// Create JWT token with claims
 	claims := TokenClaims{
 		UserID:       Employees.ID,
@@ -63,7 +71,7 @@ func Login(c *gin.Context) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(GetJWTSecret())
+	tokenString, err := token.SignedString(jwtSecret)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})

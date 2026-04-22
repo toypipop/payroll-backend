@@ -35,9 +35,16 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenString := parts[1]
 		claims := &authhandler.TokenClaims{}
 
+		jwtSecret, err := authhandler.GetJWTSecret()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication service is not configured"})
+			c.Abort()
+			return
+		}
+
 		// Parse and validate JWT token
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return authhandler.GetJWTSecret(), nil
+			return jwtSecret, nil
 		})
 
 		if err != nil || !token.Valid {
@@ -73,7 +80,7 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 		var access models.RolesModuleAccess
 
 		// Use struct for Where clause
-		query := config.DB.Debug().
+		query := config.DB.
 			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
 			Where(&models.RolesModuleAccess{RolesID: rID}).
 			Where("`AppModule`.`module_key` = ?", moduleKey)
@@ -82,7 +89,7 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 
 		if err != nil {
 			log.Printf("[DEBUG] ModuleKey: %s, RolesID: %d, Error: %v", moduleKey, rID, err)
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied", "debug_msg": err.Error()})
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 			c.Abort()
 			return
 		}
@@ -133,7 +140,7 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 		}
 
 		var accesses []models.RolesModuleAccess
-		err := config.DB.Debug().
+		err := config.DB.
 			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
 			Where(&models.RolesModuleAccess{RolesID: rID}).
 			Where("`AppModule`.`module_key` IN ?", moduleKeys).

@@ -23,14 +23,14 @@ func GetPayrollConfigs(c *gin.Context) {
 	var companies []models.Companies
 
 	// Fetch latest active config per company
-	err := config.DB.Debug().Scopes(
+	err := config.DB.Scopes(
 		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
 	).Preload("PayrollConfig", func(db *gorm.DB) *gorm.DB {
 		return db.Where("deleted_at IS NULL").Order("created_at DESC").Limit(1)
 	}).Find(&companies).Error
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch payroll configuration"})
 		return
 	}
 
