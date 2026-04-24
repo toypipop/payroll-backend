@@ -52,14 +52,9 @@ func CreateCycleEarning(c *gin.Context) {
 		return
 	}
 
-	// Validate that the EarningType is variable (not permanent)
 	var et models.EarningType
 	if err := config.DB.First(&et, input.EarningTypeID).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type not found"})
-		return
-	}
-	if et.IsPermanent {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Fixed earning types are assigned via Employee Earnings, not per-cycle"})
 		return
 	}
 

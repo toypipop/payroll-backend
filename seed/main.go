@@ -6,6 +6,7 @@ import (
 	"payroll-backend/models"
 	"time"
 
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -14,6 +15,9 @@ func ptr(u uint) *uint {
 }
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using system environment")
+	}
 	config.ConnectDatabase()
 
 	err := config.DB.AutoMigrate(
@@ -168,20 +172,28 @@ func main() {
 	config.DB.Where("bank_code = ?", "TTB").First(&bankTTB)
 
 	// Initialize employment types
-	empTypes := []models.EmploymentType{
-		{Name: "Full-time", Description: "Permanent full-time employee"},
-		{Name: "Part-time", Description: "Part-time employee working reduced hours"},
-		{Name: "Contract", Description: "Fixed-term contract employee"},
-		{Name: "Probation", Description: "Employee on probation period"},
-		{Name: "Intern", Description: "Internship / trainee position"},
+	empTypeNames := []struct {
+		Name        string
+		Description string
+	}{
+		{"Full-time", "Permanent full-time employee"},
+		{"Part-time", "Part-time employee working reduced hours"},
+		{"Contract", "Fixed-term contract employee"},
+		{"Probation", "Employee on probation period"},
+		{"Intern", "Internship / trainee position"},
 	}
-	for _, et := range empTypes {
-		config.DB.Where(models.EmploymentType{Name: et.Name}).Assign(et).FirstOrCreate(&et)
+	for _, comp := range []models.Companies{sysComp, compA, compB} {
+		for _, et := range empTypeNames {
+			rec := models.EmploymentType{CompaniesID: comp.ID, Name: et.Name, Description: et.Description}
+			config.DB.Where(models.EmploymentType{CompaniesID: comp.ID, Name: et.Name}).Assign(rec).FirstOrCreate(&rec)
+		}
 	}
 
-	// Fetch Full-time employment type ID for seeding employees
-	var fullTimeEmpType models.EmploymentType
-	config.DB.Where("name = ?", "Full-time").First(&fullTimeEmpType)
+	// Fetch Full-time employment type per company for employee seeding
+	var fullTimeEmpTypeSys, fullTimeEmpTypeA, fullTimeEmpTypeB models.EmploymentType
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Full-time").First(&fullTimeEmpTypeSys)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Full-time").First(&fullTimeEmpTypeA)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Full-time").First(&fullTimeEmpTypeB)
 
 	// Initialize categories
 	earningCats := []models.EarningCategory{
@@ -265,12 +277,12 @@ func main() {
 	// --- Earning Types ---
 	// Base Salary is NOT listed here — it is managed via the Salaries module (SalariesStructure)
 	earnings := []models.EarningType{
-		{CompaniesID: sysComp.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: true, IsPermanent: false},
-		{CompaniesID: compA.ID, Name: "Position Allowance", IsTaxable: true, IsSso: false, IsPermanent: true},
-		{CompaniesID: compA.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: true, IsPermanent: false},
+		{CompaniesID: sysComp.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: false, IsPermanent: false},
+		{CompaniesID: compA.ID, Name: "Position Allowance", IsTaxable: true, IsSso: true, IsPermanent: true},
+		{CompaniesID: compA.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: false, IsPermanent: false},
 		{CompaniesID: compA.ID, Name: "Bonus", IsTaxable: true, IsSso: false, IsPermanent: false},
-		{CompaniesID: compB.ID, Name: "Position Allowance", IsTaxable: true, IsSso: false, IsPermanent: true},
-		{CompaniesID: compB.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: true, IsPermanent: false},
+		{CompaniesID: compB.ID, Name: "Position Allowance", IsTaxable: true, IsSso: true, IsPermanent: true},
+		{CompaniesID: compB.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: false, IsPermanent: false},
 		{CompaniesID: compB.ID, Name: "Bonus", IsTaxable: true, IsSso: false, IsPermanent: false},
 	}
 	for _, e := range earnings {
@@ -349,8 +361,8 @@ func main() {
 		{ModuleName: "Timelogs", ModuleKey: "TimelogsListPage", RoutePath: "/timelogs", Icon: "Schedule", Order: 1, ParentID: ptr(3)},
 		{ModuleName: "Leave Requests", ModuleKey: "LeaveRequestsPage", RoutePath: "/leave-requests", Icon: "EventNote", Order: 2, ParentID: ptr(3)},
 		{ModuleName: "Leave Approved", ModuleKey: "LeaveApprovedPage", RoutePath: "/leave-approved", Icon: "FactCheck", Order: 3, ParentID: ptr(3)},
-		{ModuleName: "Deduction Summary", ModuleKey: "DeductionSummaryPage", RoutePath: "/deduction-summary", Icon: "Summarize", Order: 4, ParentID: ptr(3)},
-		{ModuleName: "Earning Summary", ModuleKey: "EarningSummaryPage", RoutePath: "/earning-summary", Icon: "TrendingUp", Order: 5, ParentID: ptr(3)},
+		{ModuleName: "Earning Summary", ModuleKey: "EarningSummaryPage", RoutePath: "/earning-summary", Icon: "TrendingUp", Order: 4, ParentID: ptr(3)},
+		{ModuleName: "Deduction Summary", ModuleKey: "DeductionSummaryPage", RoutePath: "/deduction-summary", Icon: "Summarize", Order: 5, ParentID: ptr(3)},
 
 		// Level 2: Sub-Menus under Payroll Processing
 		{ModuleName: "Payroll Cycles", ModuleKey: "PayrollCyclesPage", RoutePath: "/payroll-cycles", Icon: "Sync", Order: 1, ParentID: ptr(4)},
@@ -364,7 +376,6 @@ func main() {
 		{ModuleName: "Earning Types", ModuleKey: "EarningTypesPage", RoutePath: "/earning-types", Icon: "AddCard", Order: 2, ParentID: ptr(5)},
 		{ModuleName: "Deduction Types", ModuleKey: "DeductionTypesPage", RoutePath: "/deduction-types", Icon: "PriceCheck", Order: 3, ParentID: ptr(5)},
 		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 4, ParentID: ptr(5)},
-		{ModuleName: "Earning & Deduction", ModuleKey: "EarningCategoryPage", RoutePath: "/earning-categories", Icon: "Category", Order: 5, ParentID: ptr(5)},
 
 		// Level 2: Sub-Menus under Settings
 		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 1, ParentID: ptr(6)},
@@ -440,13 +451,13 @@ func main() {
 	}
 
 	usersToSeed := []empSeed{
-		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0, &bankTTB.ID, bankTTB.BankName, "Test Staff", "6789012345"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson", "1234567890"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, bankSCB.BankName, "Bob Smith", "2345678901"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, bankBBL.BankName, "Carol Davis", "3456789012"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, bankKTB.BankName, "David Wilson", "4567890123"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, bankBAY.BankName, "Eve Brown", "5678901234"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpType.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, bankBBL.BankName, "Frank Garcia", "6789012345"},
+		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpTypeSys.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0, &bankTTB.ID, bankTTB.BankName, "Test Staff", "6789012345"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson", "1234567890"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, bankSCB.BankName, "Bob Smith", "2345678901"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, bankBBL.BankName, "Carol Davis", "3456789012"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, bankKTB.BankName, "David Wilson", "4567890123"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, bankBAY.BankName, "Eve Brown", "5678901234"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, bankBBL.BankName, "Frank Garcia", "6789012345"},
 	}
 
 	effDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -473,7 +484,9 @@ func main() {
 	}
 
 	// Ensure all existing employees are set to Full-time employment type
-	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL").Update("employment_type_id", fullTimeEmpType.ID)
+	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL AND companies_id = ?", sysComp.ID).Update("employment_type_id", fullTimeEmpTypeSys.ID)
+	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL AND companies_id = ?", compA.ID).Update("employment_type_id", fullTimeEmpTypeA.ID)
+	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL AND companies_id = ?", compB.ID).Update("employment_type_id", fullTimeEmpTypeB.ID)
 
 	// --- TimeLogs for March & April 2026 (payroll cycle test data with identical data) ---
 	// Fetch employees by email so we can reference their IDs

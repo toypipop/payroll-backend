@@ -61,15 +61,17 @@ type Bank struct {
 	SwiftCode string `gorm:"size:20" json:"swift_code"`
 }
 
-// EmploymentType is a global lookup for employment contract types
+// EmploymentType is a per-company lookup for employment contract types
 type EmploymentType struct {
 	ID        uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time             `json:"created_at"`
 	UpdatedAt time.Time             `json:"updated_at"`
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_type_name_deleted;not null;default:0" json:"-"`
 
-	Name        string `gorm:"uniqueIndex:idx_emp_type_name_deleted;not null;size:100" json:"name"` // e.g. Full-time
-	Description string `gorm:"size:255" json:"description"`
+	CompaniesID uint       `gorm:"uniqueIndex:idx_emp_type_company_name_deleted;not null;default:0" json:"companies_id"`
+	Companies   *Companies `gorm:"foreignKey:CompaniesID" json:"companies,omitempty"`
+	Name        string     `gorm:"uniqueIndex:idx_emp_type_company_name_deleted;not null;size:100" json:"name"`
+	Description string     `gorm:"size:255" json:"description"`
 }
 
 // Holiday manages public and company-specific holidays per company

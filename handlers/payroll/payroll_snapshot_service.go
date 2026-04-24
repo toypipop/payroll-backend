@@ -18,8 +18,7 @@ func calculateTaxByMethod(taxMethod string, taxableBase float64, taxDeductible f
 	case method == "none" || method == "no tax":
 		return 0.0
 	case method == "fixed" || method == "fixed rate":
-		// Fixed rate: 5% on taxable base (configurable via payroll config if needed)
-		return math.Round(taxableBase*0.05*100) / 100
+		return math.Round(math.Max(0, taxableBase-taxDeductible)*0.05*100) / 100
 	default:
 		// Default to Progressive for "Progressive", "Progressive Rate", or any unknown method
 		annualTaxableBase := (taxableBase - taxDeductible) * 12
@@ -94,8 +93,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		var empEarnings []models.EmployeeEarning
 		config.DB.Preload("EarningType").
-			Joins("JOIN earning_type ON earning_type.id = employee_earning.earning_type_id").
-			Where("employee_earning.employees_id = ? AND earning_type.is_permanent = ?", emp.ID, true).
+			Where("employees_id = ?", emp.ID).
 			Find(&empEarnings)
 
 		additionalEarning := 0.0
@@ -107,7 +105,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		var earningItems []earningItem
 		for _, ee := range empEarnings {
 			additionalEarning += ee.Amount
-			taxableBase += ee.Amount
+			if ee.EarningType.IsTaxable {
+				taxableBase += ee.Amount
+			}
 			if ee.EarningType.IsSso {
 				ssoBase += ee.Amount
 			}
@@ -122,7 +122,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		for _, ce := range cycleEarnings {
 			additionalEarning += ce.Amount
-			taxableBase += ce.Amount
+			if ce.EarningType.IsTaxable {
+				taxableBase += ce.Amount
+			}
 			if ce.EarningType.IsSso {
 				ssoBase += ce.Amount
 			}
@@ -212,6 +214,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		additionalDeduction := 0.0
 		taxDeductible := 0.0
+		ssoDeductible := 0.0
 		type deductionItem struct {
 			name            string
 			amount          float64
@@ -222,6 +225,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			additionalDeduction += ed.Amount
 			if ed.DeductionType.IsTaxDeductible {
 				taxDeductible += ed.Amount
+			}
+			if ed.DeductionType.IsSsoDeductible {
+				ssoDeductible += ed.Amount
 			}
 			dtID := ed.DeductionTypeID
 			deductionItems = append(deductionItems, deductionItem{name: ed.DeductionType.Name, amount: ed.Amount, deductionTypeID: &dtID})
@@ -236,6 +242,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			additionalDeduction += cd.Amount
 			if cd.DeductionType.IsTaxDeductible {
 				taxDeductible += cd.Amount
+			}
+			if cd.DeductionType.IsSsoDeductible {
+				ssoDeductible += cd.Amount
 			}
 			dtID := cd.DeductionTypeID
 			deductionItems = append(deductionItems, deductionItem{name: cd.DeductionType.Name, amount: cd.Amount, deductionTypeID: &dtID})
@@ -293,6 +302,9 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			absentDeduction = math.Round(float64(totalAbsentDays)*attendanceConfig.AbsentRatePerDay*100) / 100
 		}
 
+		// Thai law: tax and SSO apply on actual earned income — subtract late/absent first
+		taxableBase = math.Max(0, taxableBase-lateDeduction-absentDeduction)
+		ssoBase = math.Max(0, ssoBase-ssoDeductible-lateDeduction-absentDeduction)
 		ssoAmount := 0.0
 		if ssoBase >= payrollConfig.SsoMinSalary {
 			computed := ssoBase * payrollConfig.SsoRate / 100

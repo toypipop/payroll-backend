@@ -115,16 +115,6 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "EDIT"), cfghandler.UpdateEmploymentType)
 		api.DELETE("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "DELETE"), middleware.PreventDeleteIfReferenced("employment_type"), cfghandler.DeleteEmploymentType)
 
-		api.GET("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), cfghandler.GetEarningCategories)
-		api.POST("/master/earning-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), cfghandler.CreateEarningCategory)
-		api.PUT("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), cfghandler.UpdateEarningCategory)
-		api.DELETE("/master/earning-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), middleware.PreventDeleteIfReferenced("earning_category"), cfghandler.DeleteEarningCategory)
-
-		api.GET("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "VIEW"), cfghandler.GetDeductionCategories)
-		api.POST("/master/deduction-categories", middleware.CheckPermission("EarningCategoryPage", "CREATE"), cfghandler.CreateDeductionCategory)
-		api.PUT("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "EDIT"), cfghandler.UpdateDeductionCategory)
-		api.DELETE("/master/deduction-categories/:id", middleware.CheckPermission("EarningCategoryPage", "DELETE"), middleware.PreventDeleteIfReferenced("deduction_category"), cfghandler.DeleteDeductionCategory)
-
 		// --- Settings ---
 		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), sethandler.GetDepartments)
 		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartment)
