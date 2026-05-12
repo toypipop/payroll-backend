@@ -3,6 +3,7 @@
 Agent playbook for `payroll-backend`.
 This repository is a Go (Gin + GORM + MySQL) backend for payroll, attendance, and reporting.
 Follow these conventions when editing code, adding tests, or running local checks.
+The companion React/Vite frontend lives next to this repo at `../payroll-frontend`.
 
 ## Rule Sources
 
@@ -20,15 +21,18 @@ Follow these conventions when editing code, adding tests, or running local check
 - `middleware/*`: auth, permission checks, delete guards.
 - `models/*`: GORM models, enums, request/response structs.
 - `repository/*`: query scopes and cross-entity helpers.
+- `migrations/*`: ad hoc SQL migrations that are not covered by GORM auto-migration.
 - `config/database.go`: DB bootstrap and global `config.DB`.
 
 ## Environment Assumptions
 
 - Go version from `go.mod`: `1.25.5`.
-- Database: MySQL on `127.0.0.1:3306`.
-- Default DB name in code: `PayrollDB`.
+- Database: MySQL on `127.0.0.1:3306` by default.
+- Default DB name in code and local `.env`: `PayrollDB`.
 - App listens on port `8000`.
 - Frontend CORS allowlist includes `http://localhost:5173`.
+- Local config is loaded from `.env` with `godotenv`; important keys are `JWT_SECRET`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME`.
+- API base path is `/api/v1`; the frontend typically points `VITE_API_URL` to `http://localhost:8000/api/v1`.
 
 ## Build, Run, Lint, and Test Commands
 
@@ -40,6 +44,7 @@ Run from repository root.
 - `go build ./...` - compile all packages.
 - `go run .` - run API server from `main.go`.
 - `go run ./seed` - run seed script (requires reachable MySQL).
+- `go run .` also runs GORM `AutoMigrate` before starting the server.
 
 ### Formatting and static analysis
 
@@ -72,6 +77,7 @@ Run from repository root.
 - If behavior changes, add/update tests in the same package as the changed code.
 - Run at least: `go test ./...` and `go vet ./...` before finishing.
 - If database logic changes, sanity-check with `go run ./seed` against local MySQL.
+- For API contract changes, check the matching frontend page/API usage in `../payroll-frontend/src` before finishing.
 
 ## Code Style Guidelines
 
@@ -105,6 +111,7 @@ Run from repository root.
 ### Handler conventions (Gin)
 
 - Parse inputs with `ShouldBindJSON` and validate immediately.
+- Read path params, query params, and auth context using existing local patterns in nearby handlers.
 - Return JSON errors with stable keys, primarily `{"error": "..."}`.
 - Use correct HTTP status codes:
 - `400` bad request, `401` unauthorized, `403` forbidden, `404` not found,
@@ -118,6 +125,8 @@ Run from repository root.
 - Prefer `Preload` only for fields actually needed by the response.
 - For cross-table checks, place reusable logic in `repository/*`.
 - Use transactions for multi-step writes that must be atomic.
+- The project uses singular table names via `schema.NamingStrategy{SingularTable: true}`.
+- Keep raw SQL migrations in `migrations/*` when a schema change cannot be represented safely by auto-migration alone.
 
 ### Error handling
 
@@ -153,6 +162,17 @@ Run from repository root.
 - Register new endpoints in `routes/routes.go` under the correct domain block.
 - Protect private endpoints with `AuthMiddleware()` and `CheckPermission(...)`.
 - Keep module keys and action names consistent with seeded module access data.
+- `POST /api/v1/auth/login` is public and returns the JWT plus basic user info consumed by the frontend.
+- `GET /api/v1/modules` is public and returns active `AppModule` rows sorted by `order`; the frontend uses it for routes, sidebar navigation, and breadcrumbs.
+- Seeded `AppModule.ModuleKey` values must match frontend page filenames exactly, for example `EmployeesListPage` maps to `../payroll-frontend/src/pages/**/EmployeesListPage.jsx`.
+- If adding or renaming modules, update `seed/main.go`, route permission keys, and the frontend page file/routes together.
+
+### Frontend contract notes
+
+- Companion frontend: `../payroll-frontend`, built with React 19, Vite, and React Router v7.
+- Frontend API client: `../payroll-frontend/src/api/axiosInstance.js`.
+- Frontend stores `token` and `user` in `localStorage`; 401 responses clear auth and redirect to `/login`.
+- Keep response JSON shapes stable for existing pages unless the frontend is updated in the same change.
 
 ## Testing Guidance to Add New Tests
 
