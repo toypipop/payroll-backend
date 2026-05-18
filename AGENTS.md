@@ -30,8 +30,8 @@ The companion React/Vite frontend lives next to this repo at `../payroll-fronten
 - Database: MySQL on `127.0.0.1:3306` by default.
 - Default DB name in code and local `.env`: `PayrollDB`.
 - App listens on port `8000`.
-- Frontend CORS allowlist includes `http://localhost:5173`.
-- Local config is loaded from `.env` with `godotenv`; important keys are `JWT_SECRET`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, and `DB_NAME`.
+- Frontend CORS allowlist defaults to `http://localhost:5173`; production/custom origins can be set with `CORS_ALLOWED_ORIGINS` or `FRONTEND_ORIGIN`.
+- Local config is loaded from `.env` with `godotenv`; important keys are `JWT_SECRET`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`, and optionally `CORS_ALLOWED_ORIGINS`, `FRONTEND_ORIGIN`, `APP_ENV`, `GO_ENV`, or `GIN_MODE`.
 - API base path is `/api/v1`; the frontend typically points `VITE_API_URL` to `http://localhost:8000/api/v1`.
 
 ## Build, Run, Lint, and Test Commands
@@ -144,6 +144,10 @@ Run from repository root.
 - Never hardcode credentials, DSNs, or JWT secrets in new code.
 - Prefer environment variables for all secrets and environment-specific values.
 - Do not commit real credentials or tokens.
+- JWT auth is cookie-based. Do not return JWTs in response bodies and do not rely on `Authorization: Bearer` headers for browser auth.
+- Login should set the JWT in the httpOnly `auth_token` cookie; logout should clear that cookie.
+- The auth cookie must be `HttpOnly`, `Path=/`, have an expiration/max age, and use `Secure=true` in production. Localhost/dev may use `Secure=false`.
+- Validate JWT signature, signing method, and expiration in `AuthMiddleware`; invalid or expired cookies must return `401`.
 - Avoid returning raw internal errors (`err.Error()`) in API responses for operational/database failures.
 - Avoid `config.DB.Debug()` in normal runtime code; reserve SQL debug logs for temporary troubleshooting.
 
@@ -162,7 +166,9 @@ Run from repository root.
 - Register new endpoints in `routes/routes.go` under the correct domain block.
 - Protect private endpoints with `AuthMiddleware()` and `CheckPermission(...)`.
 - Keep module keys and action names consistent with seeded module access data.
-- `POST /api/v1/auth/login` is public and returns the JWT plus basic user info consumed by the frontend.
+- `POST /api/v1/auth/login` is public, sets the httpOnly auth cookie, and returns only non-sensitive user profile data.
+- `GET /api/v1/auth/me` validates the auth cookie and returns non-sensitive user profile data for frontend route guards.
+- `POST /api/v1/auth/logout` clears the auth cookie.
 - `GET /api/v1/modules` is public and returns active `AppModule` rows sorted by `order`; the frontend uses it for routes, sidebar navigation, and breadcrumbs.
 - Seeded `AppModule.ModuleKey` values must match frontend page filenames exactly, for example `EmployeesListPage` maps to `../payroll-frontend/src/pages/**/EmployeesListPage.jsx`.
 - If adding or renaming modules, update `seed/main.go`, route permission keys, and the frontend page file/routes together.
@@ -171,7 +177,9 @@ Run from repository root.
 
 - Companion frontend: `../payroll-frontend`, built with React 19, Vite, and React Router v7.
 - Frontend API client: `../payroll-frontend/src/api/axiosInstance.js`.
-- Frontend stores `token` and `user` in `localStorage`; 401 responses clear auth and redirect to `/login`.
+- Frontend axios uses `withCredentials: true`; the browser sends the httpOnly auth cookie automatically.
+- Frontend must not store JWTs in `localStorage` or `sessionStorage`; it may store only non-sensitive user display/profile data.
+- 401 responses clear frontend profile state and redirect to `/login`.
 - Keep response JSON shapes stable for existing pages unless the frontend is updated in the same change.
 
 ## Testing Guidance to Add New Tests
