@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"payroll-backend/config"
+	"payroll-backend/migrations"
 	"payroll-backend/models"
 	"time"
 
@@ -19,6 +20,10 @@ func main() {
 		log.Println("No .env file found, using system environment")
 	}
 	config.ConnectDatabase()
+
+	if err := migrations.DropLegacyIndexes(config.DB); err != nil {
+		log.Fatalf("Legacy index cleanup failed: %v", err)
+	}
 
 	err := config.DB.AutoMigrate(
 		&models.Roles{},

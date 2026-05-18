@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"payroll-backend/config"
+	"payroll-backend/migrations"
 	"payroll-backend/models"
 	"payroll-backend/routes"
 
@@ -21,6 +22,10 @@ func main() {
 	// 2. Run Database Migration
 	// This will create or update tables based on your structs
 	fmt.Println("Running Database Migration...")
+	if err := migrations.DropLegacyIndexes(config.DB); err != nil {
+		log.Fatalf("Legacy index cleanup failed: %v", err)
+	}
+
 	err := config.DB.AutoMigrate(
 		&models.Roles{},
 		&models.AppModule{},
