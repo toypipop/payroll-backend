@@ -14,6 +14,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	authCookieName = "auth_token"
+	authTokenTTL   = 24 * time.Hour
+)
+
 func GetJWTSecret() ([]byte, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if strings.TrimSpace(secret) == "" {
@@ -28,6 +33,62 @@ type TokenClaims struct {
 	RolesID      uint `json:"roles_id"`
 	IsSuperAdmin bool `json:"is_super_admin"`
 	jwt.RegisteredClaims
+}
+
+func isProduction() bool {
+	return strings.EqualFold(os.Getenv("APP_ENV"), "production") ||
+		strings.EqualFold(os.Getenv("GO_ENV"), "production") ||
+		strings.EqualFold(os.Getenv("GIN_MODE"), "release")
+}
+
+func cookieSameSite() http.SameSite {
+	if isProduction() {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
+func cookieSecure() bool {
+	return isProduction()
+}
+
+func SetAuthCookie(c *gin.Context, tokenString string) {
+	c.SetSameSite(cookieSameSite())
+	c.SetCookie(
+		authCookieName,
+		tokenString,
+		int(authTokenTTL.Seconds()),
+		"/",
+		"",
+		cookieSecure(),
+		true,
+	)
+}
+
+func ClearAuthCookie(c *gin.Context) {
+	c.SetSameSite(cookieSameSite())
+	c.SetCookie(
+		authCookieName,
+		"",
+		-1,
+		"/",
+		"",
+		cookieSecure(),
+		true,
+	)
+}
+
+func GetAuthCookieName() string {
+	return authCookieName
+}
+
+func buildLoginResponse(employee models.Employees) models.LoginResponse {
+	return models.LoginResponse{
+		ID:          employee.ID,
+		FullName:    employee.FirstName + " " + employee.LastName,
+		Roles:       employee.Roles.RolesName,
+		CompaniesID: employee.CompaniesID,
+	}
 }
 
 func Login(c *gin.Context) {
@@ -65,7 +126,7 @@ func Login(c *gin.Context) {
 		RolesID:      Employees.RolesID,
 		IsSuperAdmin: Employees.Roles.IsSuperAdmin,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(authTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
@@ -78,13 +139,29 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Return login response
-	c.JSON(http.StatusOK, models.LoginResponse{
-		Token:    tokenString,
-		ID:       Employees.ID,
-		FullName: Employees.FirstName + " " + Employees.LastName,
-		Roles:    Employees.Roles.RolesName,
-	})
+	SetAuthCookie(c, tokenString)
+	c.JSON(http.StatusOK, buildLoginResponse(Employees))
+}
+
+func Me(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var employee models.Employees
+	if err := config.DB.Preload("Roles").First(&employee, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	c.JSON(http.StatusOK, buildLoginResponse(employee))
+}
+
+func Logout(c *gin.Context) {
+	ClearAuthCookie(c)
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
 func GetAppModules(c *gin.Context) {

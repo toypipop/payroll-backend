@@ -3,7 +3,6 @@ package middleware
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"payroll-backend/config"
 	authhandler "payroll-backend/handlers/auth"
@@ -16,23 +15,13 @@ import (
 // AuthMiddleware validates JWT and extracts tenant
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get token from Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+		tokenString, err := c.Cookie(authhandler.GetAuthCookieName())
+		if err != nil || tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication cookie is required"})
 			c.Abort()
 			return
 		}
 
-		// Validate Bearer token prefix
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
-			c.Abort()
-			return
-		}
-
-		tokenString := parts[1]
 		claims := &authhandler.TokenClaims{}
 
 		jwtSecret, err := authhandler.GetJWTSecret()
@@ -44,6 +33,9 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// Parse and validate JWT token
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, jwt.ErrTokenSignatureInvalid
+			}
 			return jwtSecret, nil
 		})
 
