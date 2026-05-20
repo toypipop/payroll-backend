@@ -20,7 +20,7 @@ func GetPayrollCycles(c *gin.Context) {
 	}
 
 	var cycles []models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
 		Preload("Companies").
 		Order("created_at DESC").Find(&cycles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -56,15 +56,10 @@ func CreatePayrollCycle(c *gin.Context) {
 	}
 
 	// Resolve target company — validate access via ApplyScopes
-	targetCompaniesID := currentUser.CompaniesID
-	if input.CompaniesID != 0 {
-		var company models.Companies
-		if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "id", "id")).
-			First(&company, input.CompaniesID).Error; err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to the specified company"})
-			return
-		}
-		targetCompaniesID = company.ID
+	targetCompaniesID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to the specified company"})
+		return
 	}
 
 	cycle := models.PayrollCycle{
@@ -93,7 +88,7 @@ func ClosePayrollCycle(c *gin.Context) {
 
 	cycleID := c.Param("id")
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found"})
 		return

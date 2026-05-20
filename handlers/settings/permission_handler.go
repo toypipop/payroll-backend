@@ -33,7 +33,7 @@ func GetRolesPermissions(c *gin.Context) {
 
 	var access []models.RolesModuleAccess
 	// Apply composite scopes for tenant and data access
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_accesses.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles_module_access.companies_id", "unused")).
 		Where("roles_id = ?", rolesID).
 		Find(&access).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch access"})
@@ -72,23 +72,29 @@ func UpdateRolesPermissions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	rID := parseUint(rolesID)
+	var role models.Roles
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id")).
+		First(&role, rID).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this role"})
+		return
+	}
 
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
 		// Apply Scopes to ensure the user only deletes permissions within their authorized companies/access
-		if err := tx.Scopes(repository.ApplyScopes(currentUser, dataScope, "roles_module_accesses.companies_id", "unused")).
+		if err := tx.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles_module_access.companies_id", "unused")).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err
 		}
 
 		if len(input) > 0 {
-			rID := parseUint(rolesID)
 			var newPermissions []models.RolesModuleAccess
 
 			for _, item := range input {
 				newPermissions = append(newPermissions, models.RolesModuleAccess{
 					RolesID:     rID,
-					CompaniesID: currentUser.CompaniesID, // Use Companies ID from validated currentUser
+					CompaniesID: role.CompaniesID,
 					ModuleID:    item.ModuleID,
 					CanView:     item.CanView,
 					CanCreate:   item.CanCreate,

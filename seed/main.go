@@ -15,6 +15,21 @@ func ptr(u uint) *uint {
 	return &u
 }
 
+func upsertEmployeeCompanyRole(employeeID, companyID, roleID uint, isDefault bool) {
+	mapping := models.EmployeeCompanyRole{
+		EmployeeID: employeeID,
+		CompanyID:  companyID,
+		RoleID:     roleID,
+		IsDefault:  isDefault,
+		IsActive:   true,
+	}
+	config.DB.Where(models.EmployeeCompanyRole{
+		EmployeeID: employeeID,
+		CompanyID:  companyID,
+		RoleID:     roleID,
+	}).Assign(mapping).FirstOrCreate(&mapping)
+}
+
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment")
@@ -56,9 +71,13 @@ func main() {
 		&models.LeaveTypeSetting{},
 		&models.EarningCategory{},
 		&models.DeductionCategory{},
+		&models.EmployeeCompanyRole{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
+	}
+	if err := migrations.BackfillEmployeeCompanyRoles(config.DB); err != nil {
+		log.Fatalf("Employee-company-role backfill failed: %v", err)
 	}
 
 	// Initialize companies
@@ -387,13 +406,14 @@ func main() {
 		{ModuleName: "Position", ModuleKey: "PositionSettings", RoutePath: "/positions", Icon: "WorkOutline", Order: 2, ParentID: ptr(6)},
 		{ModuleName: "Roles", ModuleKey: "RolesPage", RoutePath: "/roles", Icon: "ManageAccounts", Order: 3, ParentID: ptr(6)},
 		{ModuleName: "Permission", ModuleKey: "PermissionSettings", RoutePath: "/permissions", Icon: "LockPerson", Order: 4, ParentID: ptr(6)},
-		{ModuleName: "Companies", ModuleKey: "CompaniesPage", RoutePath: "/companies", Icon: "Business", Order: 5, ParentID: ptr(6)},
-		{ModuleName: "Attendance Settings", ModuleKey: "AttendanceSettingsPage", RoutePath: "/attendance-settings", Icon: "Tune", Order: 6, ParentID: ptr(6)},
-		{ModuleName: "Bank Master", ModuleKey: "MasterBankPage", RoutePath: "/master-banks", Icon: "AccountBalance", Order: 7, ParentID: ptr(6)},
-		{ModuleName: "Holiday Calendar", ModuleKey: "HolidayCalendarPage", RoutePath: "/holidays", Icon: "CalendarMonth", Order: 8, ParentID: ptr(6)},
-		{ModuleName: "Day Off", ModuleKey: "DayOffPage", RoutePath: "/day-offs", Icon: "EventAvailable", Order: 9, ParentID: ptr(6)},
-		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 10, ParentID: ptr(6)},
-		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 11, ParentID: ptr(6)},
+		{ModuleName: "Employee Company Access", ModuleKey: "EmployeeCompanyAccessPage", RoutePath: "/employee-company-access", Icon: "AdminPanelSettings", Order: 5, ParentID: ptr(6)},
+		{ModuleName: "Companies", ModuleKey: "CompaniesPage", RoutePath: "/companies", Icon: "Business", Order: 6, ParentID: ptr(6)},
+		{ModuleName: "Attendance Settings", ModuleKey: "AttendanceSettingsPage", RoutePath: "/attendance-settings", Icon: "Tune", Order: 7, ParentID: ptr(6)},
+		{ModuleName: "Bank Master", ModuleKey: "MasterBankPage", RoutePath: "/master-banks", Icon: "AccountBalance", Order: 8, ParentID: ptr(6)},
+		{ModuleName: "Holiday Calendar", ModuleKey: "HolidayCalendarPage", RoutePath: "/holidays", Icon: "CalendarMonth", Order: 9, ParentID: ptr(6)},
+		{ModuleName: "Day Off", ModuleKey: "DayOffPage", RoutePath: "/day-offs", Icon: "EventAvailable", Order: 10, ParentID: ptr(6)},
+		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 11, ParentID: ptr(6)},
+		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 12, ParentID: ptr(6)},
 
 		// Level 2: Sub-Menus under Reports
 		{ModuleName: "Payslips", ModuleKey: "PayslipsReportPage", RoutePath: "/payslips", Icon: "Description", Order: 1, ParentID: ptr(7)},
@@ -445,6 +465,9 @@ func main() {
 			FirstName:     "System", LastName: "Admin",
 			Password: hashStr, DeptID: sysDept.ID, PosID: sysPos.ID,
 		}).FirstOrCreate(&admin)
+	upsertEmployeeCompanyRole(admin.ID, sysComp.ID, sysRole.ID, true)
+	upsertEmployeeCompanyRole(admin.ID, compA.ID, sysRole.ID, false)
+	upsertEmployeeCompanyRole(admin.ID, compB.ID, sysRole.ID, false)
 
 	type empSeed struct {
 		emp         models.Employees
@@ -470,6 +493,7 @@ func main() {
 	for _, s := range usersToSeed {
 		var existingEmp models.Employees
 		config.DB.Unscoped().Where(models.Employees{Email: s.emp.Email}).Assign(s.emp).FirstOrCreate(&existingEmp)
+		upsertEmployeeCompanyRole(existingEmp.ID, s.emp.CompaniesID, s.emp.RolesID, true)
 
 		// Update bank fields on employee
 		config.DB.Model(&existingEmp).Updates(map[string]interface{}{

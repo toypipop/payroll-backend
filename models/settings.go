@@ -47,6 +47,7 @@ type Companies struct {
 	Phone            string                `json:"phone"`
 	PayrollConfig    *PayrollConfig        `gorm:"foreignKey:CompaniesID" json:"payroll_config"`
 	AttendanceConfig *AttendanceConfig     `gorm:"foreignKey:CompaniesID" json:"attendance_config"`
+	EmployeeRoles    []EmployeeCompanyRole `gorm:"foreignKey:CompanyID" json:"employee_roles,omitempty"`
 }
 
 // Bank is a global lookup table for Thai banks (not per-company)

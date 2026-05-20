@@ -21,7 +21,7 @@ func GetAttendanceConfigs(c *gin.Context) {
 
 	var companies []models.Companies
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
 	).Preload("AttendanceConfig").Find(&companies).Error
 
 	if err != nil {
@@ -75,7 +75,7 @@ func UpdateAttendanceConfig(c *gin.Context) {
 
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return

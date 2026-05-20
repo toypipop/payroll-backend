@@ -134,7 +134,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		// Use check_in for both bounds: a workday belongs to the date the employee clocked in.
 		// EndDate is stored as midnight UTC, so check_out <= EndDate drops the entire last day.
-		endOfCycle := cycle.EndDate.Truncate(24 * time.Hour).AddDate(0, 0, 1)
+		endOfCycle := cycle.EndDate.Truncate(24*time.Hour).AddDate(0, 0, 1)
 		var timeLogs []models.TimeLog
 		config.DB.Where(
 			"employees_id = ? AND check_in >= ? AND check_in < ? AND check_in IS NOT NULL AND check_out IS NOT NULL",

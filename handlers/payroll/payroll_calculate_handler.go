@@ -59,7 +59,7 @@ func CalculatePayroll(c *gin.Context) {
 
 	// 1. Fetch & validate cycle - must belong to user's company and not be closed
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found"})
 		return
@@ -104,7 +104,7 @@ func GetPayrollTransactions(c *gin.Context) {
 
 	// Verify the cycle belongs to the user's company
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Cycle not found"})
 		return
@@ -151,7 +151,7 @@ func GetPayrollSlip(c *gin.Context) {
 
 	// Verify the transaction's cycle belongs to the user's company (authorization check)
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
 		First(&cycle, transaction.CycleID).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
@@ -165,7 +165,7 @@ func GetPayrollSlip(c *gin.Context) {
 
 	// Load company profile for payslip header
 	var company models.Companies
-	config.DB.First(&company, currentUser.CompaniesID)
+	config.DB.First(&company, cycle.CompaniesID)
 
 	c.JSON(http.StatusOK, gin.H{"cycle": cycle, "slip": transaction, "company": company})
 }

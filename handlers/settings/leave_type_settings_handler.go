@@ -20,7 +20,7 @@ func GetLeaveTypeSettings(c *gin.Context) {
 
 	var leaveTypes []models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
 	).Preload("Companies").Order("name").Find(&leaveTypes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave types"})
 		return
@@ -34,10 +34,15 @@ func CreateLeaveTypeSetting(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
-	lt.CompaniesID = currentUser.CompaniesID
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, lt.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	lt.CompaniesID = companyID
 
 	if err := config.DB.Create(&lt).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create leave type"})
@@ -58,7 +63,7 @@ func UpdateLeaveTypeSetting(c *gin.Context) {
 
 	var lt models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
 	).Where("id = ?", id).First(&lt).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Leave type not found or unauthorized"})
 		return
@@ -89,7 +94,7 @@ func DeleteLeaveTypeSetting(c *gin.Context) {
 
 	var lt models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
 	).Where("id = ?", id).First(&lt).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Leave type not found or unauthorized"})
 		return

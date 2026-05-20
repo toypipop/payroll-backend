@@ -8,8 +8,9 @@ type LoginRequest struct {
 
 // LoginResponse sent to client
 type LoginResponse struct {
-	ID          uint   `json:"id"`
-	FullName    string `json:"full_name"`
-	Roles       string `json:"roles"`
-	CompaniesID uint   `json:"companies_id"`
+	ID                   uint     `json:"id"`
+	FullName             string   `json:"full_name"`
+	Roles                []string `json:"roles"`
+	CompaniesID          uint     `json:"companies_id"`
+	AccessibleCompanyIDs []uint   `json:"accessible_company_ids"`
 }

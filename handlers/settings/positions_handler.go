@@ -19,7 +19,7 @@ func GetPositions(c *gin.Context) {
 
 	var positions []models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "unused"),
 	).Preload("Companies").Find(&positions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
 		return
@@ -34,11 +34,16 @@ func CreatePosition(c *gin.Context) {
 		return
 	}
 
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
-	pos.CompaniesID = currentUser.CompaniesID
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, pos.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	pos.CompaniesID = companyID
 
 	if err := config.DB.Create(&pos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create position"})
@@ -56,14 +61,15 @@ func UpdatePosition(c *gin.Context) {
 
 	var pos models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "position.id"),
 	).Where("id = ?", id).First(&pos).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
 		return
 	}
 
 	var input struct {
-		PosName string `json:"pos_name" binding:"required"`
+		PosName     string `json:"pos_name" binding:"required"`
+		CompaniesID uint   `json:"companies_id"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -71,8 +77,13 @@ func UpdatePosition(c *gin.Context) {
 	}
 
 	// Position name is non-calculation metadata and can be updated even if used.
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
 	pos.PosName = input.PosName
-	pos.CompaniesID = currentUser.CompaniesID
+	pos.CompaniesID = companyID
 	config.DB.Save(&pos)
 	c.JSON(http.StatusOK, pos)
 }
@@ -86,14 +97,14 @@ func DeletePosition(c *gin.Context) {
 
 	var pos models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "position.id"),
 	).Where("id = ?", id).First(&pos).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
 		return
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "position.id"),
 	).Where("id = ?", id).Delete(&models.Position{})
 
 	if result.RowsAffected == 0 {

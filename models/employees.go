@@ -15,7 +15,7 @@ type Employees struct {
 	// Set default:0 to ensure unique index works correctly with soft delete (English Comment)
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_code_companies_deleted;uniqueIndex:idx_email_companies_deleted;not null;default:0" json:"-"`
 
-	// Multi-tenancy support
+	// Legacy/default tenant. Company access is stored in EmployeeCompanyRole.
 	CompaniesID uint `gorm:"uniqueIndex:idx_emp_code_companies_deleted;uniqueIndex:idx_email_companies_deleted;not null" json:"companies_id"`
 
 	// Added size:100 to prevent BLOB/TEXT error in MySQL Index (English Comment)
@@ -41,13 +41,14 @@ type Employees struct {
 	AccountNo   string `gorm:"size:50" json:"account_no"`
 
 	// Relations
-	Companies         Companies         `gorm:"foreignKey:CompaniesID" json:"companies"`
-	Department        Department        `gorm:"foreignKey:DeptID" json:"department"`
-	Position          Position          `gorm:"foreignKey:PosID" json:"position"`
-	Roles             Roles             `gorm:"foreignKey:RolesID" json:"roles"`
-	SalariesStructure SalariesStructure `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
-	EmploymentType    *EmploymentType   `gorm:"foreignKey:EmploymentTypeID" json:"employment_type"`
-	Bank              *Bank             `gorm:"foreignKey:BankID" json:"bank"`
+	Companies         Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
+	CompanyRoles      []EmployeeCompanyRole `gorm:"foreignKey:EmployeeID" json:"company_roles,omitempty"`
+	Department        Department            `gorm:"foreignKey:DeptID" json:"department"`
+	Position          Position              `gorm:"foreignKey:PosID" json:"position"`
+	Roles             Roles                 `gorm:"foreignKey:RolesID" json:"roles"`
+	SalariesStructure SalariesStructure     `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
+	EmploymentType    *EmploymentType       `gorm:"foreignKey:EmploymentTypeID" json:"employment_type"`
+	Bank              *Bank                 `gorm:"foreignKey:BankID" json:"bank"`
 }
 
 // SalariesStructure defines the base pay for each Employees

@@ -19,7 +19,7 @@ func GetEmployeeEarnings(c *gin.Context) {
 
 	var items []models.EmployeeEarning
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employee_earnings.companies_id", "employee_earnings.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_earning.companies_id", "employee_earning.employees_id"),
 	).
 		Preload("EarningType").
 		Preload("Employees").
@@ -32,9 +32,9 @@ func GetEmployeeEarnings(c *gin.Context) {
 }
 
 func CreateEmployeeEarning(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var input models.EmployeeEarning
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -42,7 +42,14 @@ func CreateEmployeeEarning(c *gin.Context) {
 		return
 	}
 	input.ID = 0
-	input.CompaniesID = currentUser.CompaniesID
+	var targetEmployee models.Employees
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
+		Select("id, companies_id").
+		First(&targetEmployee, input.EmployeesID).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+		return
+	}
+	input.CompaniesID = targetEmployee.CompaniesID
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create employee earning"})
@@ -54,13 +61,13 @@ func CreateEmployeeEarning(c *gin.Context) {
 
 func UpdateEmployeeEarning(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var item models.EmployeeEarning
-	if err := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
-		First(&item).Error; err != nil {
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employee_earning.companies_id", "employee_earning.employees_id")).
+		Where("id = ?", id).First(&item).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
@@ -70,9 +77,17 @@ func UpdateEmployeeEarning(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	var targetEmployee models.Employees
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
+		Select("id, companies_id").
+		First(&targetEmployee, input.EmployeesID).Error; err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+		return
+	}
 
 	if err := config.DB.Model(&item).Updates(map[string]interface{}{
 		"amount":          input.Amount,
+		"companies_id":    targetEmployee.CompaniesID,
 		"earning_type_id": input.EarningTypeID,
 		"employees_id":    input.EmployeesID,
 	}).Error; err != nil {
@@ -85,11 +100,12 @@ func UpdateEmployeeEarning(c *gin.Context) {
 
 func DeleteEmployeeEarning(c *gin.Context) {
 	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
-	result := config.DB.Where("id = ? AND companies_id = ?", id, currentUser.CompaniesID).
+	result := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employee_earning.companies_id", "employee_earning.employees_id")).
+		Where("id = ?", id).
 		Delete(&models.EmployeeEarning{})
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})

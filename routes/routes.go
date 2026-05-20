@@ -160,6 +160,11 @@ func SetupRouter() *gin.Engine {
 		api.GET("/permissions/:id", middleware.CheckPermission("PermissionSettings", "VIEW"), sethandler.GetRolesPermissions)
 		api.POST("/permissions/:id", middleware.CheckPermission("PermissionSettings", "EDIT"), sethandler.UpdateRolesPermissions)
 
+		api.GET("/employee-company-access", middleware.CheckPermission("EmployeeCompanyAccessPage", "VIEW"), sethandler.GetEmployeeCompanyAccess)
+		api.POST("/employee-company-access", middleware.CheckPermission("EmployeeCompanyAccessPage", "CREATE"), sethandler.CreateEmployeeCompanyAccess)
+		api.PUT("/employee-company-access/:id", middleware.CheckPermission("EmployeeCompanyAccessPage", "EDIT"), sethandler.UpdateEmployeeCompanyAccess)
+		api.DELETE("/employee-company-access/:id", middleware.CheckPermission("EmployeeCompanyAccessPage", "DELETE"), sethandler.DeleteEmployeeCompanyAccess)
+
 		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetAllCompanies)
 		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetCompanies)
 		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), sethandler.CreateCompanies)

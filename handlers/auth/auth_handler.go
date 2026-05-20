@@ -6,6 +6,7 @@ import (
 	"os"
 	"payroll-backend/config"
 	"payroll-backend/models"
+	"payroll-backend/repository"
 	"strings"
 	"time"
 
@@ -83,11 +84,18 @@ func GetAuthCookieName() string {
 }
 
 func buildLoginResponse(employee models.Employees) models.LoginResponse {
+	companyID := repository.DefaultCompanyID(employee)
+	companyIDs := repository.AccessibleCompanyIDs(employee.ID)
+	if len(companyIDs) == 0 && companyID != 0 {
+		companyIDs = []uint{companyID}
+	}
+
 	return models.LoginResponse{
-		ID:          employee.ID,
-		FullName:    employee.FirstName + " " + employee.LastName,
-		Roles:       employee.Roles.RolesName,
-		CompaniesID: employee.CompaniesID,
+		ID:                   employee.ID,
+		FullName:             employee.FirstName + " " + employee.LastName,
+		Roles:                repository.RoleNames(employee.ID),
+		CompaniesID:          companyID,
+		AccessibleCompanyIDs: companyIDs,
 	}
 }
 
@@ -100,8 +108,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Find and load employee with roles
-	if err := config.DB.Preload("Roles").Where("email = ?", input.Email).First(&Employees).Error; err != nil {
+	if err := config.DB.Where("email = ?", input.Email).First(&Employees).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
 		return
 	}
@@ -122,9 +129,9 @@ func Login(c *gin.Context) {
 	// Create JWT token with claims
 	claims := TokenClaims{
 		UserID:       Employees.ID,
-		CompaniesID:  Employees.CompaniesID,
+		CompaniesID:  repository.DefaultCompanyID(Employees),
 		RolesID:      Employees.RolesID,
-		IsSuperAdmin: Employees.Roles.IsSuperAdmin,
+		IsSuperAdmin: false,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(authTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -151,7 +158,7 @@ func Me(c *gin.Context) {
 	}
 
 	var employee models.Employees
-	if err := config.DB.Preload("Roles").First(&employee, userID).Error; err != nil {
+	if err := config.DB.First(&employee, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}

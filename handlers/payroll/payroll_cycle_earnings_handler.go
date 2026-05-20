@@ -25,7 +25,7 @@ func GetCycleEarnings(c *gin.Context) {
 
 	var items []models.PayrollCycleEarning
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_earnings.companies_id", "payroll_cycle_earnings.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
 	).
 		Preload("EarningType").
 		Preload("Employees").
@@ -94,7 +94,7 @@ func UpdateCycleEarning(c *gin.Context) {
 
 	var item models.PayrollCycleEarning
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_earnings.companies_id", "payroll_cycle_earnings.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
 	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
@@ -142,7 +142,7 @@ func DeleteCycleEarning(c *gin.Context) {
 
 	var item models.PayrollCycleEarning
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_earnings.companies_id", "payroll_cycle_earnings.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
 	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return

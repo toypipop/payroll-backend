@@ -20,7 +20,7 @@ func GetWorkLocations(c *gin.Context) {
 
 	var locations []models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
 	).Preload("Companies").Order("name").Find(&locations).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work locations"})
 		return
@@ -34,10 +34,15 @@ func CreateWorkLocation(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
-	loc.CompaniesID = currentUser.CompaniesID
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, loc.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	loc.CompaniesID = companyID
 
 	if err := config.DB.Create(&loc).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work location"})
@@ -58,7 +63,7 @@ func UpdateWorkLocation(c *gin.Context) {
 
 	var loc models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
 	).Where("id = ?", id).First(&loc).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work location not found or unauthorized"})
 		return
@@ -85,7 +90,7 @@ func DeleteWorkLocation(c *gin.Context) {
 
 	var loc models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
 	).Where("id = ?", id).First(&loc).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work location not found or unauthorized"})
 		return

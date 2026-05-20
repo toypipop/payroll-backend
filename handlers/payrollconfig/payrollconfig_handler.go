@@ -24,7 +24,7 @@ func GetPayrollConfigs(c *gin.Context) {
 
 	// Fetch latest active config per company
 	err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
 	).Preload("PayrollConfig", func(db *gorm.DB) *gorm.DB {
 		return db.Where("deleted_at IS NULL").Order("created_at DESC").Limit(1)
 	}).Find(&companies).Error
@@ -56,7 +56,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 	// Validate user company access
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this Companie"})
 		return
@@ -96,7 +96,7 @@ func GetConfigByPayrollCycle(c *gin.Context) {
 	// Fetch cycle for company ID
 	var cycle models.PayrollCycle
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused"),
 	).Preload("Companies").First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found or access denied"})
 		return

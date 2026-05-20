@@ -22,7 +22,7 @@ func GetEmployees(c *gin.Context) {
 
 	var employees []models.Employees
 	if err := config.DB.
-		Scopes(repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id")).
+		Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
 		Preload("Department").
 		Preload("Position").
 		Preload("Companies").
@@ -58,14 +58,21 @@ func CreateEmployees(c *gin.Context) {
 
 	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	if err := config.DB.Select("companies_id").First(&currentUser, userID).Error; err != nil {
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Companies context not found"})
 		return
 	}
 
-	// ScopeAll (SUPER_ADMIN) can create employees for any company if companies_id is specified
-	if dataScope != models.ScopeAll || input.CompaniesID == 0 {
-		input.CompaniesID = currentUser.CompaniesID
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	input.CompaniesID = companyID
+
+	if roles.CompaniesID != input.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
+		return
 	}
 
 	// Resolve bank_name from bank_id if provided
@@ -80,6 +87,16 @@ func CreateEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	mapping := models.EmployeeCompanyRole{
+		EmployeeID: input.ID,
+		CompanyID:  input.CompaniesID,
+		RoleID:     input.RolesID,
+		IsDefault:  true,
+		IsActive:   true,
+	}
+	config.DB.Where(models.EmployeeCompanyRole{EmployeeID: input.ID, CompanyID: input.CompaniesID, RoleID: input.RolesID}).
+		Assign(mapping).
+		FirstOrCreate(&mapping)
 
 	c.JSON(http.StatusCreated, input)
 }
@@ -96,7 +113,7 @@ func UpdateEmployees(c *gin.Context) {
 
 	var emp models.Employees
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).First(&emp, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
 		return
@@ -114,6 +131,27 @@ func UpdateEmployees(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Cannot promote to Super Admin"})
 			return
 		}
+	}
+
+	nextCompanyID := emp.CompaniesID
+	if companiesID, ok := data["companies_id"].(float64); ok {
+		nextCompanyID = uint(companiesID)
+	}
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, nextCompanyID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	data["companies_id"] = companyID
+
+	nextRoleID := emp.RolesID
+	if rolesID, ok := data["roles_id"].(float64); ok {
+		nextRoleID = uint(rolesID)
+	}
+	var role models.Roles
+	if err := config.DB.First(&role, nextRoleID).Error; err != nil || role.CompaniesID != companyID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
+		return
 	}
 
 	if pwd, ok := data["password"].(string); ok && pwd != "" {
@@ -148,6 +186,19 @@ func UpdateEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
 		return
 	}
+	mapping := models.EmployeeCompanyRole{
+		EmployeeID: emp.ID,
+		CompanyID:  companyID,
+		RoleID:     nextRoleID,
+		IsDefault:  true,
+		IsActive:   true,
+	}
+	config.DB.Model(&models.EmployeeCompanyRole{}).
+		Where("employee_id = ?", emp.ID).
+		Update("is_default", false)
+	config.DB.Where(models.EmployeeCompanyRole{EmployeeID: emp.ID, CompanyID: companyID, RoleID: nextRoleID}).
+		Assign(mapping).
+		FirstOrCreate(&mapping)
 
 	config.DB.Preload("Department").Preload("Position").Preload("SalariesStructure").Preload("Bank").First(&emp, id)
 	c.JSON(http.StatusOK, emp)
@@ -165,7 +216,7 @@ func DeleteEmployees(c *gin.Context) {
 
 	var employees models.Employees
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).First(&employees, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return

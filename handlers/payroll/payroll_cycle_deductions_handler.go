@@ -25,7 +25,7 @@ func GetCycleDeductions(c *gin.Context) {
 
 	var items []models.PayrollCycleDeduction
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_deductions.companies_id", "payroll_cycle_deductions.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_deduction.companies_id", "payroll_cycle_deduction.employees_id"),
 	).
 		Preload("DeductionType").
 		Preload("Employees").
@@ -95,7 +95,7 @@ func UpdateCycleDeduction(c *gin.Context) {
 
 	var item models.PayrollCycleDeduction
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_deductions.companies_id", "payroll_cycle_deductions.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_deduction.companies_id", "payroll_cycle_deduction.employees_id"),
 	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
@@ -143,7 +143,7 @@ func DeleteCycleDeduction(c *gin.Context) {
 
 	var item models.PayrollCycleDeduction
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "payroll_cycle_deductions.companies_id", "payroll_cycle_deductions.employees_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_deduction.companies_id", "payroll_cycle_deduction.employees_id"),
 	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return

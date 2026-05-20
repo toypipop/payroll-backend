@@ -67,7 +67,7 @@ func GetEarningSummary(c *gin.Context) {
 
 	var employees []models.Employees
 	config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).Preload("Companies").Find(&employees)
 
 	if len(employees) == 0 {

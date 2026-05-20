@@ -23,7 +23,7 @@ func GetCompanies(c *gin.Context) {
 	var companies []models.Companies
 	// For Companies table, we use "id" as the companies filter column
 	dbResult := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "id", "id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
 	).Find(&companies)
 
 	if dbResult.Error != nil {
@@ -42,7 +42,7 @@ func GetAllCompanies(c *gin.Context) {
 
 	var companies []models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "id", "id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
 	).Order("id desc").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
 		return
@@ -75,7 +75,7 @@ func UpdateCompanies(c *gin.Context) {
 	var companies models.Companies
 	// Ensure the user can only update the companies they belong to (unless ScopeAll)
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "id", "id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
 	).First(&companies, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this companies"})
 		return
@@ -106,7 +106,7 @@ func DeleteCompanies(c *gin.Context) {
 
 	// Apply strict scope for deletion
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "id", "id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
 	).Delete(&models.Companies{}, id)
 
 	if result.RowsAffected == 0 {

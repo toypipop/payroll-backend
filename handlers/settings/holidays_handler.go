@@ -20,7 +20,7 @@ func GetHolidays(c *gin.Context) {
 
 	var holidays []models.Holiday
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "holiday.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "holiday.companies_id", "unused"),
 	).Preload("Companies").Order("date").Find(&holidays).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch holidays"})
 		return
@@ -34,10 +34,15 @@ func CreateHoliday(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
-	holiday.CompaniesID = currentUser.CompaniesID
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, holiday.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	holiday.CompaniesID = companyID
 
 	if err := config.DB.Create(&holiday).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create holiday"})
@@ -58,7 +63,7 @@ func UpdateHoliday(c *gin.Context) {
 
 	var holiday models.Holiday
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "holiday.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "holiday.companies_id", "unused"),
 	).Where("id = ?", id).First(&holiday).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Holiday not found or unauthorized"})
 		return
@@ -88,7 +93,7 @@ func DeleteHoliday(c *gin.Context) {
 
 	var holiday models.Holiday
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "holiday.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "holiday.companies_id", "unused"),
 	).Where("id = ?", id).First(&holiday).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Holiday not found or unauthorized"})
 		return

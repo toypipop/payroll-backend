@@ -21,7 +21,7 @@ func GetRoles(c *gin.Context) {
 
 	var roles []models.Roles
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "roles.companies_id", "roles.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
 	).
 		Preload("Companies").
 		Where("is_super_admin = ?", false).
@@ -48,7 +48,7 @@ func CreateRole(c *gin.Context) {
 	// Validate if the user has permission to create role for this company (English Comment)
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -76,7 +76,7 @@ func UpdateRole(c *gin.Context) {
 	var role models.Roles
 	// Ensure the role belongs to an authorized company and is not a super admin (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "roles.companies_id", "roles.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
 	).Where("is_super_admin = ?", false).First(&role, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -91,6 +91,10 @@ func UpdateRole(c *gin.Context) {
 	updateData := map[string]interface{}{
 		"roles_name":   input.RolesName,
 		"companies_id": input.CompaniesID,
+	}
+	if _, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID); !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
 	}
 
 	if err := config.DB.Model(&role).Updates(updateData).Error; err != nil {
@@ -111,7 +115,7 @@ func DeleteRole(c *gin.Context) {
 
 	// Protect against deleting super admin roles or roles outside scope (English Comment)
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "roles.companies_id", "roles.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
 	).Where("id = ? AND is_super_admin = ?", id, false).Delete(&models.Roles{})
 
 	if result.RowsAffected == 0 {

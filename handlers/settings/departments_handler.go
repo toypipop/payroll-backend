@@ -21,7 +21,7 @@ func GetDepartments(c *gin.Context) {
 
 	var departments []models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "unused"),
 	).Preload("Companies").Find(&departments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
 		return
@@ -36,11 +36,16 @@ func CreateDepartment(c *gin.Context) {
 		return
 	}
 
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
-	dept.CompaniesID = currentUser.CompaniesID
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, dept.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	dept.CompaniesID = companyID
 
 	if err := config.DB.Create(&dept).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create department"})
@@ -61,14 +66,15 @@ func UpdateDepartment(c *gin.Context) {
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
 	}
 
 	var input struct {
-		DeptName string `json:"dept_name" binding:"required"`
+		DeptName    string `json:"dept_name" binding:"required"`
+		CompaniesID uint   `json:"companies_id"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -76,8 +82,13 @@ func UpdateDepartment(c *gin.Context) {
 	}
 
 	// Department name is non-calculation metadata and can be updated even if used.
+	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
 	dept.DeptName = input.DeptName
-	dept.CompaniesID = currentUser.CompaniesID
+	dept.CompaniesID = companyID
 	config.DB.Save(&dept)
 	c.JSON(http.StatusOK, dept)
 }
@@ -91,14 +102,14 @@ func DeleteDepartment(c *gin.Context) {
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "department.companies_id", "department.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "department.id"),
 	).Where("id = ?", id).Delete(&models.Department{})
 
 	if result.RowsAffected == 0 {

@@ -40,7 +40,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 
 	var emp models.Employees
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employees.companies_id", "employees.id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).Where("id = ?", input.EmployeesID).First(&emp).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
 		return

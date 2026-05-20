@@ -20,7 +20,7 @@ func GetDayOffs(c *gin.Context) {
 
 	var dayOffs []models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
 	).Preload("Companies").Order("weekday ASC, name ASC").Find(&dayOffs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch day offs"})
 		return
@@ -40,7 +40,7 @@ func GetDayOffCompanies(c *gin.Context) {
 
 	var companies []models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
 	).Order("name ASC").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
 		return
@@ -61,15 +61,14 @@ func CreateDayOff(c *gin.Context) {
 		return
 	}
 
-	userID, _ := repository.GetContextAuth(c)
+	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
-	config.DB.Select("companies_id").First(&currentUser, userID)
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
-	targetCompanyID := currentUser.CompaniesID
-	if isSuperAdmin, ok := c.Get("is_super_admin"); ok {
-		if superAdmin, isBool := isSuperAdmin.(bool); isBool && superAdmin && input.CompaniesID > 0 {
-			targetCompanyID = input.CompaniesID
-		}
+	targetCompanyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
 	}
 
 	var company models.Companies
@@ -105,7 +104,7 @@ func UpdateDayOff(c *gin.Context) {
 
 	var dayOff models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
 	).Where("id = ?", id).First(&dayOff).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Day off not found or unauthorized"})
 		return
@@ -122,11 +121,10 @@ func UpdateDayOff(c *gin.Context) {
 		return
 	}
 
-	targetCompanyID := dayOff.CompaniesID
-	if isSuperAdmin, ok := c.Get("is_super_admin"); ok {
-		if superAdmin, isBool := isSuperAdmin.(bool); isBool && superAdmin && input.CompaniesID > 0 {
-			targetCompanyID = input.CompaniesID
-		}
+	targetCompanyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
 	}
 
 	var company models.Companies
@@ -152,7 +150,7 @@ func DeleteDayOff(c *gin.Context) {
 
 	var dayOff models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
 	).Where("id = ?", id).First(&dayOff).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Day off not found or unauthorized"})
 		return

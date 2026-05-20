@@ -19,7 +19,7 @@ func GetEmploymentTypes(c *gin.Context) {
 
 	var types []models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employment_types.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
 	).Preload("Companies").Order("name").Find(&types).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employment types"})
 		return
@@ -40,7 +40,7 @@ func CreateEmploymentType(c *gin.Context) {
 
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
 	).Where("id = ?", et.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -62,7 +62,7 @@ func UpdateEmploymentType(c *gin.Context) {
 
 	var et models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employment_types.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
 	).First(&et, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employment type not found"})
 		return
@@ -91,7 +91,7 @@ func DeleteEmploymentType(c *gin.Context) {
 
 	var et models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyScopes(currentUser, dataScope, "employment_types.companies_id", "unused"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
 	).Where("id = ?", id).First(&et).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employment type not found"})
 		return

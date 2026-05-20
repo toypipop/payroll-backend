@@ -57,10 +57,14 @@ func main() {
 		&models.LeaveTypeSetting{},
 		&models.EarningCategory{},
 		&models.DeductionCategory{},
+		&models.EmployeeCompanyRole{},
 	)
 
 	if err != nil {
 		log.Fatalf("Migration Failed: %v", err)
+	}
+	if err := migrations.BackfillEmployeeCompanyRoles(config.DB); err != nil {
+		log.Fatalf("Employee-company-role backfill failed: %v", err)
 	}
 	fmt.Println("Migration Successful!")
 
