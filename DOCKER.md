@@ -1,18 +1,20 @@
-# Docker MySQL
+# Docker
 
-Run MySQL from the backend repository root:
+This repo uses Docker only for local MySQL. Run from the backend root:
 
 ```bash
 docker compose up -d
 ```
 
-The container exposes MySQL on:
+MySQL:
 
-```text
-localhost:3306
-```
+- Container: `payroll-mysql`
+- Host: `localhost`
+- Port: `3306`
+- Database: `PayrollDB`
+- Volume: `payroll_mysql_data`
 
-It uses the same database settings as the backend local `.env`:
+Backend `.env`:
 
 ```text
 DB_USER=root
@@ -22,10 +24,20 @@ DB_PORT=3306
 DB_NAME=PayrollDB
 ```
 
-MySQL data is stored in the named Docker volume `payroll_mysql_data`.
+Common commands:
 
-With this MySQL container running, start the backend locally from this repository:
+```bash
+docker compose ps
+docker compose logs -f mysql
+docker compose stop
+docker compose down
+docker compose down -v
+```
+
+With MySQL running:
 
 ```bash
 go run .
 ```
+
+If Docker fails with `dockerDesktopLinuxEngine` pipe errors, start Docker Desktop and retry.

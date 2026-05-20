@@ -1,224 +1,166 @@
 # AGENTS.md
 
-Agent playbook for `payroll-backend`.
-This repository is a Go (Gin + GORM + MySQL) backend for payroll, attendance, and reporting.
-Follow these conventions when editing code, adding tests, or running local checks.
-The companion React/Vite frontend lives next to this repo at `../payroll-frontend`.
+Compact playbook for `payroll-backend`, a Go Gin + GORM + MySQL API for payroll, attendance, settings, and reporting. The companion frontend is `../payroll-frontend`; check it whenever API contracts, routes, modules, auth responses, permissions, seed data, or response shapes change.
 
-## Rule Sources
-
-- Checked `.cursor/rules/`: not present.
-- Checked `.cursorrules`: not present.
-- Checked `.github/copilot-instructions.md`: not present.
-- Therefore, this file is the canonical agent guidance in this repo.
-
-## Project Layout
-
-- `main.go`: app entrypoint, DB connection, auto-migration, HTTP server.
-- `seed/main.go`: seed entrypoint (migrations + master/test data).
-- `routes/routes.go`: all route registration and middleware wiring.
-- `handlers/*`: HTTP handlers grouped by domain.
-- `middleware/*`: auth, permission checks, delete guards.
-- `models/*`: GORM models, enums, request/response structs.
-- `repository/*`: query scopes and cross-entity helpers.
-- `migrations/*`: ad hoc SQL migrations that are not covered by GORM auto-migration.
-- `config/database.go`: DB bootstrap and global `config.DB`.
-
-## Environment Assumptions
+## Stack And Layout
 
 - Go version from `go.mod`: `1.25.5`.
-- Database: MySQL on `127.0.0.1:3306` by default.
-- Default DB name in code and local `.env`: `PayrollDB`.
-- App listens on port `8000`.
-- Frontend CORS allowlist defaults to `http://localhost:5173`; production/custom origins can be set with `CORS_ALLOWED_ORIGINS` or `FRONTEND_ORIGIN`.
-- Local config is loaded from `.env` with `godotenv`; important keys are `JWT_SECRET`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`, and optionally `CORS_ALLOWED_ORIGINS`, `FRONTEND_ORIGIN`, `APP_ENV`, `GO_ENV`, or `GIN_MODE`.
-- API base path is `/api/v1`; the frontend typically points `VITE_API_URL` to `http://localhost:8000/api/v1`.
+- API base path: `/api/v1`; app listens on port `8000`.
+- Database: MySQL on `127.0.0.1:3306`, default DB `PayrollDB`.
+- CORS defaults to `http://localhost:5173`; override with `CORS_ALLOWED_ORIGINS` or `FRONTEND_ORIGIN`.
+- Config loads `.env` via `godotenv`; important keys are `JWT_SECRET`, DB settings, CORS settings, and optional environment mode keys.
+- Key files:
+- `main.go`: DB connection, migrations, HTTP server.
+- `routes/routes.go`: route registration and middleware.
+- `handlers/*`: domain HTTP handlers.
+- `models/*`: GORM models and API structs.
+- `repository/*`: query scopes and shared checks.
+- `middleware/*`: auth, permission, delete guard middleware.
+- `migrations/*`: SQL/GORM migrations not safely covered by auto-migration.
+- `seed/main.go`: local/test data, modules, permissions.
 
-## Build, Run, Lint, and Test Commands
+## Commands
 
-Run from repository root.
+Run from the backend root.
 
-### Local MySQL Docker
-
-- Added May 20, 2026: `docker-compose.yml` is intentionally MySQL-only for local development; do not add frontend or backend containers unless explicitly requested.
-- Start the local database from this backend repo with `docker compose up -d`.
-- Check database status with `docker compose ps` and logs with `docker compose logs -f mysql`.
-- The MySQL container is `payroll-mysql`, publishes `localhost:3306`, and creates `PayrollDB`.
-- Local `.env` should use `DB_USER=root`, `DB_PASSWORD=1234`, `DB_HOST=127.0.0.1`, `DB_PORT=3306`, and `DB_NAME=PayrollDB`.
-- Run the backend locally with `go run .`; it connects to the Docker MySQL database and runs migrations.
-- Stop the database with `docker compose stop`; remove the container with `docker compose down`; remove all local MySQL data with `docker compose down -v`.
-- If Docker commands fail with `dockerDesktopLinuxEngine` pipe errors, Docker Desktop is not running. Start it with `Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"` from PowerShell, wait until Docker is ready, then retry.
-
-### Dependency and compile checks
-
-- `go mod tidy` - clean and sync module dependencies.
+- `docker compose up -d` - start local MySQL only.
+- `docker compose ps` - check MySQL status.
+- `docker compose logs -f mysql` - follow MySQL logs.
+- `docker compose stop` - stop MySQL.
+- `docker compose down` - remove container.
+- `docker compose down -v` - remove container and local MySQL data.
+- `go run .` - run API and AutoMigrate.
+- `go run ./seed` - seed/migrate local data.
 - `go build ./...` - compile all packages.
-- `go run .` - run API server from `main.go`.
-- `go run ./seed` - run seed script (requires reachable MySQL).
-- `go run .` also runs GORM `AutoMigrate` before starting the server.
+- `go test ./...` - run tests; current packages may report `[no test files]`.
+- `go vet ./...` - static checks.
+- `go fmt ./...` or `gofmt -w .` - formatting.
 
-### Formatting and static analysis
+## Docker
 
-- `gofmt -w .` - format all Go files.
-- `go fmt ./...` - package-level formatting pass.
-- `go vet ./...` - static checks (shadowing, printf, misuse patterns).
+- `docker-compose.yml` is intentionally MySQL-only for local development.
+- Do not add frontend/backend containers unless explicitly requested.
+- MySQL container: `payroll-mysql`.
+- Published port: `localhost:3306`.
+- Database: `PayrollDB`.
+- Local `.env` should use:
+- `DB_USER=root`
+- `DB_PASSWORD=1234`
+- `DB_HOST=127.0.0.1`
+- `DB_PORT=3306`
+- `DB_NAME=PayrollDB`
+- If Docker commands fail with `dockerDesktopLinuxEngine` pipe errors, start Docker Desktop and retry.
 
-### Tests
+## Workflow
 
-- Current state: `go test ./...` reports `[no test files]` for all packages.
-- Standard full suite command: `go test ./...`.
-- Verbose suite: `go test -v ./...`.
-- Race detector: `go test -race ./...` (use when adding concurrency-sensitive code).
+- Prefer small, domain-scoped changes.
+- Keep route/middleware ordering consistent with `routes/routes.go`.
+- If behavior changes, add/update tests in the same package when practical.
+- Run at least `go test ./...`, `go vet ./...`, and `go build ./...` before finishing when code changed.
+- If database or seed behavior changes, sanity-check with `go run ./seed` against local MySQL when practical.
+- For API contract changes, check matching frontend usage in `../payroll-frontend/src`.
+- When adding/changing frontend-facing endpoints, verify every `api.get/post/put/patch/delete` path in frontend has a matching method/path in `routes/routes.go`.
 
-### Run a single test (important)
+## Go Style
 
-- Single test in one package:
-- `go test ./handlers/auth -run '^TestLogin$' -v`
-- Single subtest:
-- `go test ./handlers/auth -run '^TestLogin$/valid_credentials$' -v`
-- Multiple named tests by regex:
-- `go test ./handlers/payroll -run 'TestCalculate|TestCloseCycle' -v`
-- If test file is in current package directory:
-- `go test -run '^TestName$' -v`
-
-## Development Workflow for Agents
-
-- Prefer small, domain-scoped changes (handler + model + route as needed).
-- Keep route/middleware ordering consistent with existing `routes/routes.go` style.
-- If behavior changes, add/update tests in the same package as the changed code.
-- Run at least: `go test ./...` and `go vet ./...` before finishing.
-- If database logic changes, sanity-check with `go run ./seed` against local MySQL.
-- For API contract changes, check the matching frontend page/API usage in `../payroll-frontend/src` before finishing.
-
-## Code Style Guidelines
-
-### Imports
-
-- Use standard Go import grouping:
-- stdlib first, blank line, internal modules, blank line, third-party.
-- Keep import aliases short and meaningful (`authhandler`, `sethandler`, etc.).
-- Remove unused imports immediately; do not leave commented imports.
-
-### Formatting
-
-- Enforce `gofmt` formatting; do not hand-format alignment.
-- Prefer early returns for guard clauses and error paths.
-
-### Types and data modeling
-
+- Use standard Go import grouping: stdlib, internal modules, third-party.
+- Keep import aliases short and meaningful.
+- Enforce `gofmt`; do not hand-align code.
+- Prefer early returns for guards and errors.
 - Use explicit structs for request/response payloads when practical.
-- Use pointer fields (`*uint`, `*time.Time`) for nullable DB columns.
-- Keep GORM tags and JSON tags in sync with API contract.
-- Maintain existing soft-delete patterns (`soft_delete.DeletedAt`).
+- Use pointer fields for nullable DB columns.
+- Keep GORM tags and JSON tags in sync with API contracts.
+- Maintain existing `soft_delete.DeletedAt` patterns.
+- Avoid ignored errors unless truly safe.
 
-### Naming conventions
+## Handlers And Errors
 
-- Package names: lowercase, single word where possible.
-- Exported identifiers: `PascalCase`.
-- Unexported identifiers: `camelCase`.
-- Avoid all-caps local vars; prefer `employee` over `Employees` as local variable names.
-- Keep names domain-specific (`companiesID`, `cycleID`, `dataScope`).
+- Parse JSON with `ShouldBindJSON` and validate immediately.
+- Read params/query/auth context using nearby handler patterns.
+- Return JSON errors with stable keys, usually `{"error": "..."}`.
+- Use correct status codes: `400`, `401`, `403`, `404`, `409`, `500`.
+- Abort middleware chains after terminal errors with `c.Abort()`.
+- Avoid leaking sensitive internals in API responses.
+- Avoid noisy debug logs and `config.DB.Debug()` in normal runtime.
 
-### Handler conventions (Gin)
+## Database And Scopes
 
-- Parse inputs with `ShouldBindJSON` and validate immediately.
-- Read path params, query params, and auth context using existing local patterns in nearby handlers.
-- Return JSON errors with stable keys, primarily `{"error": "..."}`.
-- Use correct HTTP status codes:
-- `400` bad request, `401` unauthorized, `403` forbidden, `404` not found,
-- `409` conflict, `500` internal server error.
-- Abort middleware chains after writing terminal errors (`c.Abort()`).
-
-### Database and repository conventions
-
-- Use `config.DB` and existing repository scopes. Prefer `ApplyContextScopes(c, currentUser, dataScope, ...)` in handlers so company filtering honors the active permission role mapping; reserve lower-level helpers such as `ApplyScopes`, `ScopeCompanies`, and `ScopeCompanyIDs` for repository/internal use.
+- Use `config.DB` and existing repository scopes.
+- Prefer `repository.ApplyContextScopes(c, currentUser, dataScope, ...)` in handlers so active role/company mappings are honored.
 - Keep company/data-scope filtering consistent for multi-tenant safety.
-- Prefer `Preload` only for fields actually needed by the response.
-- For cross-table checks, place reusable logic in `repository/*`.
+- Preload only fields needed by the response.
+- Put reusable cross-table checks in `repository/*`.
 - Use transactions for multi-step writes that must be atomic.
-- The project uses singular table names via `schema.NamingStrategy{SingularTable: true}`.
-- When qualifying columns in scopes, use singular table names such as `employment_type.companies_id`, `time_log.companies_id`, and `employee_company_access.company_id`; plural names will fail in SQL.
-- Keep raw SQL migrations in `migrations/*` when a schema change cannot be represented safely by auto-migration alone.
+- The project uses singular table names via GORM naming strategy.
+- Qualify scoped columns with singular table names, for example `employment_type.companies_id`, `time_log.companies_id`, and `employee_company_access.company_id`.
+- Keep raw SQL migrations in `migrations/*` when auto-migration cannot represent the change safely.
 
-### Company Access Model
+## Auth And Security
+
+- JWT auth is cookie-based.
+- Login: `POST /api/v1/auth/login`; set httpOnly `auth_token` cookie and return only non-sensitive profile data.
+- Session check: `GET /api/v1/auth/me`.
+- Logout: `POST /api/v1/auth/logout`; clear cookie.
+- Do not return JWTs in response bodies.
+- Do not rely on browser `Authorization: Bearer` headers.
+- Cookie must be `HttpOnly`, `Path=/`, have expiration/max age, and use `Secure=true` in production. Localhost may use `Secure=false`.
+- Validate JWT signature, signing method, and expiration in auth middleware.
+- Never hardcode credentials, DSNs, JWT secrets, or production tokens.
+
+## Routes, Modules, And Permissions
+
+- Register endpoints in `routes/routes.go` under the correct domain block.
+- Protect private endpoints with `AuthMiddleware()` and `CheckPermission(...)`.
+- Keep action names consistent with seeded access rows.
+- `/api/v1/modules` is public and returns active `AppModule` rows sorted by `order`; the frontend uses it for routes, sidebar, and breadcrumbs.
+- Seeded `AppModule.ModuleKey` values must match frontend page filenames exactly.
+- Seeded `AppModule.Icon` values must exist in `../payroll-frontend/src/components/common/Sidebar.tsx`; missing keys render the frontend fallback icon.
+- If adding/renaming modules, update `seed/main.go`, route permission keys, frontend page files/routes, and sidebar icon map when needed.
+- `EmployeeCompanyAccessPage` manages `employee_company_access`; keep seed module, routes, permission checks, and frontend page in sync.
+- Company dropdown options are served by `GET /api/v1/companies/options`.
+- Do not assume `GET /api/v1/companies` exists.
+- `GET /api/v1/companies/all` is for the Companies settings list/index.
+- Payroll config category routes are `/api/v1/master/earning-categories` and `/api/v1/master/deduction-categories`; keep them registered with `EarningCategoryPage` permissions and category delete guards.
+
+## Company Access Model
 
 - `employees.companies_id` is the employee's primary/home company for payroll, attendance, department, position, salary, and employment type logic.
-- `employee_company_access` is the many-to-many app access table; it maps `employee_id`, `company_id`, and `role_id`, with `is_default` and `is_active`.
-- `employee_company_access.company_id` controls which company data a user can access; it does not change which company the employee belongs to for payroll.
-- Creating an employee should also create an active/default `EmployeeCompanyAccess` row for the selected `companies_id` and `roles_id`.
-- Add extra company access through `EmployeeCompanyAccessPage` / `/api/v1/employee-company-access`, not by changing the employee's primary company.
-- Normally only one `EmployeeCompanyAccess` row per employee should have `is_default = true`; the backend clears other defaults when a new default is saved through the access API.
-- Any create/update API that accepts an employee id must also accept/derive `companies_id`, validate the requester can access that company, and reject employee/company mismatches with the shared company access helpers.
-- Employee-linked records should save `companies_id` when the model has that field; do not treat company selection as frontend-only filtering.
+- `employee_company_access` maps `employee_id`, `company_id`, and `role_id`, with `is_default` and `is_active`.
+- `employee_company_access.company_id` controls app access; it does not change payroll ownership.
+- Creating an employee should also create an active/default `EmployeeCompanyAccess` row for selected `companies_id` and `roles_id`.
+- Add extra company access through `EmployeeCompanyAccessPage` and `/api/v1/employee-company-access`.
+- Normally only one mapping per employee should have `is_default = true`; the access API clears other defaults.
+- Create/update APIs accepting an employee id must accept or derive `companies_id`, validate requester access to that company, and reject employee/company mismatches.
+- Employee-linked records should save `companies_id` when the model has that field.
 
-### Error handling
+## Frontend Contract
 
-- Always handle returned errors; do not ignore with `_` unless truly safe.
-- Avoid leaking sensitive internals in API responses.
-- For user-facing errors, prefer concise and actionable messages.
+- Frontend API client: `../payroll-frontend/src/api/axiosInstance.ts`.
+- Frontend axios uses `withCredentials: true`; browser sends the httpOnly cookie automatically.
+- Frontend must not store JWTs; it may store non-sensitive display/profile data.
+- Login and `/auth/me` responses include `roles`, default `companies_id`, and `accessible_company_ids`.
+- Broad access comes from normal role/module/access rows plus `employee_company_access` mappings; there is no hardcoded privileged-user bypass.
+- Seeded top-level role is `SYSTEM_ADMIN`.
+- 401 responses should cause the frontend to clear profile state and redirect to `/login`.
+- Keep response JSON shapes stable unless the frontend is updated in the same change.
 
-### Logging
-
-- Use logs for operational context, not for sensitive payloads.
-- Avoid noisy debug logging in hot paths unless actively troubleshooting.
-
-### Security and secrets
-
-- Never hardcode credentials, DSNs, or JWT secrets in new code.
-- Prefer environment variables for all secrets and environment-specific values.
-- Do not commit real credentials or tokens.
-- JWT auth is cookie-based. Do not return JWTs in response bodies and do not rely on `Authorization: Bearer` headers for browser auth.
-- Login should set the JWT in the httpOnly `auth_token` cookie; logout should clear that cookie.
-- The auth cookie must be `HttpOnly`, `Path=/`, have an expiration/max age, and use `Secure=true` in production. Localhost/dev may use `Secure=false`.
-- Validate JWT signature, signing method, and expiration in `AuthMiddleware`; invalid or expired cookies must return `401`.
-- Avoid returning raw internal errors (`err.Error()`) in API responses for operational/database failures.
-- Avoid `config.DB.Debug()` in normal runtime code; reserve SQL debug logs for temporary troubleshooting.
-
-### Local agent artifacts
-
-- Keep local agent cache files out of source control (`.agents/`, `skills-lock.json`).
-- If working on multiple machines, sync these artifacts privately (or reinstall locally) rather than committing them.
-
-### Time and monetary values
-
-- Keep timezone handling explicit and consistent.
-- If changing payroll math, add targeted tests for boundary/rounding cases.
-
-### Routes and permissions
-
-- Register new endpoints in `routes/routes.go` under the correct domain block.
-- Protect private endpoints with `AuthMiddleware()` and `CheckPermission(...)`.
-- Keep module keys and action names consistent with seeded module access data.
-- `POST /api/v1/auth/login` is public, sets the httpOnly auth cookie, and returns only non-sensitive user profile data.
-- `GET /api/v1/auth/me` validates the auth cookie and returns non-sensitive user profile data for frontend route guards.
-- `POST /api/v1/auth/logout` clears the auth cookie.
-- `GET /api/v1/modules` is public and returns active `AppModule` rows sorted by `order`; the frontend uses it for routes, sidebar navigation, and breadcrumbs.
-- Seeded `AppModule.ModuleKey` values must match frontend page filenames exactly, for example `EmployeesListPage` maps to `../payroll-frontend/src/pages/**/EmployeesListPage.jsx`.
-- `EmployeeCompanyAccessPage` is the Settings module for managing `employee_company_access`; keep its seed module, routes, permission checks, and frontend page in sync.
-- If adding or renaming modules, update `seed/main.go`, route permission keys, and the frontend page file/routes together.
-
-### Frontend contract notes
-
-- Companion frontend: `../payroll-frontend`, built with React 19, Vite, and React Router v7.
-- Frontend API client: `../payroll-frontend/src/api/axiosInstance.js`.
-- Frontend axios uses `withCredentials: true`; the browser sends the httpOnly auth cookie automatically.
-- Frontend must not store JWTs in `localStorage` or `sessionStorage`; it may store only non-sensitive user display/profile data.
-- Login and `/auth/me` responses include `roles`, default `companies_id`, and `accessible_company_ids`; the default company comes from the default active `employee_company_access` mapping when present.
-- The backend has no hardcoded privileged-user bypass. System-wide access is represented as normal role/module/access rows plus `employee_company_access` mappings. The seeded top-level role is `SYSTEM_ADMIN`.
-- 401 responses clear frontend profile state and redirect to `/login`.
-- Keep response JSON shapes stable for existing pages unless the frontend is updated in the same change.
-
-## Testing Guidance to Add New Tests
+## Testing Guidance
 
 - Use table-driven tests for handlers and business logic.
-- Prefer `httptest` for endpoint tests and assert status + JSON shape.
-- For permission-sensitive endpoints, include allow/deny scenarios.
-- For payroll/attendance logic, test date-window and scope edge cases.
+- Prefer `httptest` for endpoints; assert status and JSON shape.
+- Include allow/deny cases for permission-sensitive endpoints.
+- Add boundary/rounding tests for payroll math changes.
 
-## Definition of Done (for agent changes)
+## Artifacts
 
-- Code is formatted (`gofmt`) and compiles (`go build ./...`).
-- Static checks pass (`go vet ./...`).
-- Tests pass (`go test ./...`), including any newly added tests.
-- API behavior, status codes, and permission checks remain consistent.
+- Keep local agent artifacts out of source control: `.agents/`, `skills-lock.json`.
+- Sync private agent artifacts outside git if needed.
+
+## Definition Of Done
+
+- Code is formatted.
+- `go build ./...` passes.
+- `go vet ./...` passes.
+- `go test ./...` passes, or any inability to run it is explained.
+- API behavior, status codes, permissions, and response shapes remain consistent.
 - No secrets added; configuration remains environment-driven.

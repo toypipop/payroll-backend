@@ -408,7 +408,8 @@ func main() {
 		{ModuleName: "Global Settings", ModuleKey: "PayrollGlobalSettingsPage", RoutePath: "/payroll-global", Icon: "SettingsSuggest", Order: 1, ParentID: ptr(5)},
 		{ModuleName: "Earning Types", ModuleKey: "EarningTypesPage", RoutePath: "/earning-types", Icon: "AddCard", Order: 2, ParentID: ptr(5)},
 		{ModuleName: "Deduction Types", ModuleKey: "DeductionTypesPage", RoutePath: "/deduction-types", Icon: "PriceCheck", Order: 3, ParentID: ptr(5)},
-		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 4, ParentID: ptr(5)},
+		{ModuleName: "Categories", ModuleKey: "EarningCategoryPage", RoutePath: "/earning-categories", Icon: "Category", Order: 4, ParentID: ptr(5)},
+		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 5, ParentID: ptr(5)},
 
 		// Level 2: Sub-Menus under Settings
 		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 1, ParentID: ptr(6)},
