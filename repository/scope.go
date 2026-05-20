@@ -32,7 +32,7 @@ func ScopeCompanyIDs(companyIDs []uint, columnName ...string) func(db *gorm.DB) 
 }
 
 func AccessibleCompanyIDs(userID uint) []uint {
-	var mappings []models.EmployeeCompanyRole
+	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.
 		Where("employee_id = ? AND is_active = ?", userID, true).
 		Find(&mappings).Error; err == nil && len(mappings) > 0 {
@@ -55,7 +55,7 @@ func AccessibleCompanyIDs(userID uint) []uint {
 }
 
 func AccessibleRoleIDs(userID uint) []uint {
-	var mappings []models.EmployeeCompanyRole
+	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.
 		Where("employee_id = ? AND is_active = ?", userID, true).
 		Find(&mappings).Error; err == nil && len(mappings) > 0 {
@@ -82,7 +82,7 @@ func AccessibleCompanyIDsForRoles(userID uint, roleIDs []uint) []uint {
 		return AccessibleCompanyIDs(userID)
 	}
 
-	var mappings []models.EmployeeCompanyRole
+	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.
 		Where("employee_id = ? AND role_id IN ? AND is_active = ?", userID, roleIDs, true).
 		Find(&mappings).Error; err != nil || len(mappings) == 0 {
@@ -101,7 +101,7 @@ func AccessibleCompanyIDsForRoles(userID uint, roleIDs []uint) []uint {
 }
 
 func DefaultCompanyID(user models.Employees) uint {
-	var mapping models.EmployeeCompanyRole
+	var mapping models.EmployeeCompanyAccess
 	if err := config.DB.
 		Where("employee_id = ? AND is_active = ? AND is_default = ?", user.ID, true, true).
 		First(&mapping).Error; err == nil && mapping.CompanyID != 0 {
@@ -152,6 +152,28 @@ func ResolveCompanyID(user models.Employees, scope models.DataScope, requestedCo
 		companyID = DefaultCompanyID(user)
 	}
 	return companyID, CanAccessCompany(user.ID, scope, companyID)
+}
+
+func ResolveEmployeeForCompany(c *gin.Context, user models.Employees, scope models.DataScope, employeeID uint, requestedCompanyID uint) (models.Employees, bool) {
+	if requestedCompanyID == 0 {
+		return models.Employees{}, false
+	}
+	companyID, ok := ResolveCompanyID(user, scope, requestedCompanyID)
+	if !ok || employeeID == 0 {
+		return models.Employees{}, false
+	}
+
+	var employee models.Employees
+	if err := config.DB.Scopes(
+		ApplyContextScopes(c, user, scope, "employees.companies_id", "employees.id"),
+	).Select("id, companies_id").First(&employee, employeeID).Error; err != nil {
+		return models.Employees{}, false
+	}
+	if employee.CompaniesID != companyID {
+		return models.Employees{}, false
+	}
+
+	return employee, true
 }
 
 func GetAuthorizedCompanyIDs(c *gin.Context, userID uint) []uint {

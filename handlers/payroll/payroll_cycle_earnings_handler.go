@@ -73,7 +73,19 @@ func CreateCycleEarning(c *gin.Context) {
 	}
 
 	input.ID = 0
+	if input.CompaniesID != 0 && input.CompaniesID != cycle.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Selected company does not match payroll cycle company"})
+		return
+	}
 	input.CompaniesID = cycle.CompaniesID
+	if _, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, cycle.CompaniesID); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Employee does not belong to payroll cycle company"})
+		return
+	}
+	if et.CompaniesID != cycle.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type does not belong to payroll cycle company"})
+		return
+	}
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create cycle earning"})
@@ -100,7 +112,8 @@ func UpdateCycleEarning(c *gin.Context) {
 		return
 	}
 
-	if _, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope); err != nil {
+	cycle, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope)
+	if err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot update earnings in a closed cycle"})
 			return
@@ -118,9 +131,23 @@ func UpdateCycleEarning(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if input.CompaniesID != 0 && input.CompaniesID != cycle.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Selected company does not match payroll cycle company"})
+		return
+	}
+	var et models.EarningType
+	if err := config.DB.First(&et, input.EarningTypeID).Error; err != nil || et.CompaniesID != cycle.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type does not belong to payroll cycle company"})
+		return
+	}
+	if _, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, cycle.CompaniesID); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Employee does not belong to payroll cycle company"})
+		return
+	}
 
 	if err := config.DB.Model(&item).Updates(map[string]interface{}{
 		"amount":          input.Amount,
+		"companies_id":    cycle.CompaniesID,
 		"earning_type_id": input.EarningTypeID,
 		"employees_id":    input.EmployeesID,
 	}).Error; err != nil {

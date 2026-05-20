@@ -15,7 +15,7 @@ type Employees struct {
 	// Set default:0 to ensure unique index works correctly with soft delete (English Comment)
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_code_companies_deleted;uniqueIndex:idx_email_companies_deleted;not null;default:0" json:"-"`
 
-	// Legacy/default tenant. Company access is stored in EmployeeCompanyRole.
+	// Primary/home tenant. App access is stored in EmployeeCompanyAccess.
 	CompaniesID uint `gorm:"uniqueIndex:idx_emp_code_companies_deleted;uniqueIndex:idx_email_companies_deleted;not null" json:"companies_id"`
 
 	// Added size:100 to prevent BLOB/TEXT error in MySQL Index (English Comment)
@@ -41,14 +41,14 @@ type Employees struct {
 	AccountNo   string `gorm:"size:50" json:"account_no"`
 
 	// Relations
-	Companies         Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
-	CompanyRoles      []EmployeeCompanyRole `gorm:"foreignKey:EmployeeID" json:"company_roles,omitempty"`
-	Department        Department            `gorm:"foreignKey:DeptID" json:"department"`
-	Position          Position              `gorm:"foreignKey:PosID" json:"position"`
-	Roles             Roles                 `gorm:"foreignKey:RolesID" json:"roles"`
-	SalariesStructure SalariesStructure     `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
-	EmploymentType    *EmploymentType       `gorm:"foreignKey:EmploymentTypeID" json:"employment_type"`
-	Bank              *Bank                 `gorm:"foreignKey:BankID" json:"bank"`
+	Companies         Companies               `gorm:"foreignKey:CompaniesID" json:"companies"`
+	CompanyAccess     []EmployeeCompanyAccess `gorm:"foreignKey:EmployeeID" json:"company_access,omitempty"`
+	Department        Department              `gorm:"foreignKey:DeptID" json:"department"`
+	Position          Position                `gorm:"foreignKey:PosID" json:"position"`
+	Roles             Roles                   `gorm:"foreignKey:RolesID" json:"roles"`
+	SalariesStructure SalariesStructure       `gorm:"foreignKey:EmployeesID" json:"salaries_structure"`
+	EmploymentType    *EmploymentType         `gorm:"foreignKey:EmploymentTypeID" json:"employment_type"`
+	Bank              *Bank                   `gorm:"foreignKey:BankID" json:"bank"`
 }
 
 // SalariesStructure defines the base pay for each Employees
@@ -57,9 +57,12 @@ type SalariesStructure struct {
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
 	DeletedAt     soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_sal_eff_deleted;not null;default:0" json:"deleted_at"`
+	CompaniesID   uint                  `gorm:"not null;index" json:"companies_id"`
 	EmployeesID   uint                  `gorm:"not null;index;uniqueIndex:idx_emp_sal_eff_deleted" json:"employees_id"`
 	BaseSalaries  float64               `gorm:"type:decimal(15,2)" json:"base_salaries"`
 	EffectiveDate time.Time             `gorm:"not null;uniqueIndex:idx_emp_sal_eff_deleted" json:"effective_date"`
+	Companies     Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Employees     *Employees            `gorm:"foreignKey:EmployeesID" json:"employees,omitempty"`
 }
 
 // PayrollCycle manages the time periods for salaries processing

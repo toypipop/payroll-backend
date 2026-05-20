@@ -16,6 +16,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 
 	var input struct {
 		EmployeesID   uint    `json:"employees_id" binding:"required"`
+		CompaniesID   uint    `json:"companies_id" binding:"required"`
 		BaseSalaries  float64 `json:"base_salaries"`
 		EffectiveDate string  `json:"effective_date" binding:"required"`
 		DeletedAt     *bool   `json:"deleted_at"`
@@ -38,16 +39,14 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
-	var emp models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Where("id = ?", input.EmployeesID).First(&emp).Error; err != nil {
+	emp, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
 		return
 	}
 
 	var existing []models.SalariesStructure
-	config.DB.Unscoped().Where("employees_id = ?", input.EmployeesID).Order("id ASC").Find(&existing)
+	config.DB.Unscoped().Where("employees_id = ? AND companies_id = ?", input.EmployeesID, emp.CompaniesID).Order("id ASC").Find(&existing)
 
 	shouldDelete := input.DeletedAt != nil && *input.DeletedAt
 
@@ -85,6 +84,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 	}
 
 	salaries := models.SalariesStructure{
+		CompaniesID:   emp.CompaniesID,
 		EmployeesID:   input.EmployeesID,
 		BaseSalaries:  input.BaseSalaries,
 		EffectiveDate: parsedDate,

@@ -15,15 +15,15 @@ func ptr(u uint) *uint {
 	return &u
 }
 
-func upsertEmployeeCompanyRole(employeeID, companyID, roleID uint, isDefault bool) {
-	mapping := models.EmployeeCompanyRole{
+func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint, isDefault bool) {
+	mapping := models.EmployeeCompanyAccess{
 		EmployeeID: employeeID,
 		CompanyID:  companyID,
 		RoleID:     roleID,
 		IsDefault:  isDefault,
 		IsActive:   true,
 	}
-	config.DB.Where(models.EmployeeCompanyRole{
+	config.DB.Where(models.EmployeeCompanyAccess{
 		EmployeeID: employeeID,
 		CompanyID:  companyID,
 		RoleID:     roleID,
@@ -38,6 +38,9 @@ func main() {
 
 	if err := migrations.DropLegacyIndexes(config.DB); err != nil {
 		log.Fatalf("Legacy index cleanup failed: %v", err)
+	}
+	if err := migrations.RenameEmployeeCompanyAccessTable(config.DB); err != nil {
+		log.Fatalf("Employee-company-access table rename failed: %v", err)
 	}
 
 	err := config.DB.AutoMigrate(
@@ -71,7 +74,7 @@ func main() {
 		&models.LeaveTypeSetting{},
 		&models.EarningCategory{},
 		&models.DeductionCategory{},
-		&models.EmployeeCompanyRole{},
+		&models.EmployeeCompanyAccess{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -79,8 +82,11 @@ func main() {
 	if err := migrations.RemoveLegacyElevatedRole(config.DB); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
-	if err := migrations.BackfillEmployeeCompanyRoles(config.DB); err != nil {
-		log.Fatalf("Employee-company-role backfill failed: %v", err)
+	if err := migrations.BackfillEmployeeCompanyAccess(config.DB); err != nil {
+		log.Fatalf("Employee-company-access backfill failed: %v", err)
+	}
+	if err := migrations.BackfillSalariesStructureCompanies(config.DB); err != nil {
+		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
 
 	// Initialize companies
@@ -468,9 +474,9 @@ func main() {
 			FirstName:     "System", LastName: "Admin",
 			Password: hashStr, DeptID: sysDept.ID, PosID: sysPos.ID,
 		}).FirstOrCreate(&admin)
-	upsertEmployeeCompanyRole(admin.ID, sysComp.ID, sysRole.ID, true)
-	upsertEmployeeCompanyRole(admin.ID, compA.ID, sysRole.ID, false)
-	upsertEmployeeCompanyRole(admin.ID, compB.ID, sysRole.ID, false)
+	upsertEmployeeCompanyAccess(admin.ID, sysComp.ID, sysRole.ID, true)
+	upsertEmployeeCompanyAccess(admin.ID, compA.ID, sysRole.ID, false)
+	upsertEmployeeCompanyAccess(admin.ID, compB.ID, sysRole.ID, false)
 
 	type empSeed struct {
 		emp         models.Employees
@@ -496,7 +502,7 @@ func main() {
 	for _, s := range usersToSeed {
 		var existingEmp models.Employees
 		config.DB.Unscoped().Where(models.Employees{Email: s.emp.Email}).Assign(s.emp).FirstOrCreate(&existingEmp)
-		upsertEmployeeCompanyRole(existingEmp.ID, s.emp.CompaniesID, s.emp.RolesID, true)
+		upsertEmployeeCompanyAccess(existingEmp.ID, s.emp.CompaniesID, s.emp.RolesID, true)
 
 		// Update bank fields on employee
 		config.DB.Model(&existingEmp).Updates(map[string]interface{}{

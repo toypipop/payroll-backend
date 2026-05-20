@@ -86,14 +86,14 @@ func CreateEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	mapping := models.EmployeeCompanyRole{
+	mapping := models.EmployeeCompanyAccess{
 		EmployeeID: input.ID,
 		CompanyID:  input.CompaniesID,
 		RoleID:     input.RolesID,
 		IsDefault:  true,
 		IsActive:   true,
 	}
-	config.DB.Where(models.EmployeeCompanyRole{EmployeeID: input.ID, CompanyID: input.CompaniesID, RoleID: input.RolesID}).
+	config.DB.Where(models.EmployeeCompanyAccess{EmployeeID: input.ID, CompanyID: input.CompaniesID, RoleID: input.RolesID}).
 		Assign(mapping).
 		FirstOrCreate(&mapping)
 
@@ -177,17 +177,17 @@ func UpdateEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
 		return
 	}
-	mapping := models.EmployeeCompanyRole{
+	mapping := models.EmployeeCompanyAccess{
 		EmployeeID: emp.ID,
 		CompanyID:  companyID,
 		RoleID:     nextRoleID,
 		IsDefault:  true,
 		IsActive:   true,
 	}
-	config.DB.Model(&models.EmployeeCompanyRole{}).
+	config.DB.Model(&models.EmployeeCompanyAccess{}).
 		Where("employee_id = ?", emp.ID).
 		Update("is_default", false)
-	config.DB.Where(models.EmployeeCompanyRole{EmployeeID: emp.ID, CompanyID: companyID, RoleID: nextRoleID}).
+	config.DB.Where(models.EmployeeCompanyAccess{EmployeeID: emp.ID, CompanyID: companyID, RoleID: nextRoleID}).
 		Assign(mapping).
 		FirstOrCreate(&mapping)
 

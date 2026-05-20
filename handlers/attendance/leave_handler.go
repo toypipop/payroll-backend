@@ -62,10 +62,8 @@ func CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Select("id, companies_id").First(&targetEmployee, input.EmployeesID).Error; err != nil {
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee or access denied"})
 		return
 	}
@@ -134,6 +132,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 
 	var input struct {
 		EmployeesID uint      `json:"employees_id" binding:"required"`
+		CompaniesID uint      `json:"companies_id" binding:"required"`
 		LeaveTypeID uint      `json:"leave_type_id" binding:"required"`
 		StartDate   time.Time `json:"start_date" binding:"required"`
 		EndDate     time.Time `json:"end_date" binding:"required"`
@@ -166,10 +165,8 @@ func UpdateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Select("id, companies_id").First(&targetEmployee, input.EmployeesID).Error; err != nil {
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee or access denied"})
 		return
 	}

@@ -137,17 +137,19 @@ Run from repository root.
 - For cross-table checks, place reusable logic in `repository/*`.
 - Use transactions for multi-step writes that must be atomic.
 - The project uses singular table names via `schema.NamingStrategy{SingularTable: true}`.
-- When qualifying columns in scopes, use singular table names such as `employment_type.companies_id`, `time_log.companies_id`, and `employee_company_role.company_id`; plural names will fail in SQL.
+- When qualifying columns in scopes, use singular table names such as `employment_type.companies_id`, `time_log.companies_id`, and `employee_company_access.company_id`; plural names will fail in SQL.
 - Keep raw SQL migrations in `migrations/*` when a schema change cannot be represented safely by auto-migration alone.
 
 ### Company Access Model
 
 - `employees.companies_id` is the employee's primary/home company for payroll, attendance, department, position, salary, and employment type logic.
-- `employee_company_role` is the many-to-many app access table; it maps `employee_id`, `company_id`, and `role_id`, with `is_default` and `is_active`.
-- `employee_company_role.company_id` controls which company data a user can access; it does not change which company the employee belongs to for payroll.
-- Creating an employee should also create an active/default `EmployeeCompanyRole` row for the selected `companies_id` and `roles_id`.
+- `employee_company_access` is the many-to-many app access table; it maps `employee_id`, `company_id`, and `role_id`, with `is_default` and `is_active`.
+- `employee_company_access.company_id` controls which company data a user can access; it does not change which company the employee belongs to for payroll.
+- Creating an employee should also create an active/default `EmployeeCompanyAccess` row for the selected `companies_id` and `roles_id`.
 - Add extra company access through `EmployeeCompanyAccessPage` / `/api/v1/employee-company-access`, not by changing the employee's primary company.
-- Normally only one `EmployeeCompanyRole` row per employee should have `is_default = true`; the backend clears other defaults when a new default is saved through the access API.
+- Normally only one `EmployeeCompanyAccess` row per employee should have `is_default = true`; the backend clears other defaults when a new default is saved through the access API.
+- Any create/update API that accepts an employee id must also accept/derive `companies_id`, validate the requester can access that company, and reject employee/company mismatches with the shared company access helpers.
+- Employee-linked records should save `companies_id` when the model has that field; do not treat company selection as frontend-only filtering.
 
 ### Error handling
 
@@ -192,7 +194,7 @@ Run from repository root.
 - `POST /api/v1/auth/logout` clears the auth cookie.
 - `GET /api/v1/modules` is public and returns active `AppModule` rows sorted by `order`; the frontend uses it for routes, sidebar navigation, and breadcrumbs.
 - Seeded `AppModule.ModuleKey` values must match frontend page filenames exactly, for example `EmployeesListPage` maps to `../payroll-frontend/src/pages/**/EmployeesListPage.jsx`.
-- `EmployeeCompanyAccessPage` is the Settings module for managing `employee_company_role`; keep its seed module, routes, permission checks, and frontend page in sync.
+- `EmployeeCompanyAccessPage` is the Settings module for managing `employee_company_access`; keep its seed module, routes, permission checks, and frontend page in sync.
 - If adding or renaming modules, update `seed/main.go`, route permission keys, and the frontend page file/routes together.
 
 ### Frontend contract notes
@@ -201,8 +203,8 @@ Run from repository root.
 - Frontend API client: `../payroll-frontend/src/api/axiosInstance.js`.
 - Frontend axios uses `withCredentials: true`; the browser sends the httpOnly auth cookie automatically.
 - Frontend must not store JWTs in `localStorage` or `sessionStorage`; it may store only non-sensitive user display/profile data.
-- Login and `/auth/me` responses include `roles`, default `companies_id`, and `accessible_company_ids`; the default company comes from the default active employee-company-role mapping when present.
-- The backend does not use a hardcoded super user/super admin bypass. System-wide access is represented as normal role/module/access rows plus `employee_company_role` mappings. The seeded top-level role is `SYSTEM_ADMIN`.
+- Login and `/auth/me` responses include `roles`, default `companies_id`, and `accessible_company_ids`; the default company comes from the default active `employee_company_access` mapping when present.
+- The backend has no hardcoded privileged-user bypass. System-wide access is represented as normal role/module/access rows plus `employee_company_access` mappings. The seeded top-level role is `SYSTEM_ADMIN`.
 - 401 responses clear frontend profile state and redirect to `/login`.
 - Keep response JSON shapes stable for existing pages unless the frontend is updated in the same change.
 

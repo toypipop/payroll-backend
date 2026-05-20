@@ -37,17 +37,17 @@ type Position struct {
 
 // Companies represents the tenant/entity information
 type Companies struct {
-	ID               uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt        time.Time             `json:"created_at"`
-	UpdatedAt        time.Time             `json:"updated_at"`
-	DeletedAt        soft_delete.DeletedAt `gorm:"uniqueIndex:idx_taxid_deleted;not null;default:0" json:"-"`
-	Name             string                `gorm:"not null" json:"name"`
-	TaxID            string                `gorm:"uniqueIndex:idx_taxid_deleted;not null;size:50" json:"tax_id"`
-	Address          string                `json:"address"`
-	Phone            string                `json:"phone"`
-	PayrollConfig    *PayrollConfig        `gorm:"foreignKey:CompaniesID" json:"payroll_config"`
-	AttendanceConfig *AttendanceConfig     `gorm:"foreignKey:CompaniesID" json:"attendance_config"`
-	EmployeeRoles    []EmployeeCompanyRole `gorm:"foreignKey:CompanyID" json:"employee_roles,omitempty"`
+	ID               uint                    `gorm:"primaryKey" json:"id"`
+	CreatedAt        time.Time               `json:"created_at"`
+	UpdatedAt        time.Time               `json:"updated_at"`
+	DeletedAt        soft_delete.DeletedAt   `gorm:"uniqueIndex:idx_taxid_deleted;not null;default:0" json:"-"`
+	Name             string                  `gorm:"not null" json:"name"`
+	TaxID            string                  `gorm:"uniqueIndex:idx_taxid_deleted;not null;size:50" json:"tax_id"`
+	Address          string                  `json:"address"`
+	Phone            string                  `json:"phone"`
+	PayrollConfig    *PayrollConfig          `gorm:"foreignKey:CompaniesID" json:"payroll_config"`
+	AttendanceConfig *AttendanceConfig       `gorm:"foreignKey:CompaniesID" json:"attendance_config"`
+	EmployeeAccess   []EmployeeCompanyAccess `gorm:"foreignKey:CompanyID" json:"employee_access,omitempty"`
 }
 
 // Bank is a global lookup table for Thai banks (not per-company)

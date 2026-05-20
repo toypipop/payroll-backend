@@ -59,11 +59,9 @@ func CreateTimeLog(c *gin.Context) {
 		return
 	}
 
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Select("id, companies_id").First(&targetEmployee, input.EmployeesID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
 		return
 	}
 
@@ -105,11 +103,9 @@ func UpdateTimeLog(c *gin.Context) {
 		return
 	}
 
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Select("id, companies_id").First(&targetEmployee, input.EmployeesID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
 		return
 	}
 

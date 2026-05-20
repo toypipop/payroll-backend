@@ -28,14 +28,14 @@ func GetEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	var mappings []models.EmployeeCompanyRole
+	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_role.company_id", "employee_company_role.employee_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
 	).
 		Preload("Employee").
 		Preload("Company").
 		Preload("Role").
-		Order("employee_company_role.employee_id ASC, employee_company_role.is_default DESC, employee_company_role.company_id ASC").
+		Order("employee_company_access.employee_id ASC, employee_company_access.is_default DESC, employee_company_access.company_id ASC").
 		Find(&mappings).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employee company access"})
 		return
@@ -68,7 +68,7 @@ func CreateEmployeeCompanyAccess(c *gin.Context) {
 
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
 		if mapping.IsDefault {
-			if err := tx.Model(&models.EmployeeCompanyRole{}).
+			if err := tx.Model(&models.EmployeeCompanyAccess{}).
 				Where("employee_id = ?", mapping.EmployeeID).
 				Update("is_default", false).Error; err != nil {
 				return err
@@ -95,9 +95,9 @@ func UpdateEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	var existing models.EmployeeCompanyRole
+	var existing models.EmployeeCompanyAccess
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_role.company_id", "employee_company_role.employee_id"),
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
 	).First(&existing, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Access mapping not found"})
 		return
@@ -117,7 +117,7 @@ func UpdateEmployeeCompanyAccess(c *gin.Context) {
 
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
 		if mapping.IsDefault {
-			if err := tx.Model(&models.EmployeeCompanyRole{}).
+			if err := tx.Model(&models.EmployeeCompanyAccess{}).
 				Where("employee_id = ? AND id <> ?", mapping.EmployeeID, existing.ID).
 				Update("is_default", false).Error; err != nil {
 				return err
@@ -152,8 +152,8 @@ func DeleteEmployeeCompanyAccess(c *gin.Context) {
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_role.company_id", "employee_company_role.employee_id"),
-	).Where("id = ?", id).Delete(&models.EmployeeCompanyRole{})
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
+	).Where("id = ?", id).Delete(&models.EmployeeCompanyAccess{})
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Access mapping not found or unauthorized"})
 		return
@@ -162,33 +162,36 @@ func DeleteEmployeeCompanyAccess(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }
 
-func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, dataScope models.DataScope, input employeeCompanyAccessInput) (models.EmployeeCompanyRole, error) {
+func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, dataScope models.DataScope, input employeeCompanyAccessInput) (models.EmployeeCompanyAccess, error) {
 	if _, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompanyID); !ok {
-		return models.EmployeeCompanyRole{}, errors.New("access denied for this company")
+		return models.EmployeeCompanyAccess{}, errors.New("access denied for this company")
 	}
 
 	var employee models.Employees
 	if err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Select("id").First(&employee, input.EmployeeID).Error; err != nil {
-		return models.EmployeeCompanyRole{}, errors.New("access denied to this employee")
+	).Select("id, companies_id").First(&employee, input.EmployeeID).Error; err != nil {
+		return models.EmployeeCompanyAccess{}, errors.New("access denied to this employee")
+	}
+	if employee.CompaniesID != input.CompanyID {
+		return models.EmployeeCompanyAccess{}, errors.New("employee does not belong to selected company")
 	}
 
 	var role models.Roles
 	if err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
 	).First(&role, input.RoleID).Error; err != nil {
-		return models.EmployeeCompanyRole{}, errors.New("access denied to this role")
+		return models.EmployeeCompanyAccess{}, errors.New("access denied to this role")
 	}
 	if role.CompaniesID != input.CompanyID {
-		return models.EmployeeCompanyRole{}, errors.New("role does not belong to selected company")
+		return models.EmployeeCompanyAccess{}, errors.New("role does not belong to selected company")
 	}
 
 	if input.IsDefault && !input.IsActive {
-		return models.EmployeeCompanyRole{}, errors.New("default access must be active")
+		return models.EmployeeCompanyAccess{}, errors.New("default access must be active")
 	}
 
-	return models.EmployeeCompanyRole{
+	return models.EmployeeCompanyAccess{
 		EmployeeID: input.EmployeeID,
 		CompanyID:  input.CompanyID,
 		RoleID:     input.RoleID,

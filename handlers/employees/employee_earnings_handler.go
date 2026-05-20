@@ -42,14 +42,18 @@ func CreateEmployeeEarning(c *gin.Context) {
 		return
 	}
 	input.ID = 0
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
-		Select("id, companies_id").
-		First(&targetEmployee, input.EmployeesID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
 		return
 	}
 	input.CompaniesID = targetEmployee.CompaniesID
+	var earningType models.EarningType
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused")).
+		First(&earningType, input.EarningTypeID).Error; err != nil || earningType.CompaniesID != input.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type does not belong to selected company"})
+		return
+	}
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create employee earning"})
@@ -77,11 +81,15 @@ func UpdateEmployeeEarning(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
-		Select("id, companies_id").
-		First(&targetEmployee, input.EmployeesID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
+		return
+	}
+	var earningType models.EarningType
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused")).
+		First(&earningType, input.EarningTypeID).Error; err != nil || earningType.CompaniesID != targetEmployee.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type does not belong to selected company"})
 		return
 	}
 

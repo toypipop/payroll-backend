@@ -36,19 +36,23 @@ type Roles struct {
 	Companies   Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
-type EmployeeCompanyRole struct {
+type EmployeeCompanyAccess struct {
 	ID         uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt  time.Time             `json:"created_at"`
 	UpdatedAt  time.Time             `json:"updated_at"`
-	DeletedAt  soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_company_role_deleted;not null;default:0" json:"-"`
-	EmployeeID uint                  `gorm:"uniqueIndex:idx_emp_company_role_deleted;not null;index" json:"employee_id"`
-	CompanyID  uint                  `gorm:"uniqueIndex:idx_emp_company_role_deleted;not null;index" json:"company_id"`
-	RoleID     uint                  `gorm:"uniqueIndex:idx_emp_company_role_deleted;not null;index" json:"role_id"`
+	DeletedAt  soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;default:0" json:"-"`
+	EmployeeID uint                  `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;index" json:"employee_id"`
+	CompanyID  uint                  `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;index" json:"company_id"`
+	RoleID     uint                  `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;index" json:"role_id"`
 	IsDefault  bool                  `gorm:"default:false;index" json:"is_default"`
 	IsActive   bool                  `gorm:"default:true;index" json:"is_active"`
 	Employee   Employees             `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
 	Company    Companies             `gorm:"foreignKey:CompanyID" json:"company,omitempty"`
 	Role       Roles                 `gorm:"foreignKey:RoleID" json:"role,omitempty"`
+}
+
+func (EmployeeCompanyAccess) TableName() string {
+	return "employee_company_access"
 }
 
 // AppModule model with fixed size

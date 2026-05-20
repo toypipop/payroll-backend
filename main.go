@@ -25,6 +25,9 @@ func main() {
 	if err := migrations.DropLegacyIndexes(config.DB); err != nil {
 		log.Fatalf("Legacy index cleanup failed: %v", err)
 	}
+	if err := migrations.RenameEmployeeCompanyAccessTable(config.DB); err != nil {
+		log.Fatalf("Employee-company-access table rename failed: %v", err)
+	}
 
 	err := config.DB.AutoMigrate(
 		&models.Roles{},
@@ -57,7 +60,7 @@ func main() {
 		&models.LeaveTypeSetting{},
 		&models.EarningCategory{},
 		&models.DeductionCategory{},
-		&models.EmployeeCompanyRole{},
+		&models.EmployeeCompanyAccess{},
 	)
 
 	if err != nil {
@@ -66,8 +69,11 @@ func main() {
 	if err := migrations.RemoveLegacyElevatedRole(config.DB); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
-	if err := migrations.BackfillEmployeeCompanyRoles(config.DB); err != nil {
-		log.Fatalf("Employee-company-role backfill failed: %v", err)
+	if err := migrations.BackfillEmployeeCompanyAccess(config.DB); err != nil {
+		log.Fatalf("Employee-company-access backfill failed: %v", err)
+	}
+	if err := migrations.BackfillSalariesStructureCompanies(config.DB); err != nil {
+		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
 	fmt.Println("Migration Successful!")
 

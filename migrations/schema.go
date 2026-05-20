@@ -22,7 +22,14 @@ func DropLegacyIndexes(db *gorm.DB) error {
 	return nil
 }
 
-func BackfillEmployeeCompanyRoles(db *gorm.DB) error {
+func RenameEmployeeCompanyAccessTable(db *gorm.DB) error {
+	if db.Migrator().HasTable("employee_company_role") && !db.Migrator().HasTable("employee_company_access") {
+		return db.Migrator().RenameTable("employee_company_role", "employee_company_access")
+	}
+	return nil
+}
+
+func BackfillEmployeeCompanyAccess(db *gorm.DB) error {
 	var employees []models.Employees
 	if err := db.Unscoped().
 		Select("id, companies_id, roles_id").
@@ -32,14 +39,14 @@ func BackfillEmployeeCompanyRoles(db *gorm.DB) error {
 	}
 
 	for _, employee := range employees {
-		mapping := models.EmployeeCompanyRole{
+		mapping := models.EmployeeCompanyAccess{
 			EmployeeID: employee.ID,
 			CompanyID:  employee.CompaniesID,
 			RoleID:     employee.RolesID,
 			IsDefault:  true,
 			IsActive:   true,
 		}
-		if err := db.Where(models.EmployeeCompanyRole{
+		if err := db.Where(models.EmployeeCompanyAccess{
 			EmployeeID: employee.ID,
 			CompanyID:  employee.CompaniesID,
 			RoleID:     employee.RolesID,
@@ -49,6 +56,18 @@ func BackfillEmployeeCompanyRoles(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+func BackfillSalariesStructureCompanies(db *gorm.DB) error {
+	if !db.Migrator().HasColumn(&models.SalariesStructure{}, "companies_id") {
+		return nil
+	}
+	return db.Exec(`
+		UPDATE salaries_structure ss
+		JOIN employees e ON e.id = ss.employees_id
+		SET ss.companies_id = e.companies_id
+		WHERE ss.companies_id = 0
+	`).Error
 }
 
 func RemoveLegacyElevatedRole(db *gorm.DB) error {
@@ -72,12 +91,12 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 
 	duplicateCleanup := []string{
 		`DELETE ecr
-		 FROM employee_company_role ecr
+		 FROM employee_company_access ecr
 		 JOIN roles legacy ON legacy.id = ecr.role_id
 		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
 			AND replacement.roles_name = 'SYSTEM_ADMIN'
 			AND replacement.deleted_at = 0
-		 JOIN employee_company_role existing ON existing.employee_id = ecr.employee_id
+		 JOIN employee_company_access existing ON existing.employee_id = ecr.employee_id
 			AND existing.company_id = ecr.company_id
 			AND existing.role_id = replacement.id
 			AND existing.deleted_at = 0
@@ -111,7 +130,7 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 		 SET e.roles_id = replacement.id
 		 WHERE legacy.roles_name = 'SUPER_ADMIN'
 			AND legacy.deleted_at = 0`,
-		`UPDATE employee_company_role ecr
+		`UPDATE employee_company_access ecr
 		 JOIN roles legacy ON legacy.id = ecr.role_id
 		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
 			AND replacement.roles_name = 'SYSTEM_ADMIN'

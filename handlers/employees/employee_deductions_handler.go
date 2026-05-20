@@ -42,14 +42,18 @@ func CreateEmployeeDeduction(c *gin.Context) {
 		return
 	}
 	input.ID = 0
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
-		Select("id, companies_id").
-		First(&targetEmployee, input.EmployeesID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
 		return
 	}
 	input.CompaniesID = targetEmployee.CompaniesID
+	var deductionType models.DeductionType
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused")).
+		First(&deductionType, input.DeductionTypeID).Error; err != nil || deductionType.CompaniesID != input.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Deduction type does not belong to selected company"})
+		return
+	}
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create employee deduction"})
@@ -77,11 +81,15 @@ func UpdateEmployeeDeduction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	var targetEmployee models.Employees
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
-		Select("id, companies_id").
-		First(&targetEmployee, input.EmployeesID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this employee"})
+	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
+		return
+	}
+	var deductionType models.DeductionType
+	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused")).
+		First(&deductionType, input.DeductionTypeID).Error; err != nil || deductionType.CompaniesID != targetEmployee.CompaniesID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Deduction type does not belong to selected company"})
 		return
 	}
 
