@@ -38,6 +38,17 @@ The companion React/Vite frontend lives next to this repo at `../payroll-fronten
 
 Run from repository root.
 
+### Local MySQL Docker
+
+- Added May 20, 2026: `docker-compose.yml` is intentionally MySQL-only for local development; do not add frontend or backend containers unless explicitly requested.
+- Start the local database from this backend repo with `docker compose up -d`.
+- Check database status with `docker compose ps` and logs with `docker compose logs -f mysql`.
+- The MySQL container is `payroll-mysql`, publishes `localhost:3306`, and creates `PayrollDB`.
+- Local `.env` should use `DB_USER=root`, `DB_PASSWORD=1234`, `DB_HOST=127.0.0.1`, `DB_PORT=3306`, and `DB_NAME=PayrollDB`.
+- Run the backend locally with `go run .`; it connects to the Docker MySQL database and runs migrations.
+- Stop the database with `docker compose stop`; remove the container with `docker compose down`; remove all local MySQL data with `docker compose down -v`.
+- If Docker commands fail with `dockerDesktopLinuxEngine` pipe errors, Docker Desktop is not running. Start it with `Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"` from PowerShell, wait until Docker is ready, then retry.
+
 ### Dependency and compile checks
 
 - `go mod tidy` - clean and sync module dependencies.
