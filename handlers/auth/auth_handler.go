@@ -29,10 +29,9 @@ func GetJWTSecret() ([]byte, error) {
 }
 
 type TokenClaims struct {
-	UserID       uint `json:"user_id"`
-	CompaniesID  uint `json:"companies_id"`
-	RolesID      uint `json:"roles_id"`
-	IsSuperAdmin bool `json:"is_super_admin"`
+	UserID      uint `json:"user_id"`
+	CompaniesID uint `json:"companies_id"`
+	RolesID     uint `json:"roles_id"`
 	jwt.RegisteredClaims
 }
 
@@ -128,10 +127,9 @@ func Login(c *gin.Context) {
 
 	// Create JWT token with claims
 	claims := TokenClaims{
-		UserID:       Employees.ID,
-		CompaniesID:  repository.DefaultCompanyID(Employees),
-		RolesID:      Employees.RolesID,
-		IsSuperAdmin: false,
+		UserID:      Employees.ID,
+		CompaniesID: repository.DefaultCompanyID(Employees),
+		RolesID:     Employees.RolesID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(authTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

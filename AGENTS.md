@@ -202,6 +202,7 @@ Run from repository root.
 - Frontend axios uses `withCredentials: true`; the browser sends the httpOnly auth cookie automatically.
 - Frontend must not store JWTs in `localStorage` or `sessionStorage`; it may store only non-sensitive user display/profile data.
 - Login and `/auth/me` responses include `roles`, default `companies_id`, and `accessible_company_ids`; the default company comes from the default active employee-company-role mapping when present.
+- The backend does not use a hardcoded super user/super admin bypass. System-wide access is represented as normal role/module/access rows plus `employee_company_role` mappings. The seeded top-level role is `SYSTEM_ADMIN`.
 - 401 responses clear frontend profile state and redirect to `/login`.
 - Keep response JSON shapes stable for existing pages unless the frontend is updated in the same change.
 

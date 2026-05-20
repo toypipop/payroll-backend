@@ -177,7 +177,7 @@ func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, da
 	var role models.Roles
 	if err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
-	).Where("is_super_admin = ?", false).First(&role, input.RoleID).Error; err != nil {
+	).First(&role, input.RoleID).Error; err != nil {
 		return models.EmployeeCompanyRole{}, errors.New("access denied to this role")
 	}
 	if role.CompaniesID != input.CompanyID {

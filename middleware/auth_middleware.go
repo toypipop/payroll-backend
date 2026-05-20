@@ -61,7 +61,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		if len(roleIDs) > 0 {
 			c.Set("roles_id", roleIDs[0])
 		}
-		c.Set("is_super_admin", false)
 
 		c.Next()
 	}

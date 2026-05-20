@@ -35,7 +35,6 @@ func GetCompanies(c *gin.Context) {
 }
 
 func GetAllCompanies(c *gin.Context) {
-	// This is typically for Super Admin, but we can apply ApplyScopes with ScopeAll logic
 	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)

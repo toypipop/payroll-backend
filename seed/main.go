@@ -76,6 +76,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
+	if err := migrations.RemoveLegacyElevatedRole(config.DB); err != nil {
+		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
+	}
 	if err := migrations.BackfillEmployeeCompanyRoles(config.DB); err != nil {
 		log.Fatalf("Employee-company-role backfill failed: %v", err)
 	}
@@ -327,10 +330,10 @@ func main() {
 	}
 
 	// --- Roles ---
-	sysRole := models.Roles{RolesName: "SUPER_ADMIN", Description: "System Admin Access", IsSuperAdmin: true, CompaniesID: sysComp.ID}
-	config.DB.Where(models.Roles{RolesName: "SUPER_ADMIN", CompaniesID: sysComp.ID}).Assign(sysRole).FirstOrCreate(&sysRole)
+	sysRole := models.Roles{RolesName: "SYSTEM_ADMIN", Description: "System Admin Access", CompaniesID: sysComp.ID}
+	config.DB.Where(models.Roles{RolesName: "SYSTEM_ADMIN", CompaniesID: sysComp.ID}).Assign(sysRole).FirstOrCreate(&sysRole)
 
-	sysStaffRole := models.Roles{RolesName: "STAFF", Description: "System Staff", IsSuperAdmin: false, CompaniesID: sysComp.ID}
+	sysStaffRole := models.Roles{RolesName: "STAFF", Description: "System Staff", CompaniesID: sysComp.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: sysComp.ID}).Assign(sysStaffRole).FirstOrCreate(&sysStaffRole)
 
 	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Sees whole companies", CompaniesID: compA.ID}
@@ -429,7 +432,7 @@ func main() {
 
 		mID := existingModule.ID
 
-		// SUPER_ADMIN (sysComp) — full access, all scope
+		// SYSTEM_ADMIN (sysComp) gets full access through role/module/access mappings.
 		upsert := func(roleID, compID uint, scope models.DataScope, full bool) {
 			acc := models.RolesModuleAccess{
 				RolesID: roleID, ModuleID: mID, CompaniesID: compID,
@@ -439,7 +442,7 @@ func main() {
 			config.DB.Where(models.RolesModuleAccess{RolesID: roleID, ModuleID: mID}).Assign(acc).FirstOrCreate(&acc)
 		}
 
-		upsert(sysRole.ID, sysComp.ID, models.ScopeAll, true)            // SUPER_ADMIN: all
+		upsert(sysRole.ID, sysComp.ID, models.ScopeAll, true)            // SYSTEM_ADMIN: all mapped companies
 		upsert(sysStaffRole.ID, sysComp.ID, models.ScopeCompanies, true) // sysStaff: full within company
 
 		// compA roles

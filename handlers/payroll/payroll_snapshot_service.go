@@ -45,8 +45,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 	var employees []models.Employees
 	if err := config.DB.
-		Joins("JOIN roles ON roles.id = employees.roles_id").
-		Where("employees.companies_id = ? AND employees.is_active = ? AND roles.is_super_admin = ?", companiesID, true, false).
+		Where("employees.companies_id = ? AND employees.is_active = ?", companiesID, true).
 		Find(&employees).Error; err != nil {
 		return 0, 0, err
 	}

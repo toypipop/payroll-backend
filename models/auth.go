@@ -26,15 +26,14 @@ const (
 
 // Roles model with fixed size
 type Roles struct {
-	ID           uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt    time.Time             `json:"created_at"`
-	UpdatedAt    time.Time             `json:"updated_at"`
-	DeletedAt    soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null;default:0" json:"-"`
-	CompaniesID  uint                  `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null" json:"companies_id"`
-	RolesName    string                `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null;size:255" json:"roles_name"`
-	Description  string                `json:"description"`
-	IsSuperAdmin bool                  `gorm:"default:false" json:"is_super_admin"`
-	Companies    Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
+	ID          uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt   time.Time             `json:"created_at"`
+	UpdatedAt   time.Time             `json:"updated_at"`
+	DeletedAt   soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null;default:0" json:"-"`
+	CompaniesID uint                  `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null" json:"companies_id"`
+	RolesName   string                `gorm:"uniqueIndex:idx_roles_name_companies_deleted;not null;size:255" json:"roles_name"`
+	Description string                `json:"description"`
+	Companies   Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
 
 type EmployeeCompanyRole struct {

@@ -14,7 +14,7 @@ var (
 )
 
 // EnsurePayrollCycleOpen validates the cycle is accessible and open.
-// Uses ApplyScopes so super admins can access cycles from any company.
+// Uses ApplyScopes so mapped role access controls which company cycles are visible.
 // Returns the cycle so callers can use cycle.CompaniesID.
 func EnsurePayrollCycleOpen(cycleID uint, user models.Employees, scope models.DataScope) (*models.PayrollCycle, error) {
 	var cycle models.PayrollCycle

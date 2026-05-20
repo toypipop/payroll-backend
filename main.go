@@ -63,6 +63,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Migration Failed: %v", err)
 	}
+	if err := migrations.RemoveLegacyElevatedRole(config.DB); err != nil {
+		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
+	}
 	if err := migrations.BackfillEmployeeCompanyRoles(config.DB); err != nil {
 		log.Fatalf("Employee-company-role backfill failed: %v", err)
 	}

@@ -45,12 +45,6 @@ func CreateEmployees(c *gin.Context) {
 		return
 	}
 
-	var roles models.Roles
-	if err := config.DB.First(&roles, input.RolesID).Error; err == nil && roles.IsSuperAdmin {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized roles selection"})
-		return
-	}
-
 	if input.Password != "" {
 		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
 		input.Password = string(hashedPassword)
@@ -70,6 +64,11 @@ func CreateEmployees(c *gin.Context) {
 	}
 	input.CompaniesID = companyID
 
+	var roles models.Roles
+	if err := config.DB.First(&roles, input.RolesID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Role not found"})
+		return
+	}
 	if roles.CompaniesID != input.CompaniesID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
 		return
@@ -123,14 +122,6 @@ func UpdateEmployees(c *gin.Context) {
 	if err := c.ShouldBindJSON(&data); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-
-	if rolesID, ok := data["roles_id"].(float64); ok {
-		var newRoles models.Roles
-		if err := config.DB.First(&newRoles, uint(rolesID)).Error; err == nil && newRoles.IsSuperAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: Cannot promote to Super Admin"})
-			return
-		}
 	}
 
 	nextCompanyID := emp.CompaniesID

@@ -24,7 +24,6 @@ func GetRoles(c *gin.Context) {
 		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
 	).
 		Preload("Companies").
-		Where("is_super_admin = ?", false).
 		Find(&roles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
 		return
@@ -56,7 +55,6 @@ func CreateRole(c *gin.Context) {
 
 	// Force safety constraints (English Comment)
 	input.ID = 0
-	input.IsSuperAdmin = false
 
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create role"})
@@ -74,10 +72,10 @@ func UpdateRole(c *gin.Context) {
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	var role models.Roles
-	// Ensure the role belongs to an authorized company and is not a super admin (English Comment)
+	// Ensure the role belongs to an authorized company.
 	if err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
-	).Where("is_super_admin = ?", false).First(&role, id).Error; err != nil {
+	).First(&role, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
 	}
@@ -113,10 +111,10 @@ func DeleteRole(c *gin.Context) {
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
-	// Protect against deleting super admin roles or roles outside scope (English Comment)
+	// Protect against deleting roles outside scope.
 	result := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
-	).Where("id = ? AND is_super_admin = ?", id, false).Delete(&models.Roles{})
+	).Where("id = ?", id).Delete(&models.Roles{})
 
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
