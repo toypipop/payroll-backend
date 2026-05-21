@@ -373,6 +373,13 @@ func main() {
 	posStaffB := models.Position{PosName: "Engineer", CompaniesID: compB.ID}
 	config.DB.Where(models.Position{PosName: "Engineer", CompaniesID: compB.ID}).Assign(posStaffB).FirstOrCreate(&posStaffB)
 	// --- Modules ---
+	deprecatedModuleKeys := []models.ModuleKey{
+		"EarningCategoryPage",
+	}
+	config.DB.Model(&models.AppModule{}).
+		Where("module_key IN ?", deprecatedModuleKeys).
+		Update("is_active", false)
+
 	modules := []models.AppModule{
 		// --- Level 1: Main Categories ---
 		{ID: 1, ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, IsCategory: false},
@@ -408,22 +415,21 @@ func main() {
 		{ModuleName: "Global Settings", ModuleKey: "PayrollGlobalSettingsPage", RoutePath: "/payroll-global", Icon: "SettingsSuggest", Order: 1, ParentID: ptr(5)},
 		{ModuleName: "Earning Types", ModuleKey: "EarningTypesPage", RoutePath: "/earning-types", Icon: "AddCard", Order: 2, ParentID: ptr(5)},
 		{ModuleName: "Deduction Types", ModuleKey: "DeductionTypesPage", RoutePath: "/deduction-types", Icon: "PriceCheck", Order: 3, ParentID: ptr(5)},
-		{ModuleName: "Categories", ModuleKey: "EarningCategoryPage", RoutePath: "/earning-categories", Icon: "Category", Order: 4, ParentID: ptr(5)},
-		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 5, ParentID: ptr(5)},
 
 		// Level 2: Sub-Menus under Settings
-		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 1, ParentID: ptr(6)},
-		{ModuleName: "Position", ModuleKey: "PositionSettings", RoutePath: "/positions", Icon: "WorkOutline", Order: 2, ParentID: ptr(6)},
-		{ModuleName: "Roles", ModuleKey: "RolesPage", RoutePath: "/roles", Icon: "ManageAccounts", Order: 3, ParentID: ptr(6)},
-		{ModuleName: "Permission", ModuleKey: "PermissionSettings", RoutePath: "/permissions", Icon: "LockPerson", Order: 4, ParentID: ptr(6)},
-		{ModuleName: "Employee Company Access", ModuleKey: "EmployeeCompanyAccessPage", RoutePath: "/employee-company-access", Icon: "AdminPanelSettings", Order: 5, ParentID: ptr(6)},
-		{ModuleName: "Companies", ModuleKey: "CompaniesPage", RoutePath: "/companies", Icon: "Business", Order: 6, ParentID: ptr(6)},
-		{ModuleName: "Attendance Settings", ModuleKey: "AttendanceSettingsPage", RoutePath: "/attendance-settings", Icon: "Tune", Order: 7, ParentID: ptr(6)},
-		{ModuleName: "Bank Master", ModuleKey: "MasterBankPage", RoutePath: "/master-banks", Icon: "AccountBalance", Order: 8, ParentID: ptr(6)},
-		{ModuleName: "Holiday Calendar", ModuleKey: "HolidayCalendarPage", RoutePath: "/holidays", Icon: "CalendarMonth", Order: 9, ParentID: ptr(6)},
-		{ModuleName: "Day Off", ModuleKey: "DayOffPage", RoutePath: "/day-offs", Icon: "EventAvailable", Order: 10, ParentID: ptr(6)},
-		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 11, ParentID: ptr(6)},
-		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 12, ParentID: ptr(6)},
+		{ModuleName: "Companies", ModuleKey: "CompaniesPage", RoutePath: "/companies", Icon: "Business", Order: 1, ParentID: ptr(6)},
+		{ModuleName: "Department", ModuleKey: "DepartmentSettings", RoutePath: "/departments", Icon: "CorporateFare", Order: 2, ParentID: ptr(6)},
+		{ModuleName: "Position", ModuleKey: "PositionSettings", RoutePath: "/positions", Icon: "WorkOutline", Order: 3, ParentID: ptr(6)},
+		{ModuleName: "Employment Types", ModuleKey: "EmploymentTypePage", RoutePath: "/employment-types", Icon: "WorkHistory", Order: 4, ParentID: ptr(6)},
+		{ModuleName: "Roles", ModuleKey: "RolesPage", RoutePath: "/roles", Icon: "ManageAccounts", Order: 5, ParentID: ptr(6)},
+		{ModuleName: "Permission", ModuleKey: "PermissionSettings", RoutePath: "/permissions", Icon: "LockPerson", Order: 6, ParentID: ptr(6)},
+		{ModuleName: "Employee Company Access", ModuleKey: "EmployeeCompanyAccessPage", RoutePath: "/employee-company-access", Icon: "AdminPanelSettings", Order: 7, ParentID: ptr(6)},
+		{ModuleName: "Attendance Settings", ModuleKey: "AttendanceSettingsPage", RoutePath: "/attendance-settings", Icon: "Tune", Order: 8, ParentID: ptr(6)},
+		{ModuleName: "Bank Master", ModuleKey: "MasterBankPage", RoutePath: "/master-banks", Icon: "AccountBalance", Order: 9, ParentID: ptr(6)},
+		{ModuleName: "Holiday Calendar", ModuleKey: "HolidayCalendarPage", RoutePath: "/holidays", Icon: "CalendarMonth", Order: 10, ParentID: ptr(6)},
+		{ModuleName: "Day Off", ModuleKey: "DayOffPage", RoutePath: "/day-offs", Icon: "EventAvailable", Order: 11, ParentID: ptr(6)},
+		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 12, ParentID: ptr(6)},
+		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 13, ParentID: ptr(6)},
 
 		// Level 2: Sub-Menus under Reports
 		{ModuleName: "Payslips", ModuleKey: "PayslipsReportPage", RoutePath: "/payslips", Icon: "Description", Order: 1, ParentID: ptr(7)},
@@ -434,6 +440,7 @@ func main() {
 	}
 
 	for _, m := range modules {
+		m.IsActive = true
 		var existingModule models.AppModule
 		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
 

@@ -115,6 +115,7 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
 			Where("roles_module_access.roles_id IN ?", roleIDs).
 			Where("`AppModule`.`module_key` = ?", moduleKey).
+			Where("`AppModule`.`is_active` = ?", true).
 			Find(&accesses).Error
 
 		if err != nil || len(accesses) == 0 {
@@ -182,6 +183,7 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
 			Where("roles_module_access.roles_id IN ?", roleIDs).
 			Where("`AppModule`.`module_key` IN ?", moduleKeys).
+			Where("`AppModule`.`is_active` = ?", true).
 			Find(&accesses).Error
 
 		if err != nil || len(accesses) == 0 {
