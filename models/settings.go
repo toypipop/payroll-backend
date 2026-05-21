@@ -62,19 +62,6 @@ type Bank struct {
 	SwiftCode string `gorm:"size:20" json:"swift_code"`
 }
 
-// EmploymentType is a per-company lookup for employment contract types
-type EmploymentType struct {
-	ID        uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time             `json:"created_at"`
-	UpdatedAt time.Time             `json:"updated_at"`
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_type_company_name_deleted;not null;default:0" json:"-"`
-
-	CompaniesID uint       `gorm:"uniqueIndex:idx_emp_type_company_name_deleted;not null;default:0" json:"companies_id"`
-	Companies   *Companies `gorm:"foreignKey:CompaniesID" json:"companies,omitempty"`
-	Name        string     `gorm:"uniqueIndex:idx_emp_type_company_name_deleted;not null;size:100" json:"name"`
-	Description string     `gorm:"size:255" json:"description"`
-}
-
 // Holiday manages public and company-specific holidays per company
 type Holiday struct {
 	ID        uint                  `gorm:"primaryKey" json:"id"`
@@ -132,24 +119,4 @@ type LeaveTypeSetting struct {
 	MaxDaysPerYear float64 `gorm:"type:decimal(5,2);default:0" json:"max_days_per_year"` // 0 = unlimited
 
 	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
-}
-
-// EarningCategory groups earning types into logical categories (global)
-type EarningCategory struct {
-	ID        uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time             `json:"created_at"`
-	UpdatedAt time.Time             `json:"updated_at"`
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_ec_name_deleted;not null;default:0" json:"-"`
-
-	Name string `gorm:"uniqueIndex:idx_ec_name_deleted;not null;size:100" json:"name"`
-}
-
-// DeductionCategory groups deduction types into logical categories (global)
-type DeductionCategory struct {
-	ID        uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time             `json:"created_at"`
-	UpdatedAt time.Time             `json:"updated_at"`
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_dc_name_deleted;not null;default:0" json:"-"`
-
-	Name string `gorm:"uniqueIndex:idx_dc_name_deleted;not null;size:100" json:"name"`
 }

@@ -65,52 +65,30 @@ type SalariesStructure struct {
 	Employees     *Employees            `gorm:"foreignKey:EmployeesID" json:"employees,omitempty"`
 }
 
-// PayrollCycle manages the time periods for salaries processing
-type PayrollCycle struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	// Allow re-creating same cycle name after deletion (English Comment)
-	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_cycle_name_comp_deleted;not null;default:0" json:"-"`
-
-	CompaniesID uint `gorm:"uniqueIndex:idx_cycle_name_comp_deleted;not null" json:"companies_id"`
-	// Added size:255 for Index support (English Comment)
-	CycleName string    `gorm:"uniqueIndex:idx_cycle_name_comp_deleted;not null;size:255" json:"cycle_name"`
-	StartDate time.Time `json:"start_date"`
-	EndDate   time.Time `json:"end_date"`
-	IsClosed  bool      `gorm:"default:false" json:"is_closed"`
-
-	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
-}
-
-// PayrollTransaction records the actual payout for an Employees
-type PayrollTransaction struct {
-	ID             uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt      time.Time             `json:"created_at"`
-	UpdatedAt      time.Time             `json:"updated_at"`
-	DeletedAt      soft_delete.DeletedAt `gorm:"index" json:"-"`
-	CycleID        uint                  `gorm:"not null" json:"cycle_id"`
-	EmployeesID    uint                  `gorm:"not null" json:"employees_id"`
-	SalariesAtTime float64               `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
-	TotalEarning   float64               `gorm:"type:decimal(15,2)" json:"total_earning"`
-	TotalDeduction float64               `gorm:"type:decimal(15,2)" json:"total_deduction"`
-	SsoAmount      float64               `gorm:"type:decimal(15,2)" json:"sso_amount"`
-	TaxAmount      float64               `gorm:"type:decimal(15,2)" json:"tax_amount"`
-	NetPay         float64               `gorm:"type:decimal(15,2)" json:"net_pay"`
-	// Relations (English Comment)
-	Details   []PayrollTransactionDetail `gorm:"foreignKey:TransactionID" json:"details"`
-	Employees Employees                  `gorm:"foreignKey:EmployeesID" json:"employees"`
-}
-
-type PayrollTransactionDetail struct {
+// EmployeeEarning assigns an additional earning type + fixed monthly amount to an employee
+type EmployeeEarning struct {
 	ID            uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt     time.Time             `json:"created_at"`
-	DeletedAt     soft_delete.DeletedAt `gorm:"index" json:"-"`
-	TransactionID uint                  `gorm:"not null;index" json:"transaction_id"`
-	ItemName      string                `gorm:"size:255" json:"item_name"` // e.g., "Overtime", "SSO", "Tax"
-	Amount        float64               `gorm:"type:decimal(15,2)" json:"amount"`
-	Type          string                `gorm:"size:20" json:"type"` // "earning" or "deduction"
-	// Reference to master data if applicable (English Comment)
-	EarningTypeID   *uint `json:"earning_type_id"`
-	DeductionTypeID *uint `json:"deduction_type_id"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	DeletedAt     soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_etype_deleted;not null;default:0" json:"-"`
+	CompaniesID   uint                  `gorm:"not null;index" json:"companies_id"`
+	EmployeesID   uint                  `gorm:"uniqueIndex:idx_emp_etype_deleted;not null;index" json:"employees_id"`
+	EarningTypeID uint                  `gorm:"uniqueIndex:idx_emp_etype_deleted;not null" json:"earning_type_id"`
+	Amount        float64               `gorm:"type:decimal(15,2);not null" json:"amount"`
+	EarningType   EarningType           `gorm:"foreignKey:EarningTypeID" json:"earning_type"`
+	Employees     Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
+}
+
+// EmployeeDeduction assigns a deduction type + fixed monthly amount to an employee
+type EmployeeDeduction struct {
+	ID              uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt       time.Time             `json:"created_at"`
+	UpdatedAt       time.Time             `json:"updated_at"`
+	DeletedAt       soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_dtype_deleted;not null;default:0" json:"-"`
+	CompaniesID     uint                  `gorm:"not null;index" json:"companies_id"`
+	EmployeesID     uint                  `gorm:"uniqueIndex:idx_emp_dtype_deleted;not null;index" json:"employees_id"`
+	DeductionTypeID uint                  `gorm:"uniqueIndex:idx_emp_dtype_deleted;not null" json:"deduction_type_id"`
+	Amount          float64               `gorm:"type:decimal(15,2);not null" json:"amount"`
+	DeductionType   DeductionType         `gorm:"foreignKey:DeductionTypeID" json:"deduction_type"`
+	Employees       Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
 }
