@@ -59,14 +59,22 @@ func BackfillEmployeeCompanyAccess(db *gorm.DB) error {
 }
 
 func BackfillSalariesStructureCompanies(db *gorm.DB) error {
-	if !db.Migrator().HasColumn(&models.SalariesStructure{}, "companies_id") {
+	if !db.Migrator().HasTable(&models.SalariesStructure{}) {
 		return nil
+	}
+	if !db.Migrator().HasColumn(&models.SalariesStructure{}, "companies_id") {
+		if err := db.Migrator().AddColumn(&models.SalariesStructure{}, "CompaniesID"); err != nil {
+			return err
+		}
 	}
 	return db.Exec(`
 		UPDATE salaries_structure ss
 		JOIN employees e ON e.id = ss.employees_id
+		JOIN companies c ON c.id = e.companies_id
+		LEFT JOIN companies existing_company ON existing_company.id = ss.companies_id
 		SET ss.companies_id = e.companies_id
 		WHERE ss.companies_id = 0
+			OR existing_company.id IS NULL
 	`).Error
 }
 

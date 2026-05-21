@@ -221,10 +221,10 @@ func DeleteLeaveRequest(c *gin.Context) {
 	// Ensure user has permission to delete this specific record (English Comment)
 	result := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
-	).Where("id = ?", id).Where("status = ?", models.LeaveStatusPending).Delete(&models.LeaveRequest{})
+	).Where("id = ?", id).Delete(&models.LeaveRequest{})
 
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found, unauthorized, or already processed"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return
 	}
 

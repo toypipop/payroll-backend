@@ -23,7 +23,7 @@ func allowedOrigins() []string {
 		origins = os.Getenv("FRONTEND_ORIGIN")
 	}
 	if strings.TrimSpace(origins) == "" {
-		return []string{"http://localhost:5173"}
+		return []string{"http://localhost:5174"}
 	}
 
 	result := []string{}
@@ -34,7 +34,7 @@ func allowedOrigins() []string {
 		}
 	}
 	if len(result) == 0 {
-		return []string{"http://localhost:5173"}
+		return []string{"http://localhost:5174"}
 	}
 	return result
 }

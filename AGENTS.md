@@ -7,7 +7,7 @@ Compact playbook for `payroll-backend`, a Go Gin + GORM + MySQL API for payroll,
 - Go version from `go.mod`: `1.25.5`.
 - API base path: `/api/v1`; app listens on port `8000`.
 - Database: MySQL on `127.0.0.1:3306`, default DB `PayrollDB`.
-- CORS defaults to `http://localhost:5173`; override with `CORS_ALLOWED_ORIGINS` or `FRONTEND_ORIGIN`.
+- CORS defaults to `http://localhost:5174`; override with `CORS_ALLOWED_ORIGINS` or `FRONTEND_ORIGIN`.
 - Config loads `.env` via `godotenv`; important keys are `JWT_SECRET`, DB settings, CORS settings, and optional environment mode keys.
 - Key files:
 - `main.go`: DB connection, migrations, HTTP server.

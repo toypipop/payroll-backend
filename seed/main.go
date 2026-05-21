@@ -42,8 +42,12 @@ func main() {
 	if err := migrations.RenameEmployeeCompanyAccessTable(config.DB); err != nil {
 		log.Fatalf("Employee-company-access table rename failed: %v", err)
 	}
+	if err := migrations.BackfillSalariesStructureCompanies(config.DB); err != nil {
+		log.Fatalf("Salaries company backfill failed: %v", err)
+	}
 
 	err := config.DB.AutoMigrate(
+		&models.Companies{},
 		&models.Roles{},
 		&models.AppModule{},
 		&models.RolesModuleAccess{},
@@ -54,7 +58,6 @@ func main() {
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
 		&models.PayrollTransactionDetail{},
-		&models.Companies{},
 		&models.TimeLog{},
 		&models.LeaveRequest{},
 		&models.LeaveBalance{},
@@ -84,9 +87,6 @@ func main() {
 	}
 	if err := migrations.BackfillEmployeeCompanyAccess(config.DB); err != nil {
 		log.Fatalf("Employee-company-access backfill failed: %v", err)
-	}
-	if err := migrations.BackfillSalariesStructureCompanies(config.DB); err != nil {
-		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
 
 	// Initialize companies
