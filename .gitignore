@@ -30,3 +30,6 @@ skills-lock.json
 
 # Build errors log
 build-errors.log
+
+# Local Go build cache
+.gocache/
