@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"math"
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/models"
@@ -300,7 +301,7 @@ func main() {
 
 		dayOffs := []models.DayOff{
 			{CompaniesID: comp.ID, Weekday: int(time.Sunday), Name: "Sunday Off", IsPaid: true},
-			{CompaniesID: comp.ID, Weekday: int(time.Monday), Name: "Monday Off", IsPaid: true},
+			{CompaniesID: comp.ID, Weekday: int(time.Saturday), Name: "Saturday Off", IsPaid: true},
 		}
 		for _, d := range dayOffs {
 			config.DB.Where("companies_id = ? AND weekday = ?", comp.ID, d.Weekday).Assign(d).FirstOrCreate(&d)
@@ -1336,15 +1337,544 @@ func main() {
 		}
 	}
 
-	// --- Employee Bank Accounts ---
-	// Fetch employees for bank account seeding (may already be fetched above, re-fetch to be safe)
-	var aliceB, bobB, carolB, davidB, eveB, staffB models.Employees
-	config.DB.Unscoped().Where("email = ?", "alice@techa.com").First(&aliceB)
-	config.DB.Unscoped().Where("email = ?", "bob@techa.com").First(&bobB)
-	config.DB.Unscoped().Where("email = ?", "carol@techa.com").First(&carolB)
-	config.DB.Unscoped().Where("email = ?", "david@bizgroup.com").First(&davidB)
-	config.DB.Unscoped().Where("email = ?", "eve@bizgroup.com").First(&eveB)
-	config.DB.Unscoped().Where("email = ?", "staff@admin.com").First(&staffB)
+	// --- Realistic 2027 Mock Baseline ---
+	// Passwords intentionally match emails for local demo/dev convenience only.
+	devUsers := []struct {
+		emp     *models.Employees
+		email   string
+		company uint
+		role    uint
+		salary  float64
+		bankID  *uint
+		bank    string
+		account string
+	}{
+		{&admin, "admin@admin.com", sysComp.ID, sysRole.ID, 0, &bankTTB.ID, bankTTB.BankName, "Payroll Pro Admin"},
+		{&staff, "staff@admin.com", sysComp.ID, sysStaffRole.ID, 42000, &bankTTB.ID, bankTTB.BankName, "Test Staff"},
+		{&alice, "alice@techa.com", compA.ID, managerRoleA.ID, 78000, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson"},
+		{&bob, "bob@techa.com", compA.ID, staffRoleA.ID, 52000, &bankSCB.ID, bankSCB.BankName, "Bob Smith"},
+		{&carol, "carol@techa.com", compA.ID, staffRoleA.ID, 32500, &bankBBL.ID, bankBBL.BankName, "Carol Davis"},
+		{&david, "david@bizgroup.com", compB.ID, managerRoleB.ID, 86000, &bankKTB.ID, bankKTB.BankName, "David Wilson"},
+		{&eve, "eve@bizgroup.com", compB.ID, staffRoleB.ID, 47000, &bankBAY.ID, bankBAY.BankName, "Eve Brown"},
+		{&frank, "frank@bizgroup.com", compB.ID, staffRoleB.ID, 29500, &bankBBL.ID, bankBBL.BankName, "Frank Garcia"},
+	}
 
-	log.Println("Migration & Setup completed with Payroll Configs!")
+	for idx, u := range devUsers {
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(u.email), 10)
+		config.DB.Model(&models.Employees{}).Where("email = ?", u.email).Updates(map[string]interface{}{
+			"password":     string(hashed),
+			"is_active":    true,
+			"roles_id":     u.role,
+			"companies_id": u.company,
+			"bank_id":      u.bankID,
+			"bank_name":    u.bank,
+			"account_name": u.account,
+			"account_no":   "2027" + time.Date(2027, time.January, idx+1, 0, 0, 0, 0, time.UTC).Format("0102") + "000",
+		})
+		config.DB.Unscoped().Where("email = ?", u.email).First(u.emp)
+		if u.salary > 0 && u.emp.ID != 0 {
+			salary := models.SalariesStructure{
+				CompaniesID:   u.company,
+				EmployeesID:   u.emp.ID,
+				BaseSalaries:  u.salary,
+				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+			}
+			config.DB.Where(models.SalariesStructure{EmployeesID: u.emp.ID, EffectiveDate: salary.EffectiveDate}).
+				Assign(salary).FirstOrCreate(&salary)
+			upsertEmployeeCompanyAccess(u.emp.ID, u.company, u.role, true)
+		}
+	}
+
+	companies := []models.Companies{sysComp, compA, compB}
+	companyIDs := []uint{sysComp.ID, compA.ID, compB.ID}
+	start2027 := time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end2027 := time.Date(2027, time.June, 30, 23, 59, 59, 0, time.UTC)
+
+	// Remove the older 2026 demo payroll/time-log rows from this seed so local data focuses on Jan-Jun 2027.
+	config.DB.Exec(`DELETE ptd FROM payroll_transaction_detail ptd
+		JOIN payroll_transaction pt ON pt.id = ptd.transaction_id
+		JOIN payroll_cycle pc ON pc.id = pt.cycle_id
+		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE pt FROM payroll_transaction pt
+		JOIN payroll_cycle pc ON pc.id = pt.cycle_id
+		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE pce FROM payroll_cycle_earning pce
+		JOIN payroll_cycle pc ON pc.id = pce.cycle_id
+		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE pcd FROM payroll_cycle_deduction pcd
+		JOIN payroll_cycle pc ON pc.id = pcd.cycle_id
+		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027).Delete(&models.PayrollCycle{})
+	config.DB.Unscoped().Where("companies_id IN ? AND ((check_in >= ? AND check_in <= ?) OR (created_at >= ? AND created_at <= ?))", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027).Delete(&models.TimeLog{})
+
+	holidaySeeds2027 := []models.Holiday{
+		{Date: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC), Name: "New Year's Day", IsPaid: true},
+		{Date: time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC), Name: "Makha Bucha Day", IsPaid: true},
+		{Date: time.Date(2027, 4, 6, 0, 0, 0, 0, time.UTC), Name: "Chakri Memorial Day", IsPaid: true},
+		{Date: time.Date(2027, 4, 13, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
+		{Date: time.Date(2027, 4, 14, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
+		{Date: time.Date(2027, 4, 15, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
+		{Date: time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC), Name: "Labour Day", IsPaid: true},
+		{Date: time.Date(2027, 5, 5, 0, 0, 0, 0, time.UTC), Name: "Coronation Day", IsPaid: true},
+		{Date: time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC), Name: "Visakha Bucha Day", IsPaid: true},
+		{Date: time.Date(2027, 6, 3, 0, 0, 0, 0, time.UTC), Name: "Queen Suthida's Birthday", IsPaid: true},
+	}
+	for _, comp := range companies {
+		for _, h := range holidaySeeds2027 {
+			h.CompaniesID = comp.ID
+			config.DB.Where("companies_id = ? AND date = ?", comp.ID, h.Date.Format("2006-01-02")).Assign(h).FirstOrCreate(&h)
+		}
+	}
+
+	monthName := func(m time.Month) string {
+		return [...]string{"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}[m]
+	}
+	monthEnd := func(year int, month time.Month) time.Time {
+		return time.Date(year, month+1, 0, 23, 59, 59, 0, time.UTC)
+	}
+	cycleByCompanyMonth := map[uint]map[time.Month]models.PayrollCycle{}
+	for _, comp := range companies {
+		cycleByCompanyMonth[comp.ID] = map[time.Month]models.PayrollCycle{}
+		for m := time.January; m <= time.June; m++ {
+			cycle := models.PayrollCycle{
+				CompaniesID: comp.ID,
+				CycleName:   monthName(m) + " 2027",
+				StartDate:   time.Date(2027, m, 1, 0, 0, 0, 0, time.UTC),
+				EndDate:     monthEnd(2027, m),
+				IsClosed:    m <= time.May,
+			}
+			config.DB.Where(models.PayrollCycle{CompaniesID: comp.ID, CycleName: cycle.CycleName}).Assign(cycle).FirstOrCreate(&cycle)
+			cycleByCompanyMonth[comp.ID][m] = cycle
+		}
+	}
+
+	type profile struct {
+		emp          models.Employees
+		companyID    uint
+		salary       float64
+		allowance    float64
+		provident    float64
+		loan         float64
+		pattern      string
+		approvedByID *uint
+	}
+	approverA, approverB, approverSys := alice.ID, david.ID, admin.ID
+	profiles := []profile{
+		{staff, sysComp.ID, 42000, 1500, 1680, 0, "steady", &approverSys},
+		{alice, compA.ID, 78000, 8000, 3900, 0, "manager", &approverA},
+		{bob, compA.ID, 52000, 2500, 2600, 3000, "late_ot", &approverA},
+		{carol, compA.ID, 32500, 1200, 1300, 0, "mixed_absent", &approverA},
+		{david, compB.ID, 86000, 9000, 4300, 0, "manager", &approverB},
+		{eve, compB.ID, 47000, 1800, 2350, 1800, "steady_ot", &approverB},
+		{frank, compB.ID, 29500, 900, 1180, 2200, "mixed_absent", &approverB},
+	}
+
+	type leavePlan struct {
+		emp       models.Employees
+		companyID uint
+		leaveType models.LeaveType
+		name      string
+		start     time.Time
+		end       time.Time
+		days      float64
+		status    models.LeaveStatus
+		reason    string
+		approver  *uint
+	}
+	leaveTypeID := func(companyID uint, name string) *uint {
+		var lt models.LeaveTypeSetting
+		if err := config.DB.Where("companies_id = ? AND name = ?", companyID, name).First(&lt).Error; err != nil {
+			return nil
+		}
+		return &lt.ID
+	}
+	leavePlans := []leavePlan{
+		{bob, compA.ID, models.LeaveTypeAnnual, "Annual Leave", time.Date(2027, 2, 18, 0, 0, 0, 0, time.UTC), time.Date(2027, 2, 19, 0, 0, 0, 0, time.UTC), 2, models.LeaveStatusApproved, "Family trip booked in advance", &approverA},
+		{carol, compA.ID, models.LeaveTypeSick, "Sick Leave", time.Date(2027, 3, 9, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 10, 0, 0, 0, 0, time.UTC), 2, models.LeaveStatusApproved, "Medical certificate attached", &approverA},
+		{eve, compB.ID, models.LeaveTypePersonal, "Personal Leave", time.Date(2027, 4, 9, 0, 0, 0, 0, time.UTC), time.Date(2027, 4, 9, 0, 0, 0, 0, time.UTC), 1, models.LeaveStatusApproved, "Government document appointment", &approverB},
+		{frank, compB.ID, models.LeaveTypeAnnual, "Annual Leave", time.Date(2027, 5, 17, 0, 0, 0, 0, time.UTC), time.Date(2027, 5, 18, 0, 0, 0, 0, time.UTC), 2, models.LeaveStatusApproved, "Planned vacation", &approverB},
+		{staff, sysComp.ID, models.LeaveTypeSick, "Sick Leave", time.Date(2027, 6, 8, 0, 0, 0, 0, time.UTC), time.Date(2027, 6, 8, 0, 0, 0, 0, time.UTC), 1, models.LeaveStatusPending, "Flu symptoms", nil},
+	}
+	approvedLeaveDays := map[string]bool{}
+	for _, lp := range leavePlans {
+		if lp.emp.ID == 0 {
+			continue
+		}
+		leave := models.LeaveRequest{
+			CompaniesID: lp.companyID, EmployeesID: lp.emp.ID, LeaveTypeID: leaveTypeID(lp.companyID, lp.name),
+			LeaveType: lp.leaveType, StartDate: lp.start, EndDate: lp.end, TotalDays: lp.days,
+			Reason: lp.reason, Status: lp.status, ApprovedBy: lp.approver,
+		}
+		config.DB.Where("employees_id = ? AND start_date = ? AND leave_type = ?", lp.emp.ID, lp.start, lp.leaveType).
+			Assign(leave).FirstOrCreate(&leave)
+		if lp.status == models.LeaveStatusApproved {
+			for day := lp.start; !day.After(lp.end); day = day.AddDate(0, 0, 1) {
+				approvedLeaveDays[lp.emp.Email+"|"+day.Format("2006-01-02")] = true
+			}
+		}
+	}
+
+	for _, p := range profiles {
+		if p.emp.ID == 0 {
+			continue
+		}
+		for _, lb := range []struct {
+			t    models.LeaveType
+			max  float64
+			used float64
+		}{
+			{models.LeaveTypeAnnual, 15, 0},
+			{models.LeaveTypeSick, 30, 0},
+			{models.LeaveTypePersonal, 3, 0},
+			{models.LeaveTypeUnpaid, 0, 0},
+		} {
+			for _, lp := range leavePlans {
+				if lp.emp.ID == p.emp.ID && lp.leaveType == lb.t && lp.status == models.LeaveStatusApproved {
+					lb.used += lp.days
+				}
+			}
+			balance := models.LeaveBalance{
+				CompaniesID: p.companyID, EmployeesID: p.emp.ID, Year: 2027, LeaveType: lb.t,
+				MaxQuota: lb.max, UsedQuota: lb.used, Remaining: math.Max(lb.max-lb.used, 0),
+			}
+			config.DB.Where(models.LeaveBalance{CompaniesID: p.companyID, EmployeesID: p.emp.ID, Year: 2027, LeaveType: lb.t}).
+				Assign(balance).FirstOrCreate(&balance)
+		}
+	}
+
+	var etOtSys2027, etOtA2027, etOtB2027, etBonusA2027, etBonusB2027, etPosA2027, etPosB2027 models.EarningType
+	var dtLoanSys2027, dtLoanA2027, dtLoanB2027, dtPfSys2027, dtPfA2027, dtPfB2027 models.DeductionType
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Overtime (OT)").First(&etOtSys2027)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Overtime (OT)").First(&etOtA2027)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Overtime (OT)").First(&etOtB2027)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Bonus").First(&etBonusA2027)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Bonus").First(&etBonusB2027)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Position Allowance").First(&etPosA2027)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Position Allowance").First(&etPosB2027)
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Loan Repayment").First(&dtLoanSys2027)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Loan Repayment").First(&dtLoanA2027)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Loan Repayment").First(&dtLoanB2027)
+	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Provident Fund").First(&dtPfSys2027)
+	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Provident Fund").First(&dtPfA2027)
+	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Provident Fund").First(&dtPfB2027)
+
+	earningTypeForCompany := func(companyID uint, kind string) uint {
+		if companyID == sysComp.ID {
+			if kind == "ot" {
+				return etOtSys2027.ID
+			}
+			return 0
+		}
+		if companyID == compA.ID {
+			if kind == "bonus" {
+				return etBonusA2027.ID
+			}
+			if kind == "position" {
+				return etPosA2027.ID
+			}
+			return etOtA2027.ID
+		}
+		if kind == "bonus" {
+			return etBonusB2027.ID
+		}
+		if kind == "position" {
+			return etPosB2027.ID
+		}
+		return etOtB2027.ID
+	}
+	deductionTypeForCompany := func(companyID uint, kind string) uint {
+		if companyID == sysComp.ID {
+			if kind == "loan" {
+				return dtLoanSys2027.ID
+			}
+			return dtPfSys2027.ID
+		}
+		if companyID == compA.ID {
+			if kind == "loan" {
+				return dtLoanA2027.ID
+			}
+			return dtPfA2027.ID
+		}
+		if kind == "loan" {
+			return dtLoanB2027.ID
+		}
+		return dtPfB2027.ID
+	}
+
+	for _, p := range profiles {
+		if p.emp.ID == 0 {
+			continue
+		}
+		if p.allowance > 0 {
+			etID := earningTypeForCompany(p.companyID, "position")
+			if etID != 0 {
+				rec := models.EmployeeEarning{CompaniesID: p.companyID, EmployeesID: p.emp.ID, EarningTypeID: etID, Amount: p.allowance}
+				config.DB.Where(models.EmployeeEarning{EmployeesID: p.emp.ID, EarningTypeID: etID}).Assign(rec).FirstOrCreate(&rec)
+			}
+		}
+		if p.provident > 0 {
+			dtID := deductionTypeForCompany(p.companyID, "provident")
+			rec := models.EmployeeDeduction{CompaniesID: p.companyID, EmployeesID: p.emp.ID, DeductionTypeID: dtID, Amount: p.provident}
+			config.DB.Where(models.EmployeeDeduction{EmployeesID: p.emp.ID, DeductionTypeID: dtID}).Assign(rec).FirstOrCreate(&rec)
+		}
+		if p.loan > 0 {
+			dtID := deductionTypeForCompany(p.companyID, "loan")
+			rec := models.EmployeeDeduction{CompaniesID: p.companyID, EmployeesID: p.emp.ID, DeductionTypeID: dtID, Amount: p.loan}
+			config.DB.Where(models.EmployeeDeduction{EmployeesID: p.emp.ID, DeductionTypeID: dtID}).Assign(rec).FirstOrCreate(&rec)
+		}
+	}
+
+	type attendanceTotals struct {
+		lateMinutes int
+		absentDays  int
+		leaveDays   int
+		otMinutes   int
+		holidayDays int
+	}
+	totals := map[string]map[time.Month]attendanceTotals{}
+	for _, p := range profiles {
+		totals[p.emp.Email] = map[time.Month]attendanceTotals{}
+	}
+	locationByCompany := map[uint][]models.WorkLocation{}
+	for _, comp := range companies {
+		var locs []models.WorkLocation
+		config.DB.Where("companies_id = ?", comp.ID).Order("name ASC").Find(&locs)
+		locationByCompany[comp.ID] = locs
+	}
+	isHoliday := func(companyID uint, day time.Time) bool {
+		var count int64
+		config.DB.Model(&models.Holiday{}).Where("companies_id = ? AND date = ?", companyID, day.Format("2006-01-02")).Count(&count)
+		return count > 0
+	}
+	addTotals := func(email string, month time.Month, delta attendanceTotals) {
+		t := totals[email][month]
+		t.lateMinutes += delta.lateMinutes
+		t.absentDays += delta.absentDays
+		t.leaveDays += delta.leaveDays
+		t.otMinutes += delta.otMinutes
+		t.holidayDays += delta.holidayDays
+		totals[email][month] = t
+	}
+	workTimes := func(p profile, day time.Time) (models.AttendanceStatus, *time.Time, *time.Time, string, attendanceTotals) {
+		key := p.emp.Email + "|" + day.Format("2006-01-02")
+		if approvedLeaveDays[key] {
+			return models.StatusLeave, nil, nil, "Approved leave", attendanceTotals{leaveDays: 1}
+		}
+		late := 0
+		ot := 0
+		absent := false
+		remark := ""
+		switch p.pattern {
+		case "manager":
+			if day.Day()%10 == 0 || day.Day()%21 == 0 {
+				ot = 90
+				remark = "Month-end review"
+			}
+		case "late_ot":
+			if day.Day()%8 == 0 || day.Day()%19 == 0 {
+				late = 25
+				remark = "Traffic delay"
+			}
+			if day.Day()%6 == 0 {
+				ot = 75
+				remark = "Deployment support"
+			}
+		case "steady_ot":
+			if day.Day()%7 == 0 || day.Day()%17 == 0 {
+				ot = 60
+				remark = "Customer support extension"
+			}
+			if day.Day()%23 == 0 {
+				late = 15
+				remark = "School drop-off"
+			}
+		case "mixed_absent":
+			if day.Day()%16 == 0 {
+				absent = true
+				remark = "Unexcused absence"
+			} else if day.Day()%5 == 0 || day.Day()%22 == 0 {
+				late = 40
+				remark = "Late arrival"
+			}
+			if day.Day()%13 == 0 {
+				ot = 45
+				remark = "Inventory count"
+			}
+		default:
+			if day.Day()%18 == 0 {
+				ot = 60
+				remark = "System maintenance"
+			}
+		}
+		if absent {
+			return models.StatusAbsent, nil, nil, remark, attendanceTotals{absentDays: 1}
+		}
+		status := models.StatusOnTime
+		if late > 0 {
+			status = models.StatusLate
+		}
+		checkIn := time.Date(day.Year(), day.Month(), day.Day(), 9, late, 0, 0, time.UTC)
+		checkOut := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, time.UTC).Add(time.Duration(ot) * time.Minute)
+		return status, &checkIn, &checkOut, remark, attendanceTotals{lateMinutes: late, otMinutes: ot}
+	}
+
+	for day := start2027; !day.After(end2027); day = day.AddDate(0, 0, 1) {
+		isWeekend := day.Weekday() == time.Saturday || day.Weekday() == time.Sunday
+		for _, p := range profiles {
+			if p.emp.ID == 0 {
+				continue
+			}
+			status, checkIn, checkOut, remark, delta := workTimes(p, day)
+			if isWeekend || isHoliday(p.companyID, day) {
+				if !(p.pattern == "manager" && day.Day()%14 == 0) && !(p.pattern == "steady_ot" && day.Day()%20 == 0) {
+					continue
+				}
+				status = models.StatusHoliday
+				checkInTime := time.Date(day.Year(), day.Month(), day.Day(), 10, 0, 0, 0, time.UTC)
+				checkOutTime := time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+				checkIn, checkOut = &checkInTime, &checkOutTime
+				remark = "Approved holiday work"
+				delta = attendanceTotals{holidayDays: 1, otMinutes: 360}
+			}
+			addTotals(p.emp.Email, day.Month(), delta)
+			var locID *uint
+			if locs := locationByCompany[p.companyID]; len(locs) > 0 && checkIn != nil {
+				loc := locs[day.Day()%len(locs)]
+				locID = &loc.ID
+			}
+			tl := models.TimeLog{
+				CompaniesID: p.companyID, EmployeesID: p.emp.ID, CheckIn: checkIn, CheckOut: checkOut,
+				Status: status, WorkLocationID: locID, Remark: remark,
+			}
+			if checkIn == nil {
+				tl.CreatedAt = day
+				tl.UpdatedAt = day
+				config.DB.Where("employees_id = ? AND status = ? AND created_at >= ? AND created_at < ?", p.emp.ID, status, day, day.AddDate(0, 0, 1)).
+					Assign(tl).FirstOrCreate(&tl)
+			} else {
+				config.DB.Where(models.TimeLog{EmployeesID: p.emp.ID, CheckIn: checkIn}).Assign(tl).FirstOrCreate(&tl)
+			}
+		}
+	}
+
+	roundMoney := func(v float64) float64 { return math.Round(v*100) / 100 }
+	monthlyTax := func(taxable float64) float64 {
+		annual := taxable*12 - 60000
+		if annual <= 150000 {
+			return 0
+		}
+		switch {
+		case annual <= 300000:
+			return roundMoney((annual - 150000) * 0.05 / 12)
+		case annual <= 500000:
+			return roundMoney((7500 + (annual-300000)*0.10) / 12)
+		case annual <= 750000:
+			return roundMoney((27500 + (annual-500000)*0.15) / 12)
+		case annual <= 1000000:
+			return roundMoney((65000 + (annual-750000)*0.20) / 12)
+		default:
+			return roundMoney((115000 + (annual-1000000)*0.25) / 12)
+		}
+	}
+	seedCycleItem := func(companyID, cycleID, empID, typeID uint, amount float64, earning bool) {
+		if cycleID == 0 || empID == 0 || typeID == 0 || amount <= 0 {
+			return
+		}
+		if earning {
+			rec := models.PayrollCycleEarning{CompaniesID: companyID, CycleID: cycleID, EmployeesID: empID, EarningTypeID: typeID, Amount: amount}
+			config.DB.Where(models.PayrollCycleEarning{CycleID: cycleID, EmployeesID: empID, EarningTypeID: typeID}).Assign(rec).FirstOrCreate(&rec)
+			return
+		}
+		rec := models.PayrollCycleDeduction{CompaniesID: companyID, CycleID: cycleID, EmployeesID: empID, DeductionTypeID: typeID, Amount: amount}
+		config.DB.Where(models.PayrollCycleDeduction{CycleID: cycleID, EmployeesID: empID, DeductionTypeID: typeID}).Assign(rec).FirstOrCreate(&rec)
+	}
+
+	for _, p := range profiles {
+		if p.emp.ID == 0 {
+			continue
+		}
+		for m := time.January; m <= time.June; m++ {
+			cycle := cycleByCompanyMonth[p.companyID][m]
+			t := totals[p.emp.Email][m]
+			bonus := 0.0
+			if m == time.January && (p.pattern == "manager" || p.pattern == "steady") {
+				bonus = 12000
+			}
+			if m == time.April && p.companyID != sysComp.ID {
+				bonus += 5000
+			}
+			otAmount := roundMoney(float64(t.otMinutes) * 5)
+			lateDeduction := roundMoney(float64(t.lateMinutes) * 5)
+			absentDeduction := roundMoney(float64(t.absentDays) * 1100)
+			holidayAmount := roundMoney(float64(t.holidayDays) * 700)
+			loanExtra := 0.0
+			if p.loan > 0 && (m == time.March || m == time.May) {
+				loanExtra = 1500
+			}
+			seedCycleItem(p.companyID, cycle.ID, p.emp.ID, earningTypeForCompany(p.companyID, "ot"), otAmount+holidayAmount, true)
+			seedCycleItem(p.companyID, cycle.ID, p.emp.ID, earningTypeForCompany(p.companyID, "bonus"), bonus, true)
+			seedCycleItem(p.companyID, cycle.ID, p.emp.ID, deductionTypeForCompany(p.companyID, "loan"), loanExtra, false)
+
+			totalEarning := roundMoney(p.salary + p.allowance + otAmount + holidayAmount + bonus)
+			totalDeduction := roundMoney(p.provident + p.loan + loanExtra + lateDeduction + absentDeduction)
+			sso := 0.0
+			if p.salary >= 1650 {
+				sso = math.Min(roundMoney(p.salary*0.05), 750)
+			}
+			tax := monthlyTax(totalEarning - p.provident)
+			netPay := roundMoney(totalEarning - totalDeduction - sso - tax)
+
+			tx := models.PayrollTransaction{
+				CycleID: cycle.ID, EmployeesID: p.emp.ID, SalariesAtTime: p.salary,
+				TotalEarning: totalEarning, TotalDeduction: totalDeduction, SsoAmount: sso, TaxAmount: tax, NetPay: netPay,
+			}
+			var existingTx models.PayrollTransaction
+			result := config.DB.Where("cycle_id = ? AND employees_id = ?", cycle.ID, p.emp.ID).Limit(1).Find(&existingTx)
+			if result.Error != nil {
+				log.Printf("Failed to query 2027 transaction for emp %d: %v", p.emp.ID, result.Error)
+				continue
+			}
+			if result.RowsAffected > 0 {
+				tx.ID = existingTx.ID
+				config.DB.Model(&existingTx).Updates(tx)
+			} else {
+				config.DB.Create(&tx)
+			}
+			config.DB.Unscoped().Where("transaction_id = ?", tx.ID).Delete(&models.PayrollTransactionDetail{})
+			details := []models.PayrollTransactionDetail{
+				{TransactionID: tx.ID, ItemName: "Base Salary", Amount: p.salary, Type: "earning"},
+				{TransactionID: tx.ID, ItemName: "Social Security (SSO)", Amount: sso, Type: "deduction"},
+				{TransactionID: tx.ID, ItemName: "Income Tax", Amount: tax, Type: "deduction"},
+			}
+			if p.allowance > 0 {
+				etID := earningTypeForCompany(p.companyID, "position")
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Position Allowance", Amount: p.allowance, Type: "earning", EarningTypeID: &etID})
+			}
+			if otAmount+holidayAmount > 0 {
+				etID := earningTypeForCompany(p.companyID, "ot")
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Overtime and Holiday Work", Amount: otAmount + holidayAmount, Type: "earning", EarningTypeID: &etID})
+			}
+			if bonus > 0 {
+				etID := earningTypeForCompany(p.companyID, "bonus")
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Performance Bonus", Amount: bonus, Type: "earning", EarningTypeID: &etID})
+			}
+			if p.provident > 0 {
+				dtID := deductionTypeForCompany(p.companyID, "provident")
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Provident Fund", Amount: p.provident, Type: "deduction", DeductionTypeID: &dtID})
+			}
+			if p.loan+loanExtra > 0 {
+				dtID := deductionTypeForCompany(p.companyID, "loan")
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Loan Repayment", Amount: p.loan + loanExtra, Type: "deduction", DeductionTypeID: &dtID})
+			}
+			if lateDeduction > 0 {
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Late Deduction", Amount: lateDeduction, Type: "deduction"})
+			}
+			if absentDeduction > 0 {
+				details = append(details, models.PayrollTransactionDetail{TransactionID: tx.ID, ItemName: "Absent Deduction", Amount: absentDeduction, Type: "deduction"})
+			}
+			config.DB.Create(&details)
+		}
+	}
+
+	log.Println("Migration & Setup completed with realistic Jan-Jun 2027 mock data!")
 }
