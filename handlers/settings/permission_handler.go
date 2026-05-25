@@ -29,7 +29,7 @@ func GetRolesPermissions(c *gin.Context) {
 	}
 
 	var modules []models.AppModule
-	config.DB.Order("`order` asc").Find(&modules)
+	config.DB.Order(`"order" asc`).Find(&modules)
 
 	var access []models.RolesModuleAccess
 	// Apply composite scopes for tenant and data access

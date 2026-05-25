@@ -1,13 +1,13 @@
 # AGENTS.md
 
-Compact playbook for `payroll-backend`, a Go Gin + GORM + MySQL API. The companion frontend is `../payroll-frontend`; check it for API contracts, routes, modules, auth responses, permissions, seed data, or response-shape changes.
+Compact playbook for `payroll-backend`, a Go Gin + GORM + Postgres API. The companion frontend is `../payroll-frontend`; check it for API contracts, routes, modules, auth responses, permissions, seed data, or response-shape changes.
 
 ## Stack
 
-- Go `1.25.5`, Gin, GORM, MySQL.
+- Go `1.25.5`, Gin, GORM, Postgres.
 - API base path: `/api/v1`; server port: `8000`.
 - CORS default: `http://localhost:5174`; override with `CORS_ALLOWED_ORIGINS` or `FRONTEND_ORIGIN`.
-- Local DB: `root` / `1234` on `127.0.0.1:3306`, database `PayrollDB`.
+- Local DB: `postgres` / `1234` on `127.0.0.1:5432`, database `payrolldb`.
 - Config loads `.env` via `godotenv`; never hardcode secrets.
 
 ## Layout
@@ -25,7 +25,7 @@ Compact playbook for `payroll-backend`, a Go Gin + GORM + MySQL API. The compani
 
 ## Commands
 
-- `docker compose up -d` - start local MySQL.
+- `docker compose up -d` - start local Postgres.
 - `docker compose down` / `docker compose down -v` - stop/remove DB container/data.
 - `go run .` - run API and AutoMigrate.
 - `go run ./seed` - seed local data.

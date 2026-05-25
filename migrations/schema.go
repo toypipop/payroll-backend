@@ -68,13 +68,19 @@ func BackfillSalariesStructureCompanies(db *gorm.DB) error {
 		}
 	}
 	return db.Exec(`
-		UPDATE salaries_structure ss
-		JOIN employees e ON e.id = ss.employees_id
-		JOIN companies c ON c.id = e.companies_id
-		LEFT JOIN companies existing_company ON existing_company.id = ss.companies_id
-		SET ss.companies_id = e.companies_id
-		WHERE ss.companies_id = 0
-			OR existing_company.id IS NULL
+		UPDATE salaries_structure AS ss
+		SET companies_id = e.companies_id
+		FROM employees AS e
+		WHERE e.id = ss.employees_id
+			AND EXISTS (SELECT 1 FROM companies AS c WHERE c.id = e.companies_id)
+			AND (
+				ss.companies_id = 0
+				OR NOT EXISTS (
+					SELECT 1
+					FROM companies AS existing_company
+					WHERE existing_company.id = ss.companies_id
+				)
+			)
 	`).Error
 }
 
@@ -84,43 +90,45 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 
 	// Rename legacy seeded roles when no replacement exists for that company.
 	if err := db.Exec(`
-		UPDATE roles legacy
-		LEFT JOIN roles replacement
-			ON replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = ?
-			AND replacement.deleted_at = 0
-		SET legacy.roles_name = ?
+		UPDATE roles AS legacy
+		SET roles_name = ?
 		WHERE legacy.roles_name = ?
 			AND legacy.deleted_at = 0
-			AND replacement.id IS NULL
-	`, systemRoleName, systemRoleName, legacyRoleName).Error; err != nil {
+			AND NOT EXISTS (
+				SELECT 1
+				FROM roles AS replacement
+				WHERE replacement.companies_id = legacy.companies_id
+					AND replacement.roles_name = ?
+					AND replacement.deleted_at = 0
+			)
+	`, systemRoleName, legacyRoleName, systemRoleName).Error; err != nil {
 		return err
 	}
 
 	duplicateCleanup := []string{
-		`DELETE ecr
-		 FROM employee_company_access ecr
-		 JOIN roles legacy ON legacy.id = ecr.role_id
-		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
+		`DELETE FROM employee_company_access AS ecr
+		 USING roles AS legacy, roles AS replacement, employee_company_access AS existing
+		 WHERE legacy.roles_name = 'SUPER_ADMIN'
+			AND legacy.deleted_at = 0
+			AND legacy.id = ecr.role_id
+			AND replacement.companies_id = legacy.companies_id
 			AND replacement.roles_name = 'SYSTEM_ADMIN'
 			AND replacement.deleted_at = 0
-		 JOIN employee_company_access existing ON existing.employee_id = ecr.employee_id
+			AND existing.employee_id = ecr.employee_id
 			AND existing.company_id = ecr.company_id
 			AND existing.role_id = replacement.id
-			AND existing.deleted_at = 0
+			AND existing.deleted_at = 0`,
+		`DELETE FROM roles_module_access AS rma
+		 USING roles AS legacy, roles AS replacement, roles_module_access AS existing
 		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0`,
-		`DELETE rma
-		 FROM roles_module_access rma
-		 JOIN roles legacy ON legacy.id = rma.roles_id
-		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
+			AND legacy.deleted_at = 0
+			AND legacy.id = rma.roles_id
+			AND replacement.companies_id = legacy.companies_id
 			AND replacement.roles_name = 'SYSTEM_ADMIN'
 			AND replacement.deleted_at = 0
-		 JOIN roles_module_access existing ON existing.roles_id = replacement.id
+			AND existing.roles_id = replacement.id
 			AND existing.module_id = rma.module_id
-			AND existing.deleted_at = 0
-		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0`,
+			AND existing.deleted_at = 0`,
 	}
 	for _, query := range duplicateCleanup {
 		if err := db.Exec(query).Error; err != nil {
@@ -130,37 +138,40 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 
 	// If both names exist, move references to the replacement then deactivate the legacy row.
 	referenceUpdates := []string{
-		`UPDATE employees e
-		 JOIN roles legacy ON legacy.id = e.roles_id
-		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0
-		 SET e.roles_id = replacement.id
+		`UPDATE employees AS e
+		 SET roles_id = replacement.id
+		 FROM roles AS legacy, roles AS replacement
 		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0`,
-		`UPDATE employee_company_access ecr
-		 JOIN roles legacy ON legacy.id = ecr.role_id
-		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
+			AND legacy.deleted_at = 0
+			AND legacy.id = e.roles_id
+			AND replacement.companies_id = legacy.companies_id
 			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0
-		 SET ecr.role_id = replacement.id
+			AND replacement.deleted_at = 0`,
+		`UPDATE employee_company_access AS ecr
+		 SET role_id = replacement.id
+		 FROM roles AS legacy, roles AS replacement
 		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0`,
-		`UPDATE roles_module_access rma
-		 JOIN roles legacy ON legacy.id = rma.roles_id
-		 JOIN roles replacement ON replacement.companies_id = legacy.companies_id
+			AND legacy.deleted_at = 0
+			AND legacy.id = ecr.role_id
+			AND replacement.companies_id = legacy.companies_id
 			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0
-		 SET rma.roles_id = replacement.id
+			AND replacement.deleted_at = 0`,
+		`UPDATE roles_module_access AS rma
+		 SET roles_id = replacement.id
+		 FROM roles AS legacy, roles AS replacement
 		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0`,
+			AND legacy.deleted_at = 0
+			AND legacy.id = rma.roles_id
+			AND replacement.companies_id = legacy.companies_id
+			AND replacement.roles_name = 'SYSTEM_ADMIN'
+			AND replacement.deleted_at = 0`,
 	}
 	for _, query := range referenceUpdates {
 		if err := db.Exec(query).Error; err != nil {
 			return err
 		}
 	}
-	if err := db.Exec("UPDATE roles SET deleted_at = UNIX_TIMESTAMP() WHERE roles_name = ? AND deleted_at = 0", legacyRoleName).Error; err != nil {
+	if err := db.Exec("UPDATE roles SET deleted_at = CAST(EXTRACT(EPOCH FROM NOW()) AS bigint) WHERE roles_name = ? AND deleted_at = 0", legacyRoleName).Error; err != nil {
 		return err
 	}
 

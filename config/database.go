@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -20,16 +20,20 @@ func getEnv(key, fallback string) string {
 }
 
 func ConnectDatabase() {
-	user := getEnv("DB_USER", "root")
+	user := getEnv("DB_USER", "postgres")
 	password := getEnv("DB_PASSWORD", "")
 	host := getEnv("DB_HOST", "127.0.0.1")
-	port := getEnv("DB_PORT", "3306")
-	dbName := getEnv("DB_NAME", "PayrollDB")
+	port := getEnv("DB_PORT", "5432")
+	dbName := getEnv("DB_NAME", "payrolldb")
+	sslMode := getEnv("DB_SSLMODE", "disable")
+	timeZone := getEnv("DB_TIMEZONE", "Asia/Bangkok")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		user, password, host, port, dbName)
+	dsn := fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
+		host, user, password, dbName, port, sslMode, timeZone,
+	)
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true, // Singular table names
 		},

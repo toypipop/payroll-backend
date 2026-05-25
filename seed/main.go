@@ -31,6 +31,16 @@ func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint, isDefault b
 	}).Assign(mapping).FirstOrCreate(&mapping)
 }
 
+func syncAppModuleIDSequence() {
+	config.DB.Exec(`
+		SELECT setval(
+			pg_get_serial_sequence('app_module', 'id'),
+			COALESCE((SELECT MAX(id) FROM app_module), 1),
+			(SELECT COUNT(*) > 0 FROM app_module)
+		)
+	`)
+}
+
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system environment")
@@ -444,6 +454,9 @@ func main() {
 		m.IsActive = true
 		var existingModule models.AppModule
 		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
+		if m.ID != 0 {
+			syncAppModuleIDSequence()
+		}
 
 		mID := existingModule.ID
 
@@ -522,7 +535,7 @@ func main() {
 		})
 
 		if s.salary > 0 {
-			salary := models.SalariesStructure{EmployeesID: existingEmp.ID, BaseSalaries: s.salary, EffectiveDate: effDate}
+			salary := models.SalariesStructure{CompaniesID: existingEmp.CompaniesID, EmployeesID: existingEmp.ID, BaseSalaries: s.salary, EffectiveDate: effDate}
 			config.DB.Where(models.SalariesStructure{EmployeesID: existingEmp.ID}).Assign(salary).FirstOrCreate(&salary)
 		} else {
 			var existing models.SalariesStructure
@@ -1391,19 +1404,23 @@ func main() {
 	end2027 := time.Date(2027, time.June, 30, 23, 59, 59, 0, time.UTC)
 
 	// Remove the older 2026 demo payroll/time-log rows from this seed so local data focuses on Jan-Jun 2027.
-	config.DB.Exec(`DELETE ptd FROM payroll_transaction_detail ptd
-		JOIN payroll_transaction pt ON pt.id = ptd.transaction_id
-		JOIN payroll_cycle pc ON pc.id = pt.cycle_id
-		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
-	config.DB.Exec(`DELETE pt FROM payroll_transaction pt
-		JOIN payroll_cycle pc ON pc.id = pt.cycle_id
-		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
-	config.DB.Exec(`DELETE pce FROM payroll_cycle_earning pce
-		JOIN payroll_cycle pc ON pc.id = pce.cycle_id
-		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
-	config.DB.Exec(`DELETE pcd FROM payroll_cycle_deduction pcd
-		JOIN payroll_cycle pc ON pc.id = pcd.cycle_id
-		WHERE pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE FROM payroll_transaction_detail AS ptd
+		USING payroll_transaction AS pt, payroll_cycle AS pc
+		WHERE pt.id = ptd.transaction_id
+			AND pc.id = pt.cycle_id
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE FROM payroll_transaction AS pt
+		USING payroll_cycle AS pc
+		WHERE pc.id = pt.cycle_id
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE FROM payroll_cycle_earning AS pce
+		USING payroll_cycle AS pc
+		WHERE pc.id = pce.cycle_id
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+	config.DB.Exec(`DELETE FROM payroll_cycle_deduction AS pcd
+		USING payroll_cycle AS pc
+		WHERE pc.id = pcd.cycle_id
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
 	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027).Delete(&models.PayrollCycle{})
 	config.DB.Unscoped().Where("companies_id IN ? AND ((check_in >= ? AND check_in <= ?) OR (created_at >= ? AND created_at <= ?))", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027).Delete(&models.TimeLog{})
 

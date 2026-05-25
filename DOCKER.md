@@ -1,40 +1,42 @@
 # Docker
 
-This repo uses Docker only for local MySQL. Run from the backend root:
+This repo uses Docker only for local Postgres. Run from the backend root:
 
 ```bash
 docker compose up -d
 ```
 
-MySQL:
+Postgres:
 
-- Container: `payroll-mysql`
+- Container: `payroll-postgres`
 - Host: `localhost`
-- Port: `3306`
-- Database: `PayrollDB`
-- Volume: `payroll_mysql_data`
+- Port: `5432`
+- Database: `payrolldb`
+- Volume: `payroll_postgres_data`
 
 Backend `.env`:
 
 ```text
-DB_USER=root
+DB_USER=postgres
 DB_PASSWORD=1234
 DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=PayrollDB
+DB_PORT=5432
+DB_NAME=payrolldb
+DB_SSLMODE=disable
+DB_TIMEZONE=Asia/Bangkok
 ```
 
 Common commands:
 
 ```bash
 docker compose ps
-docker compose logs -f mysql
+docker compose logs -f postgres
 docker compose stop
 docker compose down
 docker compose down -v
 ```
 
-With MySQL running:
+With Postgres running:
 
 ```bash
 go run .

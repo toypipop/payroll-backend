@@ -18,7 +18,6 @@ type Employees struct {
 	// Primary/home tenant. App access is stored in EmployeeCompanyAccess.
 	CompaniesID uint `gorm:"uniqueIndex:idx_emp_code_companies_deleted;uniqueIndex:idx_email_companies_deleted;not null" json:"companies_id"`
 
-	// Added size:100 to prevent BLOB/TEXT error in MySQL Index (English Comment)
 	EmployeesCode string `gorm:"uniqueIndex:idx_emp_code_companies_deleted;not null;size:100" json:"employees_code"`
 	Email         string `gorm:"uniqueIndex:idx_email_companies_deleted;not null;size:150" json:"email"`
 

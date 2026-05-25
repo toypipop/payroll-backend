@@ -1,23 +1,24 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: payroll-mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+  postgres:
+    image: postgres:17
+    container_name: payroll-postgres
     environment:
-      MYSQL_ROOT_PASSWORD: "1234"
-      MYSQL_DATABASE: PayrollDB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "1234"
+      POSTGRES_DB: payrolldb
       TZ: Asia/Bangkok
+      PGTZ: Asia/Bangkok
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - payroll_mysql_data:/var/lib/mysql
+      - payroll_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
 
 volumes:
-  payroll_mysql_data:
-    name: payroll_mysql_data
+  payroll_postgres_data:
+    name: payroll_postgres_data

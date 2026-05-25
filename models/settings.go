@@ -13,9 +13,8 @@ type Department struct {
 	// Use Composite Unique Index with DeletedAt to allow re-creating same dept name (English Comment)
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null;default:0" json:"-"`
 
-	CompaniesID uint `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null" json:"companies_id"`
-	// Add size:255 for MySQL index support (English Comment)
-	DeptName string `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null;size:255" json:"dept_name"`
+	CompaniesID uint   `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null" json:"companies_id"`
+	DeptName    string `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null;size:255" json:"dept_name"`
 
 	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
 }
@@ -28,9 +27,8 @@ type Position struct {
 	// Use Composite Unique Index with DeletedAt to allow re-creating same position name (English Comment)
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_pos_name_companies_deleted;not null;default:0" json:"-"`
 
-	CompaniesID uint `gorm:"uniqueIndex:idx_pos_name_companies_deleted;not null" json:"companies_id"`
-	// Add size:255 for MySQL index support (English Comment)
-	PosName string `gorm:"uniqueIndex:idx_pos_name_companies_deleted;not null;size:255" json:"pos_name"`
+	CompaniesID uint   `gorm:"uniqueIndex:idx_pos_name_companies_deleted;not null" json:"companies_id"`
+	PosName     string `gorm:"uniqueIndex:idx_pos_name_companies_deleted;not null;size:255" json:"pos_name"`
 
 	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
 }

@@ -176,7 +176,7 @@ func GetAppModules(c *gin.Context) {
 	// Fetch active modules sorted
 	if err := config.DB.
 		Where("is_active = ?", true).
-		Order("`order` ASC"). // Use backticks because 'order' is a reserved word in SQL
+		Order(`"order" ASC`).
 		Find(&modules).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch app modules"})
 		return
