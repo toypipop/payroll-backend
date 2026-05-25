@@ -1,0 +1,11 @@
+.agents/
+.git/
+.gocache/
+.vscode/
+build-errors.log
+Dockerfile
+*.exe
+*.test
+*.out
+.env
+skills-lock.json
