@@ -52,6 +52,10 @@ func SetupRouter() *gin.Engine {
 	}))
 
 	// Public Routes
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
 	authGroup := r.Group("/api/v1/auth")
 	{
 		authGroup.POST("/login", authhandler.Login)
