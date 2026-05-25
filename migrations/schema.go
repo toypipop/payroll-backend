@@ -1,10 +1,46 @@
 package migrations
 
 import (
+	"fmt"
+	"log"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
 )
+
+func ensureSchemaMigrationTable(db *gorm.DB) error {
+	return db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migration (
+			name TEXT PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`).Error
+}
+
+func RunOnce(db *gorm.DB, name string, migration func(*gorm.DB) error) error {
+	if err := ensureSchemaMigrationTable(db); err != nil {
+		return fmt.Errorf("ensure schema_migration table: %w", err)
+	}
+
+	var count int64
+	if err := db.Raw("SELECT COUNT(*) FROM schema_migration WHERE name = ?", name).Scan(&count).Error; err != nil {
+		return fmt.Errorf("check schema migration %s: %w", name, err)
+	}
+	if count > 0 {
+		log.Printf("Skipping migration %s (already applied)", name)
+		return nil
+	}
+
+	log.Printf("Running migration %s", name)
+	if err := migration(db); err != nil {
+		return fmt.Errorf("run schema migration %s: %w", name, err)
+	}
+	if err := db.Exec("INSERT INTO schema_migration (name) VALUES (?) ON CONFLICT (name) DO NOTHING", name).Error; err != nil {
+		return fmt.Errorf("mark schema migration %s applied: %w", name, err)
+	}
+
+	return nil
+}
 
 func DropLegacyIndexes(db *gorm.DB) error {
 	legacyIndexes := []string{
@@ -30,32 +66,35 @@ func RenameEmployeeCompanyAccessTable(db *gorm.DB) error {
 }
 
 func BackfillEmployeeCompanyAccess(db *gorm.DB) error {
-	var employees []models.Employees
-	if err := db.Unscoped().
-		Select("id, companies_id, roles_id").
-		Where("companies_id <> 0 AND roles_id <> 0").
-		Find(&employees).Error; err != nil {
-		return err
-	}
-
-	for _, employee := range employees {
-		mapping := models.EmployeeCompanyAccess{
-			EmployeeID: employee.ID,
-			CompanyID:  employee.CompaniesID,
-			RoleID:     employee.RolesID,
-			IsDefault:  true,
-			IsActive:   true,
-		}
-		if err := db.Where(models.EmployeeCompanyAccess{
-			EmployeeID: employee.ID,
-			CompanyID:  employee.CompaniesID,
-			RoleID:     employee.RolesID,
-		}).Assign(mapping).FirstOrCreate(&mapping).Error; err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return db.Exec(`
+		INSERT INTO employee_company_access (
+			created_at,
+			updated_at,
+			deleted_at,
+			employee_id,
+			company_id,
+			role_id,
+			is_default,
+			is_active
+		)
+		SELECT
+			NOW(),
+			NOW(),
+			0,
+			e.id,
+			e.companies_id,
+			e.roles_id,
+			TRUE,
+			TRUE
+		FROM employees AS e
+		WHERE e.companies_id <> 0
+			AND e.roles_id <> 0
+		ON CONFLICT (employee_id, company_id, role_id, deleted_at)
+		DO UPDATE SET
+			is_default = TRUE,
+			is_active = TRUE,
+			updated_at = NOW()
+	`).Error
 }
 
 func BackfillSalariesStructureCompanies(db *gorm.DB) error {

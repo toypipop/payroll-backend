@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"payroll-backend/config"
 	"payroll-backend/migrations"
-	"payroll-backend/models"
 	"payroll-backend/routes"
 
 	"github.com/joho/godotenv"
@@ -19,71 +19,36 @@ func main() {
 	// 1. Initialize Database Connection
 	config.ConnectDatabase()
 
-	// 2. Run Database Migration
-	// This will create or update tables based on your structs
-	fmt.Println("Running Database Migration...")
-	if err := migrations.DropLegacyIndexes(config.DB); err != nil {
+	// 2. Run one-time database repair migrations. Schema AutoMigrate is handled by seed/main.go.
+	fmt.Println("Running Database Repair Migrations...")
+	if err := migrations.RunOnce(config.DB, "20260525_drop_legacy_indexes", migrations.DropLegacyIndexes); err != nil {
 		log.Fatalf("Legacy index cleanup failed: %v", err)
 	}
-	if err := migrations.RenameEmployeeCompanyAccessTable(config.DB); err != nil {
+	if err := migrations.RunOnce(config.DB, "20260525_rename_employee_company_access_table", migrations.RenameEmployeeCompanyAccessTable); err != nil {
 		log.Fatalf("Employee-company-access table rename failed: %v", err)
 	}
-	if err := migrations.BackfillSalariesStructureCompanies(config.DB); err != nil {
+	if err := migrations.RunOnce(config.DB, "20260525_backfill_salaries_structure_companies", migrations.BackfillSalariesStructureCompanies); err != nil {
 		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
-
-	err := config.DB.AutoMigrate(
-		&models.Companies{},
-		&models.Roles{},
-		&models.AppModule{},
-		&models.RolesModuleAccess{},
-		&models.Department{},
-		&models.Position{},
-		&models.Employees{},
-		&models.SalariesStructure{},
-		&models.PayrollCycle{},
-		&models.PayrollTransaction{},
-		&models.PayrollTransactionDetail{},
-		&models.TimeLog{},
-		&models.LeaveRequest{},
-		&models.LeaveBalance{},
-		&models.PayrollConfig{},
-		&models.EarningType{},
-		&models.DeductionType{},
-		&models.EmployeeEarning{},
-		&models.EmployeeDeduction{},
-		&models.PayrollCycleEarning{},
-		&models.PayrollCycleDeduction{},
-		&models.AttendanceConfig{},
-		&models.Bank{},
-		&models.EmploymentType{},
-		&models.Holiday{},
-		&models.DayOff{},
-		&models.WorkLocation{},
-		&models.LeaveTypeSetting{},
-		&models.EarningCategory{},
-		&models.DeductionCategory{},
-		&models.EmployeeCompanyAccess{},
-	)
-
-	if err != nil {
-		log.Fatalf("Migration Failed: %v", err)
-	}
-	if err := migrations.RemoveLegacyElevatedRole(config.DB); err != nil {
+	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
-	if err := migrations.BackfillEmployeeCompanyAccess(config.DB); err != nil {
+	if err := migrations.RunOnce(config.DB, "20260525_backfill_employee_company_access", migrations.BackfillEmployeeCompanyAccess); err != nil {
 		log.Fatalf("Employee-company-access backfill failed: %v", err)
 	}
-	fmt.Println("Migration Successful!")
+	fmt.Println("Database Repair Migrations Successful!")
 
 	// 3. Initialize Router (Gin)
 	// SetupRouter contains all your API endpoints
 	r := routes.SetupRouter()
 
 	// 4. Start Web Server
-	fmt.Println("Server is running on port 8000")
-	if err := r.Run(":8000"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+	fmt.Printf("Server is running on port %s\n", port)
+	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -19,21 +20,56 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func ConnectDatabase() {
-	user := getEnv("DB_USER", "postgres")
-	password := getEnv("DB_PASSWORD", "")
-	host := getEnv("DB_HOST", "127.0.0.1")
-	port := getEnv("DB_PORT", "5432")
-	dbName := getEnv("DB_NAME", "payrolldb")
-	sslMode := getEnv("DB_SSLMODE", "disable")
-	timeZone := getEnv("DB_TIMEZONE", "Asia/Bangkok")
+func firstEnv(fallback string, keys ...string) string {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return fallback
+}
+
+func postgresDSNValue(value string) string {
+	escaped := strings.ReplaceAll(value, `\`, `\\`)
+	escaped = strings.ReplaceAll(escaped, " ", `\ `)
+	return escaped
+}
+
+func buildPostgresDSN() string {
+	if dsn := firstEnv("", "DATABASE_URL", "POSTGRES_URL"); dsn != "" {
+		return dsn
+	}
+
+	user := firstEnv("postgres", "DB_USER", "PGUSER")
+	password := firstEnv("", "DB_PASSWORD", "PGPASSWORD")
+	host := firstEnv("127.0.0.1", "DB_HOST", "PGHOST")
+	port := firstEnv("5432", "DB_PORT", "PGPORT")
+	dbName := firstEnv("payrolldb", "DB_NAME", "PGDATABASE")
+	sslMode := firstEnv("disable", "DB_SSLMODE", "PGSSLMODE")
+	timeZone := firstEnv("Asia/Bangkok", "DB_TIMEZONE", "PGTZ", "TZ")
+	channelBinding := firstEnv("", "DB_CHANNEL_BINDING", "PGCHANNELBINDING")
 
 	dsn := fmt.Sprintf(
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
-		host, user, password, dbName, port, sslMode, timeZone,
+		postgresDSNValue(host),
+		postgresDSNValue(user),
+		postgresDSNValue(password),
+		postgresDSNValue(dbName),
+		postgresDSNValue(port),
+		postgresDSNValue(sslMode),
+		postgresDSNValue(timeZone),
 	)
+	if channelBinding != "" {
+		dsn += " channel_binding=" + postgresDSNValue(channelBinding)
+	}
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	return dsn
+}
+
+func ConnectDatabase() {
+	dbName := firstEnv("payrolldb", "DB_NAME", "PGDATABASE")
+
+	db, err := gorm.Open(postgres.Open(buildPostgresDSN()), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true, // Singular table names
 		},
