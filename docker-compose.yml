@@ -6,14 +6,16 @@ services:
     container_name: payroll-backend
     environment:
       PGUSER: ${PGUSER:-postgres}
-      PGPASSWORD: ${PGPASSWORD:-1234}
+      PGPASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
       PGHOST: ${PGHOST:-postgres}
       PGPORT: ${PGPORT:-5432}
       PGDATABASE: ${PGDATABASE:-payrolldb}
       PGSSLMODE: ${PGSSLMODE:-disable}
       PGCHANNELBINDING: ${PGCHANNELBINDING:-}
       DB_TIMEZONE: Asia/Bangkok
-      JWT_SECRET: payroll-super-secret-key-2024
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-}
+      SEED_USE_EMAIL_PASSWORDS: ${SEED_USE_EMAIL_PASSWORDS:-false}
       FRONTEND_ORIGIN: http://localhost:5174
     ports:
       - "8001:8000"
@@ -50,9 +52,9 @@ services:
     image: postgres:17
     container_name: payroll-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "1234"
-      POSTGRES_DB: payrolldb
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
+      POSTGRES_DB: ${PGDATABASE:-payrolldb}
       TZ: Asia/Bangkok
       PGTZ: Asia/Bangkok
     ports:

@@ -24,13 +24,18 @@ Backend `.env`:
 
 ```text
 PGUSER=postgres
-PGPASSWORD=1234
+PGPASSWORD=<choose-a-local-postgres-password>
 PGHOST=127.0.0.1
 PGPORT=5432
 PGDATABASE=payrolldb
 PGSSLMODE=disable
 DB_TIMEZONE=Asia/Bangkok
+JWT_SECRET=<choose-a-long-random-secret>
+SEED_DEFAULT_PASSWORD=<optional-local-demo-password>
+SEED_USE_EMAIL_PASSWORDS=false
 ```
+
+Docker Compose reads `PGPASSWORD` and `JWT_SECRET` from your environment or local `.env`; both are required.
 
 Common commands:
 
