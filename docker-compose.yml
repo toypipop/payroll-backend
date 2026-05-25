@@ -5,12 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: payroll-backend
     environment:
-      DB_USER: postgres
-      DB_PASSWORD: "1234"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: payrolldb
-      DB_SSLMODE: disable
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:-1234}
+      PGHOST: ${PGHOST:-postgres}
+      PGPORT: ${PGPORT:-5432}
+      PGDATABASE: ${PGDATABASE:-payrolldb}
+      PGSSLMODE: ${PGSSLMODE:-disable}
+      PGCHANNELBINDING: ${PGCHANNELBINDING:-}
       DB_TIMEZONE: Asia/Bangkok
       JWT_SECRET: payroll-super-secret-key-2024
       FRONTEND_ORIGIN: http://localhost:5174

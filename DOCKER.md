@@ -23,12 +23,12 @@ Postgres:
 Backend `.env`:
 
 ```text
-DB_USER=postgres
-DB_PASSWORD=1234
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_NAME=payrolldb
-DB_SSLMODE=disable
+PGUSER=postgres
+PGPASSWORD=1234
+PGHOST=127.0.0.1
+PGPORT=5432
+PGDATABASE=payrolldb
+PGSSLMODE=disable
 DB_TIMEZONE=Asia/Bangkok
 ```
 
