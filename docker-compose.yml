@@ -57,8 +57,6 @@ services:
       POSTGRES_DB: ${PGDATABASE:-payrolldb}
       TZ: Asia/Bangkok
       PGTZ: Asia/Bangkok
-    ports:
-      - "5432:5432"
     volumes:
       - payroll_postgres_data:/var/lib/postgresql/data
     healthcheck:
