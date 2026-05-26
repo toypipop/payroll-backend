@@ -66,6 +66,10 @@ func RenameEmployeeCompanyAccessTable(db *gorm.DB) error {
 }
 
 func BackfillEmployeeCompanyAccess(db *gorm.DB) error {
+	if !db.Migrator().HasTable("employee_company_access") || !db.Migrator().HasTable("employees") {
+		return nil
+	}
+
 	return db.Exec(`
 		INSERT INTO employee_company_access (
 			created_at,
@@ -101,6 +105,9 @@ func BackfillSalariesStructureCompanies(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&models.SalariesStructure{}) {
 		return nil
 	}
+	if !db.Migrator().HasTable(&models.Employees{}) || !db.Migrator().HasTable(&models.Companies{}) {
+		return nil
+	}
 	if !db.Migrator().HasColumn(&models.SalariesStructure{}, "companies_id") {
 		if err := db.Migrator().AddColumn(&models.SalariesStructure{}, "CompaniesID"); err != nil {
 			return err
@@ -127,6 +134,10 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 	const legacyRoleName = "SUPER_ADMIN"
 	const systemRoleName = "SYSTEM_ADMIN"
 
+	if !db.Migrator().HasTable(&models.Roles{}) {
+		return nil
+	}
+
 	// Rename legacy seeded roles when no replacement exists for that company.
 	if err := db.Exec(`
 		UPDATE roles AS legacy
@@ -144,69 +155,96 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 		return err
 	}
 
-	duplicateCleanup := []string{
-		`DELETE FROM employee_company_access AS ecr
-		 USING roles AS legacy, roles AS replacement, employee_company_access AS existing
-		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0
-			AND legacy.id = ecr.role_id
-			AND replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0
-			AND existing.employee_id = ecr.employee_id
-			AND existing.company_id = ecr.company_id
-			AND existing.role_id = replacement.id
-			AND existing.deleted_at = 0`,
-		`DELETE FROM roles_module_access AS rma
-		 USING roles AS legacy, roles AS replacement, roles_module_access AS existing
-		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0
-			AND legacy.id = rma.roles_id
-			AND replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0
-			AND existing.roles_id = replacement.id
-			AND existing.module_id = rma.module_id
-			AND existing.deleted_at = 0`,
+	duplicateCleanup := []struct {
+		table string
+		query string
+	}{
+		{
+			table: "employee_company_access",
+			query: `DELETE FROM employee_company_access AS ecr
+				USING roles AS legacy, roles AS replacement, employee_company_access AS existing
+				WHERE legacy.roles_name = 'SUPER_ADMIN'
+					AND legacy.deleted_at = 0
+					AND legacy.id = ecr.role_id
+					AND replacement.companies_id = legacy.companies_id
+					AND replacement.roles_name = 'SYSTEM_ADMIN'
+					AND replacement.deleted_at = 0
+					AND existing.employee_id = ecr.employee_id
+					AND existing.company_id = ecr.company_id
+					AND existing.role_id = replacement.id
+					AND existing.deleted_at = 0`,
+		},
+		{
+			table: "roles_module_access",
+			query: `DELETE FROM roles_module_access AS rma
+				USING roles AS legacy, roles AS replacement, roles_module_access AS existing
+				WHERE legacy.roles_name = 'SUPER_ADMIN'
+					AND legacy.deleted_at = 0
+					AND legacy.id = rma.roles_id
+					AND replacement.companies_id = legacy.companies_id
+					AND replacement.roles_name = 'SYSTEM_ADMIN'
+					AND replacement.deleted_at = 0
+					AND existing.roles_id = replacement.id
+					AND existing.module_id = rma.module_id
+					AND existing.deleted_at = 0`,
+		},
 	}
-	for _, query := range duplicateCleanup {
-		if err := db.Exec(query).Error; err != nil {
+	for _, cleanup := range duplicateCleanup {
+		if !db.Migrator().HasTable(cleanup.table) {
+			continue
+		}
+		if err := db.Exec(cleanup.query).Error; err != nil {
 			return err
 		}
 	}
 
 	// If both names exist, move references to the replacement then deactivate the legacy row.
-	referenceUpdates := []string{
-		`UPDATE employees AS e
-		 SET roles_id = replacement.id
-		 FROM roles AS legacy, roles AS replacement
-		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0
-			AND legacy.id = e.roles_id
-			AND replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0`,
-		`UPDATE employee_company_access AS ecr
-		 SET role_id = replacement.id
-		 FROM roles AS legacy, roles AS replacement
-		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0
-			AND legacy.id = ecr.role_id
-			AND replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0`,
-		`UPDATE roles_module_access AS rma
-		 SET roles_id = replacement.id
-		 FROM roles AS legacy, roles AS replacement
-		 WHERE legacy.roles_name = 'SUPER_ADMIN'
-			AND legacy.deleted_at = 0
-			AND legacy.id = rma.roles_id
-			AND replacement.companies_id = legacy.companies_id
-			AND replacement.roles_name = 'SYSTEM_ADMIN'
-			AND replacement.deleted_at = 0`,
+	referenceUpdates := []struct {
+		table string
+		query string
+	}{
+		{
+			table: "employees",
+			query: `UPDATE employees AS e
+			 SET roles_id = replacement.id
+			 FROM roles AS legacy, roles AS replacement
+			 WHERE legacy.roles_name = 'SUPER_ADMIN'
+				AND legacy.deleted_at = 0
+				AND legacy.id = e.roles_id
+				AND replacement.companies_id = legacy.companies_id
+				AND replacement.roles_name = 'SYSTEM_ADMIN'
+				AND replacement.deleted_at = 0`,
+		},
+		{
+			table: "employee_company_access",
+			query: `UPDATE employee_company_access AS ecr
+			 SET role_id = replacement.id
+			 FROM roles AS legacy, roles AS replacement
+			 WHERE legacy.roles_name = 'SUPER_ADMIN'
+				AND legacy.deleted_at = 0
+				AND legacy.id = ecr.role_id
+				AND replacement.companies_id = legacy.companies_id
+				AND replacement.roles_name = 'SYSTEM_ADMIN'
+				AND replacement.deleted_at = 0`,
+		},
+		{
+			table: "roles_module_access",
+			query: `UPDATE roles_module_access AS rma
+			 SET roles_id = replacement.id
+			 FROM roles AS legacy, roles AS replacement
+			 WHERE legacy.roles_name = 'SUPER_ADMIN'
+				AND legacy.deleted_at = 0
+				AND legacy.id = rma.roles_id
+				AND replacement.companies_id = legacy.companies_id
+				AND replacement.roles_name = 'SYSTEM_ADMIN'
+				AND replacement.deleted_at = 0`,
+		},
 	}
-	for _, query := range referenceUpdates {
-		if err := db.Exec(query).Error; err != nil {
+	for _, update := range referenceUpdates {
+		if !db.Migrator().HasTable(update.table) {
+			continue
+		}
+		if err := db.Exec(update.query).Error; err != nil {
 			return err
 		}
 	}
