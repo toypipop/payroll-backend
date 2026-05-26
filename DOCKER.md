@@ -15,8 +15,9 @@ Apps:
 Postgres:
 
 - Container: `payroll-postgres`
-- Host: `localhost`
-- Port: `5432`
+- Host inside Docker network: `postgres`
+- Port inside Docker network: `5432`
+- Host port: not exposed by default
 - Database: `payrolldb`
 - Volume: `payroll_postgres_data`
 
@@ -40,6 +41,7 @@ Docker Compose reads `PGPASSWORD` and `JWT_SECRET` from your environment or loca
 Common commands:
 
 ```bash
+docker compose build
 docker compose ps
 docker compose logs -f backend
 docker compose logs -f frontend
@@ -55,10 +57,18 @@ Run the backend locally against Docker Postgres:
 go run .
 ```
 
+Run database migrations:
+
+```bash
+go run ./migrate
+docker compose --profile tools run --rm migrate
+```
+
 Seed local data:
 
 ```bash
 go run ./seed
+docker compose --profile tools run --rm seed
 ```
 
 If Docker fails with `dockerDesktopLinuxEngine` pipe errors, start Docker Desktop and retry.

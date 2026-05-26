@@ -19,7 +19,7 @@ func main() {
 	// 1. Initialize Database Connection
 	config.ConnectDatabase()
 
-	// 2. Run one-time database repair migrations. Schema AutoMigrate is handled by seed/main.go.
+	// 2. Run one-time database repair migrations. Schema AutoMigrate is handled by migrate/main.go and seed/main.go.
 	fmt.Println("Running Database Repair Migrations...")
 	if err := migrations.RunOnce(config.DB, "20260525_drop_legacy_indexes", migrations.DropLegacyIndexes); err != nil {
 		log.Fatalf("Legacy index cleanup failed: %v", err)

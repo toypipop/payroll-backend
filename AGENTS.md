@@ -27,7 +27,8 @@ Compact playbook for `payroll-backend`, a Go Gin + GORM + Postgres API. The comp
 
 - `docker compose up -d` - start local Postgres.
 - `docker compose down` / `docker compose down -v` - stop/remove DB container/data.
-- `go run .` - run API and AutoMigrate.
+- `go run .` - run API and repair migrations.
+- `go run ./migrate` - run repair migrations and AutoMigrate.
 - `go run ./seed` - seed local data.
 - `go test ./...`, `go vet ./...`, `go build ./...` - required checks after code changes.
 - `gofmt -w <files>` - format touched Go files.

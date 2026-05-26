@@ -70,40 +70,7 @@ func main() {
 		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
 
-	err := config.DB.AutoMigrate(
-		&models.Companies{},
-		&models.Roles{},
-		&models.AppModule{},
-		&models.RolesModuleAccess{},
-		&models.Department{},
-		&models.Position{},
-		&models.Employees{},
-		&models.SalariesStructure{},
-		&models.PayrollCycle{},
-		&models.PayrollTransaction{},
-		&models.PayrollTransactionDetail{},
-		&models.TimeLog{},
-		&models.LeaveRequest{},
-		&models.LeaveBalance{},
-		&models.PayrollConfig{},
-		&models.EarningType{},
-		&models.DeductionType{},
-		&models.EmployeeEarning{},
-		&models.EmployeeDeduction{},
-		&models.PayrollCycleEarning{},
-		&models.PayrollCycleDeduction{},
-		&models.AttendanceConfig{},
-		&models.Bank{},
-		&models.EmploymentType{},
-		&models.Holiday{},
-		&models.DayOff{},
-		&models.WorkLocation{},
-		&models.LeaveTypeSetting{},
-		&models.EarningCategory{},
-		&models.DeductionCategory{},
-		&models.EmployeeCompanyAccess{},
-	)
-	if err != nil {
+	if err := migrations.AutoMigrateSchema(config.DB); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {

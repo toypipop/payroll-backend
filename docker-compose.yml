@@ -1,22 +1,27 @@
+x-backend-image: &backend_image payroll-backend:local
+x-backend-build: &backend_build
+  context: .
+  dockerfile: Dockerfile
+x-backend-env: &backend_env
+  PGUSER: ${PGUSER:-postgres}
+  PGPASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
+  PGHOST: ${PGHOST:-postgres}
+  PGPORT: ${PGPORT:-5432}
+  PGDATABASE: ${PGDATABASE:-payrolldb}
+  PGSSLMODE: ${PGSSLMODE:-disable}
+  PGCHANNELBINDING: ${PGCHANNELBINDING:-}
+  DB_TIMEZONE: Asia/Bangkok
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-}
+  SEED_USE_EMAIL_PASSWORDS: ${SEED_USE_EMAIL_PASSWORDS:-false}
+  FRONTEND_ORIGIN: http://localhost:5174
+
 services:
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: *backend_image
+    build: *backend_build
     container_name: payroll-backend
-    environment: &backend_env
-      PGUSER: ${PGUSER:-postgres}
-      PGPASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
-      PGHOST: ${PGHOST:-postgres}
-      PGPORT: ${PGPORT:-5432}
-      PGDATABASE: ${PGDATABASE:-payrolldb}
-      PGSSLMODE: ${PGSSLMODE:-disable}
-      PGCHANNELBINDING: ${PGCHANNELBINDING:-}
-      DB_TIMEZONE: Asia/Bangkok
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-}
-      SEED_USE_EMAIL_PASSWORDS: ${SEED_USE_EMAIL_PASSWORDS:-false}
-      FRONTEND_ORIGIN: http://localhost:5174
+    environment: *backend_env
     ports:
       - "8001:8000"
     depends_on:
@@ -30,9 +35,8 @@ services:
       start_period: 20s
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: *backend_image
+    build: *backend_build
     container_name: payroll-migrate
     environment: *backend_env
     command: [ "/app/migrate" ]
@@ -43,9 +47,8 @@ services:
       - tools
 
   seed:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: *backend_image
+    build: *backend_build
     container_name: payroll-seed
     environment: *backend_env
     command: [ "/app/seed" ]
