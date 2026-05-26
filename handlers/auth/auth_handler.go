@@ -41,7 +41,32 @@ func isProduction() bool {
 		strings.EqualFold(os.Getenv("GIN_MODE"), "release")
 }
 
+func envBool(key string) (bool, bool) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return false, false
+	}
+
+	switch strings.ToLower(value) {
+	case "1", "true", "t", "yes", "y", "on":
+		return true, true
+	case "0", "false", "f", "no", "n", "off":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
 func cookieSameSite() http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("COOKIE_SAMESITE"))) {
+	case "none":
+		return http.SameSiteNoneMode
+	case "strict":
+		return http.SameSiteStrictMode
+	case "lax":
+		return http.SameSiteLaxMode
+	}
+
 	if isProduction() {
 		return http.SameSiteNoneMode
 	}
@@ -49,6 +74,9 @@ func cookieSameSite() http.SameSite {
 }
 
 func cookieSecure() bool {
+	if value, ok := envBool("COOKIE_SECURE"); ok {
+		return value
+	}
 	return isProduction()
 }
 

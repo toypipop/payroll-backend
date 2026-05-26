@@ -33,11 +33,15 @@ PGSSLMODE=disable
 DB_TIMEZONE=Asia/Bangkok
 JWT_SECRET=<choose-a-long-random-secret>
 FRONTEND_ORIGIN=http://localhost:5174
+APP_ENV=development
+COOKIE_SECURE=false
+COOKIE_SAMESITE=lax
 SEED_DEFAULT_PASSWORD=<optional-shared-demo-password>
 SEED_USE_EMAIL_PASSWORDS=true
 ```
 
-For UAT, set `FRONTEND_ORIGIN` to the public frontend origin, for example `https://uat.example.com`.
+For SIT/UAT/Prod with same-origin deployment, build the frontend with `VITE_API_URL=/api/v1` and set `FRONTEND_ORIGIN` to the public frontend origin, for example `https://uat.example.com`.
+For HTTPS production, use `APP_ENV=production`, `COOKIE_SECURE=true`, and `COOKIE_SAMESITE=none`. For same-origin HTTP local development, use `COOKIE_SECURE=false` and `COOKIE_SAMESITE=lax`.
 Docker Compose reads `PGPASSWORD`, `JWT_SECRET`, and optional runtime values from your environment or local `.env`; secrets are required and must not be committed.
 Seeded demo users use their email address as the password by default. Set `SEED_USE_EMAIL_PASSWORDS=false` with `SEED_DEFAULT_PASSWORD` only when you want one shared seed password.
 
