@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: payroll-backend
-    environment:
+    environment: &backend_env
       PGUSER: ${PGUSER:-postgres}
       PGPASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
       PGHOST: ${PGHOST:-postgres}
@@ -28,6 +28,32 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payroll-migrate
+    environment: *backend_env
+    command: ["/app/migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: payroll-seed
+    environment: *backend_env
+    command: ["/app/seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
 
   frontend:
     build:
