@@ -12,6 +12,25 @@ Apps:
 - Backend API direct port: `http://localhost:8001/api/v1`
 - Frontend nginx proxies `/api` to the backend container.
 
+## Environment routing
+
+The frontend should use the same API path in every environment:
+
+```text
+VITE_API_URL=/api/v1
+```
+
+That means the browser calls the same origin that served the frontend, then the local dev server or reverse proxy forwards `/api` to the backend.
+
+| Environment | Browser calls | Proxy that forwards to backend | Backend target |
+| --- | --- | --- | --- |
+| Local Docker full stack | `http://localhost:5174/api/v1/...` | frontend nginx container | `http://backend:8000` |
+| Local frontend dev + Docker backend | `http://localhost:5174/api/v1/...` | Vite dev proxy | `API_PROXY_TARGET=http://localhost:8001` |
+| Local frontend dev + `go run .` backend | `http://localhost:5174/api/v1/...` | Vite dev proxy | `API_PROXY_TARGET=http://localhost:8000` |
+| SIT/UAT/Prod same-origin | `https://<env-domain>/api/v1/...` | public nginx/load balancer/reverse proxy | backend service port `8000` |
+
+With this setup, SIT/UAT/Prod do not need a frontend rebuild just to change the backend host. Keep `VITE_API_URL=/api/v1`; change only the environment/proxy/backend settings.
+
 Postgres:
 
 - Container: `payroll-postgres`
