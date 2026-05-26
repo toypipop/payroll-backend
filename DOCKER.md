@@ -33,12 +33,13 @@ PGSSLMODE=disable
 DB_TIMEZONE=Asia/Bangkok
 JWT_SECRET=<choose-a-long-random-secret>
 FRONTEND_ORIGIN=http://localhost:5174
-SEED_DEFAULT_PASSWORD=<optional-local-demo-password>
-SEED_USE_EMAIL_PASSWORDS=false
+SEED_DEFAULT_PASSWORD=<optional-shared-demo-password>
+SEED_USE_EMAIL_PASSWORDS=true
 ```
 
 For UAT, set `FRONTEND_ORIGIN` to the public frontend origin, for example `https://uat.example.com`.
 Docker Compose reads `PGPASSWORD`, `JWT_SECRET`, and optional runtime values from your environment or local `.env`; secrets are required and must not be committed.
+Seeded demo users use their email address as the password by default. Set `SEED_USE_EMAIL_PASSWORDS=false` with `SEED_DEFAULT_PASSWORD` only when you want one shared seed password.
 
 Common commands:
 

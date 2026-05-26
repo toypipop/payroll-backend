@@ -41,7 +41,7 @@ func seedPassword(defaultValue string) string {
 }
 
 func useEmailSeedPasswords() bool {
-	return strings.EqualFold(os.Getenv("SEED_USE_EMAIL_PASSWORDS"), "true")
+	return !strings.EqualFold(os.Getenv("SEED_USE_EMAIL_PASSWORDS"), "false")
 }
 
 func syncAppModuleIDSequence() {
