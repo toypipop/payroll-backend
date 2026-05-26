@@ -3,11 +3,9 @@ package main
 import (
 	"log"
 	"math"
-	"os"
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/models"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -31,17 +29,6 @@ func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint, isDefault b
 		CompanyID:  companyID,
 		RoleID:     roleID,
 	}).Assign(mapping).FirstOrCreate(&mapping)
-}
-
-func seedPassword(defaultValue string) string {
-	if value := os.Getenv("SEED_DEFAULT_PASSWORD"); strings.TrimSpace(value) != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func useEmailSeedPasswords() bool {
-	return !strings.EqualFold(os.Getenv("SEED_USE_EMAIL_PASSWORDS"), "false")
 }
 
 func syncAppModuleIDSequence() {
@@ -463,8 +450,7 @@ func main() {
 	}
 
 	// --- Employees Seeding (Using your existing logic) ---
-	defaultPass := seedPassword("change-me-dev-seed")
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(defaultPass), 10)
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("admin@admin.com"), 10)
 	hashStr := string(hashedPassword)
 
 	admin := models.Employees{Email: "admin@admin.com"}
@@ -1353,11 +1339,7 @@ func main() {
 	}
 
 	for idx, u := range devUsers {
-		password := defaultPass
-		if useEmailSeedPasswords() {
-			password = u.email
-		}
-		hashed, _ := bcrypt.GenerateFromPassword([]byte(password), 10)
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(u.email), 10)
 		config.DB.Model(&models.Employees{}).Where("email = ?", u.email).Updates(map[string]interface{}{
 			"password":     string(hashed),
 			"is_active":    true,
