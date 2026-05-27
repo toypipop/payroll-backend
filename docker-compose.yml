@@ -12,20 +12,35 @@ x-backend-env: &backend_env
   PGCHANNELBINDING: ${PGCHANNELBINDING:-}
   DB_TIMEZONE: ${DB_TIMEZONE:-Asia/Bangkok}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-  FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5174}
+  FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
   APP_ENV: ${APP_ENV:-}
   GIN_MODE: ${GIN_MODE:-}
   COOKIE_SECURE: ${COOKIE_SECURE:-}
   COOKIE_SAMESITE: ${COOKIE_SAMESITE:-}
 
 services:
+  caddy:
+    image: caddy:2
+    container_name: payroll-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
   backend:
     image: *backend_image
     build: *backend_build
     container_name: payroll-backend
     environment: *backend_env
-    ports:
-      - "8001:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,6 +50,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    restart: unless-stopped
 
   migrate:
     image: *backend_image
@@ -67,8 +83,6 @@ services:
       args:
         VITE_API_URL: /api/v1
     container_name: payroll-frontend
-    ports:
-      - "5174:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -78,6 +92,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
 
   postgres:
     image: postgres:17
@@ -96,7 +111,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
 
 volumes:
   payroll_postgres_data:
     name: payroll_postgres_data
+  caddy_data:
+  caddy_config:
