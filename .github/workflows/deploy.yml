@@ -29,10 +29,15 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd ~/payroll-backend
-
             git fetch origin
             git checkout ${{ inputs.branch }}
             git pull origin ${{ inputs.branch }}
 
+            cd ~/payroll-frontend
+            git fetch origin
+            git checkout ${{ inputs.branch }}
+            git pull origin ${{ inputs.branch }}
+
+            cd ~/payroll-backend
             docker compose -f docker-compose.${{ inputs.environment }}.yml up -d --build
             docker ps
