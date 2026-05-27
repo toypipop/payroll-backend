@@ -10,6 +10,10 @@ on:
         options:
           - uat
           - prod
+      branch:
+        description: "Branch to deploy"
+        required: true
+        default: "uat"
 
 jobs:
   deploy:
@@ -27,8 +31,8 @@ jobs:
             cd ~/payroll-backend
 
             git fetch origin
-            git checkout ${{ inputs.environment }}
-            git pull origin ${{ inputs.environment }}
+            git checkout ${{ inputs.branch }}
+            git pull origin ${{ inputs.branch }}
 
             docker compose -f docker-compose.${{ inputs.environment }}.yml up -d --build
             docker ps
