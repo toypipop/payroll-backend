@@ -8,7 +8,6 @@ import (
 	"payroll-backend/models"
 	"time"
 
-	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -42,9 +41,7 @@ func syncAppModuleIDSequence() {
 }
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment")
-	}
+	config.LoadDotEnv()
 	config.ConnectDatabase()
 
 	if err := migrations.RunOnce(config.DB, "20260525_drop_legacy_indexes", migrations.DropLegacyIndexes); err != nil {

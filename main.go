@@ -7,14 +7,10 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/routes"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment")
-	}
+	config.LoadDotEnv()
 
 	// 1. Initialize Database Connection
 	config.ConnectDatabase()
@@ -53,35 +49,46 @@ func main() {
 	}
 }
 
-// All Modules:
-// ├── Dashboard
-// ├── Employees
-// │   ├── Employee List
-// │   ├── Salaries
-// │   ├── Employee Earnings
-// │   └── Employee Deductions
-// ├── Attendance
-// │   ├── Timelogs
-// │   ├── Leave Requests
-// │   ├── Leave Approved
-// │   └── Earning Summary
-// │   └── Deduction Summary
-// ├── Payroll Processing
-// │   ├── Payroll Cycles
-// │   ├── Run Payroll
-// │   ├── Cycle Earnings
-// │   └── Cycle Deductions
-// ├── Payroll Config
-// │   ├── Global Settings
-// │   ├── Earning Types
-// │   └── Deduction Types
-// ├── Settings
-// │   ├── Department
-// │   ├── Position
-// │   ├── Roles
-// │   ├── Permission
-// │   ├── Companies
-// │   └── Attendance Settings
-// └── Reports
-//     ├── Payslips
-//     └── Government Forms
+// All Modules seeded by seed/main.go:
+// - Dashboard
+// - Employees
+//   - Employee List
+//   - Salaries
+//   - Employee Earnings
+//   - Employee Deductions
+// - Attendance
+//   - Timelogs
+//   - Leave Requests
+//   - Leave Approved
+//   - Earning Summary
+//   - Deduction Summary
+// - Payroll Processing
+//   - Payroll Cycles
+//   - Run Payroll
+//   - Cycle Earnings
+//   - Cycle Deductions
+//   - Transaction
+// - Payroll Config
+//   - Global Settings
+//   - Earning Types
+//   - Deduction Types
+// - Settings
+//   - Companies
+//   - Department
+//   - Position
+//   - Employment Types
+//   - Roles
+//   - Permission
+//   - Employee Company Access
+//   - Attendance Settings
+//   - Bank Master
+//   - Holiday Calendar
+//   - Day Off
+//   - Work Locations
+//   - Leave Types
+// - Reports
+//   - Payslips
+//   - Bank Transfer
+//   - Tax Forms
+//   - Social Security (SSO)
+//   - Payroll Analysis

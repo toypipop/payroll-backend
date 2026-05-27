@@ -3,7 +3,7 @@
 Local full stack runs Postgres, the Go API, and the Vite frontend served by nginx. Run from `payroll-backend`:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.local.yml up -d --build
 ```
 
 ## URLs
@@ -35,8 +35,10 @@ SIT/UAT/Prod should not need a frontend rebuild just to change backend host; kee
 ## Environment
 
 - `.env` is runtime-only and ignored; `.env.example` lists keys only and contains no real values or secrets.
-- Docker backend uses `PGHOST=postgres`; host-run `go run .`, migrate, or seed needs a host-reachable DB such as `PGHOST=127.0.0.1`.
-- Docker Compose reads `PGPASSWORD`, `JWT_SECRET`, and optional runtime values from environment/local `.env`; secrets must not be committed.
+- Local Docker reads `PGUSER`, `PGPASSWORD`, `PGDATABASE`, `JWT_SECRET`, and runtime values from `.env`, but containers always use `PGHOST=postgres` on the Docker network.
+- Host-run `go run .`, Air, migrate, or seed needs `.env` to use a host-reachable DB such as `PGHOST=127.0.0.1`.
+- `PGPASSWORD` must match the password used when the local Postgres volume was first initialized; if it changed, recreate only the local volume with `docker compose -f docker-compose.local.yml down -v`.
+- Docker Compose reads secrets from environment/local `.env`; secrets must not be committed.
 - Seeded demo users use email-as-password, e.g. `admin@admin.com` / `admin@admin.com`.
 
 Postgres defaults:
@@ -54,7 +56,7 @@ Backend `.env` shape:
 ```text
 PGUSER=postgres
 PGPASSWORD=<local-password>
-PGHOST=postgres
+PGHOST=127.0.0.1
 PGPORT=5432
 PGDATABASE=payrolldb
 PGSSLMODE=disable
@@ -72,28 +74,60 @@ HTTPS same-origin SIT/UAT/Prod: build frontend with `VITE_API_URL=/api/v1`, set 
 
 ## Commands
 
+Local development with direct ports and no Caddy:
+
 ```bash
-docker compose build
-docker compose up -d --build
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f postgres
-docker compose stop
-docker compose down
-docker compose down -v
+docker compose -f docker-compose.local.yml up -d --build
+docker compose -f docker-compose.local.yml ps
+docker compose -f docker-compose.local.yml logs -f backend
+docker compose -f docker-compose.local.yml logs -f frontend
+docker compose -f docker-compose.local.yml logs -f postgres
+docker compose -f docker-compose.local.yml stop
+docker compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml down -v
+```
+
+The local file uses the same `PGUSER`, `PGPASSWORD`, and `PGDATABASE` values as host-run Go. It overrides only container-side `PGHOST` to `postgres`, so backend, migrate, and seed containers connect to the database service while host-run Go uses `127.0.0.1:5432`.
+
+Local migrate/seed:
+
+```bash
+docker compose -f docker-compose.local.yml --profile tools run --rm migrate
+docker compose -f docker-compose.local.yml --profile tools run --rm seed
+```
+
+To avoid repeating `-f docker-compose.local.yml` in a shell session:
+
+```bash
+$env:COMPOSE_FILE = "docker-compose.local.yml"
+docker compose --profile tools run --rm migrate
+docker compose --profile tools run --rm seed
+```
+
+UAT/SIT/production compose with Caddy:
+
+```bash
+docker compose -f docker-compose.uat.yml build
+docker compose -f docker-compose.uat.yml up -d --build
+docker compose -f docker-compose.uat.yml ps
+docker compose -f docker-compose.uat.yml logs -f backend
+docker compose -f docker-compose.uat.yml logs -f frontend
+docker compose -f docker-compose.uat.yml logs -f postgres
+docker compose -f docker-compose.uat.yml stop
+docker compose -f docker-compose.uat.yml down
+docker compose -f docker-compose.uat.yml down -v
 ```
 
 Migrate/seed:
 
 ```bash
-docker compose --profile tools run --rm migrate
-docker compose --profile tools run --rm seed
+docker compose -f docker-compose.uat.yml --profile tools run --rm migrate
+docker compose -f docker-compose.uat.yml --profile tools run --rm seed
 go run ./migrate
 go run ./seed
 ```
 
-`docker compose down -v` deletes the Postgres volume. Use it only for intentional fresh data, initialized DB credential/name changes, or full reseed.
+`docker compose -f docker-compose.uat.yml down -v` deletes the UAT/prod Postgres volume. Use it only for intentional fresh data, initialized DB credential/name changes, or full reseed.
 
 ## Linux/Hetzner Update
 
@@ -101,22 +135,22 @@ go run ./seed
 cd ~/payroll-backend && git pull
 cd ~/payroll-frontend && git pull
 cd ~/payroll-backend
-docker compose down
-docker compose up -d --build
-docker compose --profile tools run --rm migrate
-docker compose --profile tools run --rm seed
-docker compose up -d backend frontend
-docker compose ps
+docker compose -f docker-compose.uat.yml down
+docker compose -f docker-compose.uat.yml up -d --build
+docker compose -f docker-compose.uat.yml --profile tools run --rm migrate
+docker compose -f docker-compose.uat.yml --profile tools run --rm seed
+docker compose -f docker-compose.uat.yml up -d backend frontend
+docker compose -f docker-compose.uat.yml ps
 ```
 
 Fresh reset/reseed:
 
 ```bash
-docker compose down -v
-docker compose up -d --build
-docker compose --profile tools run --rm migrate
-docker compose --profile tools run --rm seed
-docker compose up -d backend frontend
+docker compose -f docker-compose.uat.yml down -v
+docker compose -f docker-compose.uat.yml up -d --build
+docker compose -f docker-compose.uat.yml --profile tools run --rm migrate
+docker compose -f docker-compose.uat.yml --profile tools run --rm seed
+docker compose -f docker-compose.uat.yml up -d backend frontend
 ```
 
 ## Notes

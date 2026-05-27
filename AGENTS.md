@@ -25,8 +25,9 @@ Compact playbook for `payroll-backend`, the Go 1.25.5 + Gin + GORM + Postgres AP
 
 ## Commands
 
-- Docker DB/full stack helpers: `docker compose up -d`, `docker compose down`, `docker compose down -v`.
-- Docker tools: `docker compose --profile tools run --rm migrate`, `docker compose --profile tools run --rm seed`.
+- Local Docker helpers: `docker compose -f docker-compose.local.yml up -d`, `docker compose -f docker-compose.local.yml down`.
+- UAT Docker helpers: `docker compose -f docker-compose.uat.yml up -d`, `docker compose -f docker-compose.uat.yml down`.
+- Docker tools: add the matching `-f docker-compose.local.yml` or `-f docker-compose.uat.yml`, e.g. `docker compose -f docker-compose.local.yml --profile tools run --rm migrate`.
 - Local run/tools: `go run .`, `go run ./migrate`, `go run ./seed`.
 - Required after code edits: `gofmt -w <files>`, `go test ./...`, `go vet ./...`, `go build ./...`.
 

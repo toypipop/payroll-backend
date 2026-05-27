@@ -4,14 +4,10 @@ import (
 	"log"
 	"payroll-backend/config"
 	"payroll-backend/migrations"
-
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment")
-	}
+	config.LoadDotEnv()
 
 	config.ConnectDatabase()
 

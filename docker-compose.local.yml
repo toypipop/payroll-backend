@@ -1,0 +1,108 @@
+x-backend-image: &backend_image payroll-backend:local
+x-backend-build: &backend_build
+  context: .
+  dockerfile: Dockerfile
+x-backend-env: &backend_env
+  PGUSER: ${PGUSER:-postgres}
+  PGPASSWORD: ${PGPASSWORD:-postgres}
+  PGHOST: postgres
+  PGPORT: ${PGPORT:-5432}
+  PGDATABASE: ${PGDATABASE:-payrolldb}
+  PGSSLMODE: ${PGSSLMODE:-disable}
+  PGCHANNELBINDING: ${PGCHANNELBINDING:-}
+  DB_TIMEZONE: ${DB_TIMEZONE:-Asia/Bangkok}
+  JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-me}
+  FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5174}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5174}
+  APP_ENV: ${APP_ENV:-development}
+  GIN_MODE: ${GIN_MODE:-debug}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  COOKIE_SAMESITE: ${COOKIE_SAMESITE:-lax}
+
+services:
+  backend:
+    image: *backend_image
+    build: *backend_build
+    container_name: payroll-backend-local
+    environment: *backend_env
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:8000/api/v1/modules >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  migrate:
+    image: *backend_image
+    build: *backend_build
+    container_name: payroll-migrate-local
+    environment: *backend_env
+    command: [ "/app/migrate" ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  seed:
+    image: *backend_image
+    build: *backend_build
+    container_name: payroll-seed-local
+    environment: *backend_env
+    command: [ "/app/seed" ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  frontend:
+    build:
+      context: ../payroll-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    container_name: payroll-frontend-local
+    ports:
+      - "5174:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    container_name: payroll-postgres-local
+    environment:
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+      POSTGRES_DB: ${PGDATABASE:-payrolldb}
+      TZ: Asia/Bangkok
+      PGTZ: Asia/Bangkok
+    ports:
+      - "5432:5432"
+    volumes:
+      - payroll_postgres_data_local:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  payroll_postgres_data_local:
+    name: payroll_postgres_data_local
