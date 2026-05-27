@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func parseUint(s string) uint {
@@ -29,7 +30,8 @@ func GetRolesPermissions(c *gin.Context) {
 	}
 
 	var modules []models.AppModule
-	config.DB.Order(`"order" asc`).Find(&modules)
+	// Let GORM quote the reserved column name for PostgreSQL instead of hand-writing SQL.
+	config.DB.Order(clause.OrderByColumn{Column: clause.Column{Name: "order"}}).Find(&modules)
 
 	var access []models.RolesModuleAccess
 	// Apply composite scopes for tenant and data access

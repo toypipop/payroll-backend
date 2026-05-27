@@ -13,6 +13,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	appModuleDeletedAtColumn = `"AppModule"."deleted_at"`
+	appModuleIsActiveColumn  = `"AppModule"."is_active"`
+	appModuleModuleKeyColumn = `"AppModule"."module_key"`
+)
+
 // AuthMiddleware validates JWT and extracts tenant
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -111,11 +117,13 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 		}
 
 		var accesses []models.RolesModuleAccess
+		// PostgreSQL does not support MySQL backtick quoting; the mixed-case
+		// GORM association alias must use double-quoted identifiers here.
 		err := config.DB.
-			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
+			InnerJoins("AppModule", config.DB.Where(appModuleDeletedAtColumn+" = ?", 0)).
 			Where("roles_module_access.roles_id IN ?", roleIDs).
-			Where("`AppModule`.`module_key` = ?", moduleKey).
-			Where("`AppModule`.`is_active` = ?", true).
+			Where(appModuleModuleKeyColumn+" = ?", moduleKey).
+			Where(appModuleIsActiveColumn+" = ?", true).
 			Find(&accesses).Error
 
 		if err != nil || len(accesses) == 0 {
@@ -179,11 +187,13 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 		}
 
 		var accesses []models.RolesModuleAccess
+		// PostgreSQL does not support MySQL backtick quoting; the mixed-case
+		// GORM association alias must use double-quoted identifiers here.
 		err := config.DB.
-			InnerJoins("AppModule", config.DB.Where("`AppModule`.`deleted_at` = ?", 0)).
+			InnerJoins("AppModule", config.DB.Where(appModuleDeletedAtColumn+" = ?", 0)).
 			Where("roles_module_access.roles_id IN ?", roleIDs).
-			Where("`AppModule`.`module_key` IN ?", moduleKeys).
-			Where("`AppModule`.`is_active` = ?", true).
+			Where(appModuleModuleKeyColumn+" IN ?", moduleKeys).
+			Where(appModuleIsActiveColumn+" = ?", true).
 			Find(&accesses).Error
 
 		if err != nil || len(accesses) == 0 {

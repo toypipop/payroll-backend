@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -204,7 +205,8 @@ func GetAppModules(c *gin.Context) {
 	// Fetch active modules sorted
 	if err := config.DB.
 		Where("is_active = ?", true).
-		Order(`"order" ASC`).
+		// Let GORM quote the reserved column name for PostgreSQL instead of hand-writing SQL.
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "order"}}).
 		Find(&modules).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch app modules"})
 		return
