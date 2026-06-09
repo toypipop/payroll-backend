@@ -46,7 +46,7 @@ func CreateEmployees(c *gin.Context) {
 	}
 
 	if input.Password != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 10)
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
 		input.Password = string(hashedPassword)
 	}
 
@@ -146,7 +146,7 @@ func UpdateEmployees(c *gin.Context) {
 	}
 
 	if pwd, ok := data["password"].(string); ok && pwd != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(pwd), 10)
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(pwd), 12)
 		data["password"] = string(hashedPassword)
 	} else {
 		delete(data, "password")

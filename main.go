@@ -12,6 +12,10 @@ import (
 func main() {
 	config.LoadDotEnv()
 
+	if secret := os.Getenv("JWT_SECRET"); secret == "" {
+		log.Fatal("FATAL: JWT_SECRET environment variable is not set")
+	}
+
 	// 1. Initialize Database Connection
 	config.ConnectDatabase()
 

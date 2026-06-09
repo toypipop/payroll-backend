@@ -67,6 +67,7 @@ func SetupRouter() *gin.Engine {
 	// Protected Routes
 	api := r.Group("/api/v1")
 	api.Use(middleware.AuthMiddleware())
+	api.Use(middleware.RequireXMLHttpRequest())
 	{
 		// --- Employees ---
 		api.GET("/employees", middleware.CheckPermission("EmployeesListPage", "VIEW"), emphandler.GetEmployees)
@@ -74,7 +75,7 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/employees/:id", middleware.CheckPermission("EmployeesListPage", "EDIT"), emphandler.UpdateEmployees)
 		api.DELETE("/employees/:id", middleware.CheckPermission("EmployeesListPage", "DELETE"), emphandler.DeleteEmployees)
 
-		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), emphandler.GetEmployees)
+		api.GET("/salaries", middleware.CheckPermission("SalariesStructurePage", "VIEW"), emphandler.GetSalaries)
 		api.POST("/salaries", middleware.CheckPermission("SalariesStructurePage", "CREATE"), emphandler.UpdateSalariesStructure)
 
 		api.GET("/employee-earnings", middleware.CheckPermission("EmployeeEarningsPage", "VIEW"), emphandler.GetEmployeeEarnings)
@@ -111,6 +112,7 @@ func SetupRouter() *gin.Engine {
 		api.GET("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "VIEW"), payhandler.GetPayrollCycles)
 		api.POST("/payroll/cycles", middleware.CheckPermission("PayrollCyclesPage", "CREATE"), payhandler.CreatePayrollCycle)
 		api.PATCH("/payroll/cycles/:id/close", middleware.CheckPermission("PayrollCyclesPage", "EDIT"), payhandler.ClosePayrollCycle)
+		api.GET("/payroll/pre-check/:cycle_id", middleware.CheckPermission("RunPayrollPage", "EDIT"), payhandler.PreCheckPayroll)
 		api.POST("/payroll/calculate/:cycle_id", middleware.CheckPermission("RunPayrollPage", "EDIT"), payhandler.CalculatePayroll)
 		api.GET("/payroll/transactions/:cycle_id", middleware.CheckPermissionAny([]string{"TransactionsPage", "RunPayrollPage", "PayslipsReportPage", "TaxFormsReportPage"}, "VIEW"), payhandler.GetPayrollTransactions)
 		api.GET("/payroll/slip/:transaction_id", middleware.CheckPermissionAny([]string{"TransactionsPage", "RunPayrollPage"}, "VIEW"), payhandler.GetPayrollSlip)
