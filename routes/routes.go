@@ -117,6 +117,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/payroll/calculate/:cycle_id", middleware.CheckPermission("RunPayrollPage", "EDIT"), payhandler.CalculatePayroll)
 		api.GET("/payroll/transactions/:cycle_id", middleware.CheckPermissionAny([]string{"TransactionsPage", "RunPayrollPage", "PayslipsReportPage", "TaxFormsReportPage"}, "VIEW"), payhandler.GetPayrollTransactions)
 		api.GET("/payroll/slip/:transaction_id", middleware.CheckPermissionAny([]string{"TransactionsPage", "RunPayrollPage"}, "VIEW"), payhandler.GetPayrollSlip)
+		api.GET("/payroll/my-slips", payhandler.GetMySlips)
 
 		api.GET("/cycle-earnings", middleware.CheckPermission("CycleEarningsPage", "VIEW"), payhandler.GetCycleEarnings)
 		api.POST("/cycle-earnings", middleware.CheckPermission("CycleEarningsPage", "CREATE"), payhandler.CreateCycleEarning)
