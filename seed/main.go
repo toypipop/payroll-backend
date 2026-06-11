@@ -418,9 +418,13 @@ func main() {
 	for _, m := range modules {
 		m.IsActive = true
 		var existingModule models.AppModule
-		config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
 		if m.ID != 0 {
+			// Upsert by primary key to avoid conflict when id is taken by a different module_key
+			config.DB.Save(&m)
+			existingModule = m
 			syncAppModuleIDSequence()
+		} else {
+			config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
 		}
 
 		mID := existingModule.ID
