@@ -14,10 +14,10 @@ func GetMySlips(c *gin.Context) {
 
 	var transactions []models.PayrollTransaction
 	if err := config.DB.
-		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transactions.cycle_id AND payroll_cycle.is_closed = true AND payroll_cycle.deleted_at = 0").
-		Where("payroll_transactions.employees_id = ? AND payroll_transactions.deleted_at = 0", userID).
+		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id AND payroll_cycle.is_closed = true AND payroll_cycle.deleted_at = 0").
+		Where("payroll_transaction.employees_id = ? AND payroll_transaction.deleted_at = 0", userID).
 		Preload("Details").
-		Order("payroll_transactions.id DESC").
+		Order("payroll_transaction.id DESC").
 		Find(&transactions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
