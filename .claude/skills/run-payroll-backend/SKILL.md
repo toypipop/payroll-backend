@@ -43,7 +43,7 @@ go run .
 ```bash
 bash .claude/skills/run-payroll-backend/smoke.sh
 # Runs: healthz, /modules, login, auth/me, employees
-# Exit 0 = all pass. Override URL: bash smoke.sh http://localhost:8001
+# Exit 0 = all pass. Override URL: bash smoke.sh http://localhost:8000
 ```
 
 **Step 3 — hit specific endpoints with curl:**
