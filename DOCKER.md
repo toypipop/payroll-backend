@@ -9,9 +9,9 @@ docker compose -f docker-compose.local.yml up -d --build
 ## URLs
 
 - Frontend: `http://localhost:5174`
-- Backend direct API: `http://localhost:8001/api/v1`
+- Backend direct API: `http://localhost:8000/api/v1`
 - UAT frontend: `http://5.223.87.23:5174`
-- UAT direct API: `http://5.223.87.23:8001/api/v1`
+- UAT direct API: `http://5.223.87.23:8000/api/v1`
 - Frontend nginx proxies `/api` to the backend container.
 
 ## Routing
@@ -25,7 +25,7 @@ VITE_API_URL=/api/v1
 | Environment | Browser calls | Proxy | Backend target |
 | --- | --- | --- | --- |
 | Local Docker full stack | `http://localhost:5174/api/v1/...` | frontend nginx | `http://backend:8000` |
-| Frontend dev + Docker backend | `http://localhost:5174/api/v1/...` | Vite proxy | `API_PROXY_TARGET=http://localhost:8001` |
+| Frontend dev + Docker backend | `http://localhost:5174/api/v1/...` | Vite proxy | `API_PROXY_TARGET=http://localhost:8000` |
 | Frontend dev + `go run .` | `http://localhost:5174/api/v1/...` | Vite proxy | `API_PROXY_TARGET=http://localhost:8000` |
 | UAT IP/port | `http://5.223.87.23:5174/api/v1/...` | frontend nginx | `http://backend:8000` |
 | SIT/UAT/Prod domain | `https://<env-domain>/api/v1/...` | public proxy | backend `:8000` |
