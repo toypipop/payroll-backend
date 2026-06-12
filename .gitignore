@@ -32,6 +32,3 @@ build-errors.log
 
 # Local Go build cache
 .gocache/
-
-# Local build artifacts and smoke test output
-tmp/
