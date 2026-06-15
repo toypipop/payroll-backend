@@ -306,14 +306,18 @@ func main() {
 	sysStaffRole := models.Roles{RolesName: "STAFF", Description: "System Staff", CompaniesID: sysComp.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: sysComp.ID}).Assign(sysStaffRole).FirstOrCreate(&sysStaffRole)
 
-	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Sees whole companies", CompaniesID: compA.ID}
+	adminRoleA := models.Roles{RolesName: "ADMIN", Description: "Company Admin - full access to all modules", CompaniesID: compA.ID}
+	config.DB.Where(models.Roles{RolesName: "ADMIN", CompaniesID: compA.ID}).Assign(adminRoleA).FirstOrCreate(&adminRoleA)
+	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Full operational access, no structural admin", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compA.ID}).Assign(managerRoleA).FirstOrCreate(&managerRoleA)
-	staffRoleA := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compA.ID}
+	staffRoleA := models.Roles{RolesName: "STAFF", Description: "View only, department scope", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compA.ID}).Assign(staffRoleA).FirstOrCreate(&staffRoleA)
 
-	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Sees whole companies", CompaniesID: compB.ID}
+	adminRoleB := models.Roles{RolesName: "ADMIN", Description: "Company Admin - full access to all modules", CompaniesID: compB.ID}
+	config.DB.Where(models.Roles{RolesName: "ADMIN", CompaniesID: compB.ID}).Assign(adminRoleB).FirstOrCreate(&adminRoleB)
+	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Full operational access, no structural admin", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compB.ID}).Assign(managerRoleB).FirstOrCreate(&managerRoleB)
-	staffRoleB := models.Roles{RolesName: "STAFF", Description: "Sees only department", CompaniesID: compB.ID}
+	staffRoleB := models.Roles{RolesName: "STAFF", Description: "View only, department scope", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
 
 	// --- Departments & Positions ---
@@ -397,6 +401,19 @@ func main() {
 		{ModuleName: "Payroll Analysis", ModuleKey: "PayrollAnalysisPage", RoutePath: "/reports/payroll-analysis", Icon: "Analytics", Order: 5, ParentID: ptr(7)},
 	}
 
+	// Modules that only ADMIN (and above) can access — MANAGER is blocked from these.
+	// All other permission boundaries must be set here in seed, not in code.
+	adminOnlyModules := map[models.ModuleKey]bool{
+		"CompaniesPage":             true,
+		"RolesPage":                 true,
+		"PermissionSettings":        true,
+		"EmployeeCompanyAccessPage": true,
+	}
+
+	// Wipe and rebuild all seeded role permissions so re-running seed is fully authoritative.
+	seedRoleIDs := []uint{sysRole.ID, sysStaffRole.ID, adminRoleA.ID, managerRoleA.ID, staffRoleA.ID, adminRoleB.ID, managerRoleB.ID, staffRoleB.ID}
+	config.DB.Where("roles_id IN ?", seedRoleIDs).Delete(&models.RolesModuleAccess{})
+
 	for _, m := range modules {
 		m.IsActive = true
 		var existingModule models.AppModule
@@ -411,26 +428,32 @@ func main() {
 
 		mID := existingModule.ID
 
-		// SYSTEM_ADMIN (sysComp) gets full access through role/module/access mappings.
 		upsert := func(roleID, compID uint, scope models.DataScope, full bool) {
 			acc := models.RolesModuleAccess{
 				RolesID: roleID, ModuleID: mID, CompaniesID: compID,
 				CanView: true, CanCreate: full, CanEdit: full, CanDelete: full,
 				DataScope: scope,
 			}
-			config.DB.Where(models.RolesModuleAccess{RolesID: roleID, ModuleID: mID}).Assign(acc).FirstOrCreate(&acc)
+			config.DB.Create(&acc)
 		}
 
-		upsert(sysRole.ID, sysComp.ID, models.ScopeAll, true)            // SYSTEM_ADMIN: all mapped companies
+		// sysComp roles
+		upsert(sysRole.ID, sysComp.ID, models.ScopeAll, true)            // SYSTEM_ADMIN: cross-company
 		upsert(sysStaffRole.ID, sysComp.ID, models.ScopeCompanies, true) // sysStaff: full within company
 
 		// compA roles
-		upsert(managerRoleA.ID, compA.ID, models.ScopeCompanies, true) // MANAGER: full within company
+		upsert(adminRoleA.ID, compA.ID, models.ScopeCompanies, true) // ADMIN: all modules, full CRUD
 		upsert(staffRoleA.ID, compA.ID, models.ScopeDepartment, false) // STAFF: view only, dept scope
+		if !adminOnlyModules[m.ModuleKey] {
+			upsert(managerRoleA.ID, compA.ID, models.ScopeCompanies, true) // MANAGER: operational only
+		}
 
 		// compB roles
-		upsert(managerRoleB.ID, compB.ID, models.ScopeCompanies, true)
+		upsert(adminRoleB.ID, compB.ID, models.ScopeCompanies, true)
 		upsert(staffRoleB.ID, compB.ID, models.ScopeDepartment, false)
+		if !adminOnlyModules[m.ModuleKey] {
+			upsert(managerRoleB.ID, compB.ID, models.ScopeCompanies, true)
+		}
 	}
 
 	// --- Employees Seeding (Using your existing logic) ---
@@ -461,11 +484,11 @@ func main() {
 
 	usersToSeed := []empSeed{
 		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpTypeSys.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0, &bankTTB.ID, bankTTB.BankName, "Test Staff", "6789012345"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson", "1234567890"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, bankSCB.BankName, "Bob Smith", "2345678901"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: adminRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson", "1234567890"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, bankSCB.BankName, "Bob Smith", "2345678901"},
 		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, bankBBL.BankName, "Carol Davis", "3456789012"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, bankKTB.BankName, "David Wilson", "4567890123"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, bankBAY.BankName, "Eve Brown", "5678901234"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: adminRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, bankKTB.BankName, "David Wilson", "4567890123"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, bankBAY.BankName, "Eve Brown", "5678901234"},
 		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, bankBBL.BankName, "Frank Garcia", "6789012345"},
 	}
 
