@@ -203,17 +203,6 @@ func main() {
 	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Full-time").First(&fullTimeEmpTypeA)
 	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Full-time").First(&fullTimeEmpTypeB)
 
-	// Initialize categories
-	earningCats := []models.EarningCategory{
-		{Name: "Regular Pay"},
-		{Name: "Allowance"},
-		{Name: "Bonus"},
-		{Name: "Overtime"},
-		{Name: "Reimbursement"},
-	}
-	for _, ec := range earningCats {
-		config.DB.Where(models.EarningCategory{Name: ec.Name}).Assign(ec).FirstOrCreate(&ec)
-	}
 
 	// --- Deduction Categories (Global) ---
 	deductionCats := []models.DeductionCategory{
@@ -348,13 +337,6 @@ func main() {
 	posStaffB := models.Position{PosName: "Engineer", CompaniesID: compB.ID}
 	config.DB.Where(models.Position{PosName: "Engineer", CompaniesID: compB.ID}).Assign(posStaffB).FirstOrCreate(&posStaffB)
 	// --- Modules ---
-	deprecatedModuleKeys := []models.ModuleKey{
-		"EarningCategoryPage",
-	}
-	config.DB.Model(&models.AppModule{}).
-		Where("module_key IN ?", deprecatedModuleKeys).
-		Update("is_active", false)
-
 	modules := []models.AppModule{
 		// --- Level 1: Main Categories ---
 		{ID: 1, ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, IsCategory: false},

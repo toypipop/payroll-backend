@@ -277,7 +277,7 @@ func ApproveLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	if leave.Status != "Pending" {
+	if leave.Status != models.LeaveStatusPending {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This request has already been processed"})
 		return
 	}

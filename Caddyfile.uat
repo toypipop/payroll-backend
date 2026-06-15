@@ -1,7 +1,7 @@
-app.getpipop.org {
+uat.app.getpipop.org {
     reverse_proxy frontend:80
 }
 
-api.getpipop.org {
+uat.api.getpipop.org {
     reverse_proxy backend:8000
 }

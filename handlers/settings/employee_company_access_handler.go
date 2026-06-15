@@ -168,13 +168,8 @@ func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, da
 	}
 
 	var employee models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).Select("id, companies_id").First(&employee, input.EmployeeID).Error; err != nil {
-		return models.EmployeeCompanyAccess{}, errors.New("access denied to this employee")
-	}
-	if employee.CompaniesID != input.CompanyID {
-		return models.EmployeeCompanyAccess{}, errors.New("employee does not belong to selected company")
+	if err := config.DB.Select("id, companies_id").First(&employee, input.EmployeeID).Error; err != nil {
+		return models.EmployeeCompanyAccess{}, errors.New("employee not found")
 	}
 
 	var role models.Roles
