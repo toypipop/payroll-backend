@@ -44,7 +44,6 @@ type EmployeeCompanyAccess struct {
 	EmployeeID uint                  `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;index" json:"employee_id"`
 	CompanyID  uint                  `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;index" json:"company_id"`
 	RoleID     uint                  `gorm:"uniqueIndex:idx_emp_company_access_deleted;not null;index" json:"role_id"`
-	IsDefault  bool                  `gorm:"default:false;index" json:"is_default"`
 	IsActive   bool                  `gorm:"default:true;index" json:"is_active"`
 	Employee   Employees             `gorm:"foreignKey:EmployeeID" json:"employee,omitempty"`
 	Company    Companies             `gorm:"foreignKey:CompanyID" json:"company,omitempty"`

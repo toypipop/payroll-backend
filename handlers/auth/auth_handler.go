@@ -155,10 +155,11 @@ func Login(c *gin.Context) {
 	}
 
 	// Create JWT token with claims
+	defaultCompanyID, defaultRoleID := repository.DefaultCompanyAccess(Employees)
 	claims := TokenClaims{
 		UserID:      Employees.ID,
-		CompaniesID: repository.DefaultCompanyID(Employees),
-		RolesID:     Employees.RolesID,
+		CompaniesID: defaultCompanyID,
+		RolesID:     defaultRoleID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(authTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

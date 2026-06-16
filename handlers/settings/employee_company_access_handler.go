@@ -15,7 +15,6 @@ type employeeCompanyAccessInput struct {
 	EmployeeID uint `json:"employee_id" binding:"required"`
 	CompanyID  uint `json:"company_id" binding:"required"`
 	RoleID     uint `json:"role_id" binding:"required"`
-	IsDefault  bool `json:"is_default"`
 	IsActive   bool `json:"is_active"`
 }
 
@@ -67,13 +66,6 @@ func CreateEmployeeCompanyAccess(c *gin.Context) {
 	mapping.ID = 0
 
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
-		if mapping.IsDefault {
-			if err := tx.Model(&models.EmployeeCompanyAccess{}).
-				Where("employee_id = ?", mapping.EmployeeID).
-				Update("is_default", false).Error; err != nil {
-				return err
-			}
-		}
 		return tx.Create(&mapping).Error
 	})
 	if err != nil {
@@ -116,19 +108,10 @@ func UpdateEmployeeCompanyAccess(c *gin.Context) {
 	}
 
 	err = config.DB.Transaction(func(tx *gorm.DB) error {
-		if mapping.IsDefault {
-			if err := tx.Model(&models.EmployeeCompanyAccess{}).
-				Where("employee_id = ? AND id <> ?", mapping.EmployeeID, existing.ID).
-				Update("is_default", false).Error; err != nil {
-				return err
-			}
-		}
-
 		return tx.Model(&existing).Updates(map[string]interface{}{
 			"employee_id": mapping.EmployeeID,
 			"company_id":  mapping.CompanyID,
 			"role_id":     mapping.RoleID,
-			"is_default":  mapping.IsDefault,
 			"is_active":   mapping.IsActive,
 		}).Error
 	})
@@ -182,15 +165,10 @@ func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, da
 		return models.EmployeeCompanyAccess{}, errors.New("role does not belong to selected company")
 	}
 
-	if input.IsDefault && !input.IsActive {
-		return models.EmployeeCompanyAccess{}, errors.New("default access must be active")
-	}
-
 	return models.EmployeeCompanyAccess{
 		EmployeeID: input.EmployeeID,
 		CompanyID:  input.CompanyID,
 		RoleID:     input.RoleID,
-		IsDefault:  input.IsDefault,
 		IsActive:   input.IsActive,
 	}, nil
 }

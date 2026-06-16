@@ -15,12 +15,11 @@ func ptr(u uint) *uint {
 	return &u
 }
 
-func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint, isDefault bool) {
+func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint) {
 	mapping := models.EmployeeCompanyAccess{
 		EmployeeID: employeeID,
 		CompanyID:  companyID,
 		RoleID:     roleID,
-		IsDefault:  isDefault,
 		IsActive:   true,
 	}
 	config.DB.Where(models.EmployeeCompanyAccess{
@@ -469,9 +468,10 @@ func main() {
 			FirstName:     "System", LastName: "Admin",
 			Password: hashStr, DeptID: sysDept.ID, PosID: sysPos.ID,
 		}).FirstOrCreate(&admin)
-	upsertEmployeeCompanyAccess(admin.ID, sysComp.ID, sysRole.ID, true)
-	upsertEmployeeCompanyAccess(admin.ID, compA.ID, sysRole.ID, false)
-	upsertEmployeeCompanyAccess(admin.ID, compB.ID, sysRole.ID, false)
+	config.DB.Where("employee_id = ? AND company_id = ? AND role_id != ? AND deleted_at = 0", admin.ID, compA.ID, adminRoleA.ID).Delete(&models.EmployeeCompanyAccess{})
+	config.DB.Where("employee_id = ? AND company_id = ? AND role_id != ? AND deleted_at = 0", admin.ID, compB.ID, adminRoleB.ID).Delete(&models.EmployeeCompanyAccess{})
+	upsertEmployeeCompanyAccess(admin.ID, compA.ID, adminRoleA.ID)
+	upsertEmployeeCompanyAccess(admin.ID, compB.ID, adminRoleB.ID)
 
 	type empSeed struct {
 		emp         models.Employees
@@ -497,7 +497,6 @@ func main() {
 	for _, s := range usersToSeed {
 		var existingEmp models.Employees
 		config.DB.Unscoped().Where(models.Employees{Email: s.emp.Email}).Assign(s.emp).FirstOrCreate(&existingEmp)
-		upsertEmployeeCompanyAccess(existingEmp.ID, s.emp.CompaniesID, s.emp.RolesID, true)
 
 		// Update bank fields on employee
 		config.DB.Model(&existingEmp).Updates(map[string]interface{}{
@@ -1337,10 +1336,10 @@ func main() {
 	}{
 		{&admin, "admin@admin.com", sysComp.ID, sysRole.ID, 0, &bankTTB.ID, bankTTB.BankName, "Payroll Pro Admin"},
 		{&staff, "staff@admin.com", sysComp.ID, sysStaffRole.ID, 42000, &bankTTB.ID, bankTTB.BankName, "Test Staff"},
-		{&alice, "alice@techa.com", compA.ID, managerRoleA.ID, 78000, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson"},
+		{&alice, "alice@techa.com", compA.ID, adminRoleA.ID, 78000, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson"},
 		{&bob, "bob@techa.com", compA.ID, staffRoleA.ID, 52000, &bankSCB.ID, bankSCB.BankName, "Bob Smith"},
 		{&carol, "carol@techa.com", compA.ID, staffRoleA.ID, 32500, &bankBBL.ID, bankBBL.BankName, "Carol Davis"},
-		{&david, "david@bizgroup.com", compB.ID, managerRoleB.ID, 86000, &bankKTB.ID, bankKTB.BankName, "David Wilson"},
+		{&david, "david@bizgroup.com", compB.ID, adminRoleB.ID, 86000, &bankKTB.ID, bankKTB.BankName, "David Wilson"},
 		{&eve, "eve@bizgroup.com", compB.ID, staffRoleB.ID, 47000, &bankBAY.ID, bankBAY.BankName, "Eve Brown"},
 		{&frank, "frank@bizgroup.com", compB.ID, staffRoleB.ID, 29500, &bankBBL.ID, bankBBL.BankName, "Frank Garcia"},
 	}
@@ -1367,7 +1366,6 @@ func main() {
 			}
 			config.DB.Where(models.SalariesStructure{EmployeesID: u.emp.ID, EffectiveDate: salary.EffectiveDate}).
 				Assign(salary).FirstOrCreate(&salary)
-			upsertEmployeeCompanyAccess(u.emp.ID, u.company, u.role, true)
 		}
 	}
 

@@ -86,16 +86,6 @@ func CreateEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	mapping := models.EmployeeCompanyAccess{
-		EmployeeID: input.ID,
-		CompanyID:  input.CompaniesID,
-		RoleID:     input.RolesID,
-		IsDefault:  true,
-		IsActive:   true,
-	}
-	config.DB.Where(models.EmployeeCompanyAccess{EmployeeID: input.ID, CompanyID: input.CompaniesID, RoleID: input.RolesID}).
-		Assign(mapping).
-		FirstOrCreate(&mapping)
 
 	c.JSON(http.StatusCreated, input)
 }
@@ -177,19 +167,6 @@ func UpdateEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
 		return
 	}
-	mapping := models.EmployeeCompanyAccess{
-		EmployeeID: emp.ID,
-		CompanyID:  companyID,
-		RoleID:     nextRoleID,
-		IsDefault:  true,
-		IsActive:   true,
-	}
-	config.DB.Model(&models.EmployeeCompanyAccess{}).
-		Where("employee_id = ?", emp.ID).
-		Update("is_default", false)
-	config.DB.Where(models.EmployeeCompanyAccess{EmployeeID: emp.ID, CompanyID: companyID, RoleID: nextRoleID}).
-		Assign(mapping).
-		FirstOrCreate(&mapping)
 
 	config.DB.Preload("Department").Preload("Position").Preload("SalariesStructure").Preload("Bank").First(&emp, id)
 	c.JSON(http.StatusOK, emp)

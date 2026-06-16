@@ -32,49 +32,59 @@ func ScopeCompanyIDs(companyIDs []uint, columnName ...string) func(db *gorm.DB) 
 }
 
 func AccessibleCompanyIDs(userID uint) []uint {
+	var user models.Employees
+	if err := config.DB.Select("id, companies_id").First(&user, userID).Error; err != nil {
+		return nil
+	}
+
+	seen := map[uint]bool{}
+	ids := make([]uint, 0)
+
+	if user.CompaniesID != 0 {
+		seen[user.CompaniesID] = true
+		ids = append(ids, user.CompaniesID)
+	}
+
 	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.
 		Where("employee_id = ? AND is_active = ?", userID, true).
-		Find(&mappings).Error; err == nil && len(mappings) > 0 {
-		seen := map[uint]bool{}
-		ids := make([]uint, 0, len(mappings))
-		for _, mapping := range mappings {
-			if mapping.CompanyID != 0 && !seen[mapping.CompanyID] {
-				seen[mapping.CompanyID] = true
-				ids = append(ids, mapping.CompanyID)
+		Find(&mappings).Error; err == nil {
+		for _, m := range mappings {
+			if m.CompanyID != 0 && !seen[m.CompanyID] {
+				seen[m.CompanyID] = true
+				ids = append(ids, m.CompanyID)
 			}
 		}
-		return ids
 	}
-
-	var user models.Employees
-	if err := config.DB.Select("companies_id").First(&user, userID).Error; err == nil && user.CompaniesID != 0 {
-		return []uint{user.CompaniesID}
-	}
-	return nil
+	return ids
 }
 
 func AccessibleRoleIDs(userID uint) []uint {
+	var user models.Employees
+	if err := config.DB.Select("id, roles_id").First(&user, userID).Error; err != nil {
+		return nil
+	}
+
+	seen := map[uint]bool{}
+	ids := make([]uint, 0)
+
+	if user.RolesID != 0 {
+		seen[user.RolesID] = true
+		ids = append(ids, user.RolesID)
+	}
+
 	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.
 		Where("employee_id = ? AND is_active = ?", userID, true).
-		Find(&mappings).Error; err == nil && len(mappings) > 0 {
-		seen := map[uint]bool{}
-		ids := make([]uint, 0, len(mappings))
-		for _, mapping := range mappings {
-			if mapping.RoleID != 0 && !seen[mapping.RoleID] {
-				seen[mapping.RoleID] = true
-				ids = append(ids, mapping.RoleID)
+		Find(&mappings).Error; err == nil {
+		for _, m := range mappings {
+			if m.RoleID != 0 && !seen[m.RoleID] {
+				seen[m.RoleID] = true
+				ids = append(ids, m.RoleID)
 			}
 		}
-		return ids
 	}
-
-	var user models.Employees
-	if err := config.DB.Select("roles_id").First(&user, userID).Error; err == nil && user.RolesID != 0 {
-		return []uint{user.RolesID}
-	}
-	return nil
+	return ids
 }
 
 func AccessibleCompanyIDsForRoles(userID uint, roleIDs []uint) []uint {
@@ -101,19 +111,12 @@ func AccessibleCompanyIDsForRoles(userID uint, roleIDs []uint) []uint {
 }
 
 func DefaultCompanyID(user models.Employees) uint {
-	var mapping models.EmployeeCompanyAccess
-	if err := config.DB.
-		Where("employee_id = ? AND is_active = ? AND is_default = ?", user.ID, true, true).
-		First(&mapping).Error; err == nil && mapping.CompanyID != 0 {
-		return mapping.CompanyID
-	}
-	if err := config.DB.
-		Where("employee_id = ? AND is_active = ?", user.ID, true).
-		Order("id ASC").
-		First(&mapping).Error; err == nil && mapping.CompanyID != 0 {
-		return mapping.CompanyID
-	}
-	return user.CompaniesID
+	companyID, _ := DefaultCompanyAccess(user)
+	return companyID
+}
+
+func DefaultCompanyAccess(user models.Employees) (companyID uint, roleID uint) {
+	return user.CompaniesID, user.RolesID
 }
 
 func RoleNames(userID uint) []string {
