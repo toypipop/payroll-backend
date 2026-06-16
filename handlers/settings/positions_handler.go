@@ -38,7 +38,7 @@ func CreatePosition(c *gin.Context) {
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
-	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, pos.CompaniesID)
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, pos.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -77,7 +77,7 @@ func UpdatePosition(c *gin.Context) {
 	}
 
 	// Position name is non-calculation metadata and can be updated even if used.
-	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return

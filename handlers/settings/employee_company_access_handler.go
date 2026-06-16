@@ -34,7 +34,7 @@ func GetEmployeeCompanyAccess(c *gin.Context) {
 		Preload("Employee").
 		Preload("Company").
 		Preload("Role").
-		Order("employee_company_access.employee_id ASC, employee_company_access.is_default DESC, employee_company_access.company_id ASC").
+		Order("employee_company_access.employee_id ASC, employee_company_access.company_id ASC").
 		Find(&mappings).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employee company access"})
 		return
@@ -146,7 +146,7 @@ func DeleteEmployeeCompanyAccess(c *gin.Context) {
 }
 
 func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, dataScope models.DataScope, input employeeCompanyAccessInput) (models.EmployeeCompanyAccess, error) {
-	if _, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompanyID); !ok {
+	if _, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompanyID); !ok {
 		return models.EmployeeCompanyAccess{}, errors.New("access denied for this company")
 	}
 

@@ -56,7 +56,7 @@ func CreatePayrollCycle(c *gin.Context) {
 	}
 
 	// Resolve target company — validate access via ApplyScopes
-	targetCompaniesID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	targetCompaniesID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to the specified company"})
 		return

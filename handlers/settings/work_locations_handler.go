@@ -37,7 +37,7 @@ func CreateWorkLocation(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, loc.CompaniesID)
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, loc.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return

@@ -87,33 +87,84 @@ func scopeRank(scope models.DataScope) int {
 	}
 }
 
-func getContextRoleIDs(c *gin.Context) []uint {
-	if val, ok := c.Get("role_ids"); ok {
-		if ids, ok := val.([]uint); ok {
-			return ids
+func getContextUserID(c *gin.Context) (uint, bool) {
+	val, _ := c.Get("user_id")
+	id, ok := val.(uint)
+	return id, ok
+}
+
+func permissionAllows(access *models.RolesModuleAccess, action string) bool {
+	switch action {
+	case "VIEW":
+		return access.CanView
+	case "CREATE":
+		return access.CanCreate
+	case "EDIT":
+		return access.CanEdit
+	case "DELETE":
+		return access.CanDelete
+	default:
+		return false
+	}
+}
+
+// resolveAuthorizedCompanies pairs each company the employee can reach with the
+// role they act under in that company, and keeps only the companies whose role
+// actually grants `action` for the queried module(s). This is what makes
+// permissions per-company instead of a single allow/deny for the whole user.
+func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses []models.RolesModuleAccess, action string) ([]uint, models.DataScope, bool) {
+	type roleResult struct {
+		allowed bool
+		scope   models.DataScope
+	}
+	roleResults := make(map[uint]roleResult)
+	for i := range accesses {
+		access := &accesses[i]
+		if !permissionAllows(access, action) {
+			continue
+		}
+		cur := roleResults[access.RolesID]
+		if !cur.allowed || scopeRank(access.DataScope) > scopeRank(cur.scope) {
+			roleResults[access.RolesID] = roleResult{allowed: true, scope: access.DataScope}
 		}
 	}
 
-	valRoles, _ := c.Get("roles_id")
-	switch v := valRoles.(type) {
-	case uint:
-		return []uint{v}
-	case float64:
-		return []uint{uint(v)}
-	case int:
-		return []uint{uint(v)}
-	default:
-		return nil
+	var companyIDs []uint
+	var bestScope models.DataScope
+	found := false
+	for _, cr := range companyRoles {
+		res, ok := roleResults[cr.RoleID]
+		if !ok || !res.allowed {
+			continue
+		}
+		companyIDs = append(companyIDs, cr.CompanyID)
+		if !found || scopeRank(res.scope) > scopeRank(bestScope) {
+			bestScope = res.scope
+			found = true
+		}
 	}
+	return companyIDs, bestScope, found
 }
 
 func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		roleIDs := getContextRoleIDs(c)
-		if len(roleIDs) == 0 {
+		userID, ok := getContextUserID(c)
+		if !ok {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
 			c.Abort()
 			return
+		}
+
+		companyRoles := repository.AccessibleCompanyRoles(userID)
+		if len(companyRoles) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
+			c.Abort()
+			return
+		}
+
+		roleIDs := make([]uint, 0, len(companyRoles))
+		for _, cr := range companyRoles {
+			roleIDs = append(roleIDs, cr.RoleID)
 		}
 
 		var accesses []models.RolesModuleAccess
@@ -133,27 +184,8 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 			return
 		}
 
-		var selected *models.RolesModuleAccess
-		var selectedRoleIDs []uint
-		for i := range accesses {
-			access := &accesses[i]
-			permissions := map[string]bool{
-				"VIEW":   access.CanView,
-				"CREATE": access.CanCreate,
-				"EDIT":   access.CanEdit,
-				"DELETE": access.CanDelete,
-			}
-			if allowed, ok := permissions[action]; ok && allowed {
-				if selected == nil || scopeRank(access.DataScope) > scopeRank(selected.DataScope) {
-					selected = access
-					selectedRoleIDs = []uint{access.RolesID}
-				} else if selected != nil && scopeRank(access.DataScope) == scopeRank(selected.DataScope) {
-					selectedRoleIDs = append(selectedRoleIDs, access.RolesID)
-				}
-			}
-		}
-
-		if selected == nil {
+		companyIDs, scope, found := resolveAuthorizedCompanies(companyRoles, accesses, action)
+		if !found {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":  "Permission denied",
 				"action": action,
@@ -162,11 +194,8 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 			return
 		}
 
-		c.Set("data_scope", selected.DataScope)
-		userID, _ := c.Get("user_id")
-		if id, ok := userID.(uint); ok {
-			c.Set("authorized_company_ids", repository.AccessibleCompanyIDsForRoles(id, selectedRoleIDs))
-		}
+		c.Set("data_scope", scope)
+		c.Set("authorized_company_ids", companyIDs)
 		c.Next()
 	}
 }
@@ -179,11 +208,23 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 			return
 		}
 
-		roleIDs := getContextRoleIDs(c)
-		if len(roleIDs) == 0 {
+		userID, ok := getContextUserID(c)
+		if !ok {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
 			c.Abort()
 			return
+		}
+
+		companyRoles := repository.AccessibleCompanyRoles(userID)
+		if len(companyRoles) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
+			c.Abort()
+			return
+		}
+
+		roleIDs := make([]uint, 0, len(companyRoles))
+		for _, cr := range companyRoles {
+			roleIDs = append(roleIDs, cr.RoleID)
 		}
 
 		var accesses []models.RolesModuleAccess
@@ -203,41 +244,18 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 			return
 		}
 
-		var selected *models.RolesModuleAccess
-		var selectedRoleIDs []uint
-		for _, access := range accesses {
-			permissions := map[string]bool{
-				"VIEW":   access.CanView,
-				"CREATE": access.CanCreate,
-				"EDIT":   access.CanEdit,
-				"DELETE": access.CanDelete,
-			}
-
-			allowed, ok := permissions[action]
-			if ok && allowed {
-				if selected == nil || scopeRank(access.DataScope) > scopeRank(selected.DataScope) {
-					selected = &access
-					selectedRoleIDs = []uint{access.RolesID}
-				} else if selected != nil && scopeRank(access.DataScope) == scopeRank(selected.DataScope) {
-					selectedRoleIDs = append(selectedRoleIDs, access.RolesID)
-				}
-			}
-		}
-
-		if selected != nil {
-			c.Set("data_scope", selected.DataScope)
-			userID, _ := c.Get("user_id")
-			if id, ok := userID.(uint); ok {
-				c.Set("authorized_company_ids", repository.AccessibleCompanyIDsForRoles(id, selectedRoleIDs))
-			}
-			c.Next()
+		companyIDs, scope, found := resolveAuthorizedCompanies(companyRoles, accesses, action)
+		if !found {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":  "Permission denied",
+				"action": action,
+			})
+			c.Abort()
 			return
 		}
 
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":  "Permission denied",
-			"action": action,
-		})
-		c.Abort()
+		c.Set("data_scope", scope)
+		c.Set("authorized_company_ids", companyIDs)
+		c.Next()
 	}
 }

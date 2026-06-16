@@ -57,7 +57,7 @@ func CreateEmployees(c *gin.Context) {
 		return
 	}
 
-	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID)
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -118,7 +118,7 @@ func UpdateEmployees(c *gin.Context) {
 	if companiesID, ok := data["companies_id"].(float64); ok {
 		nextCompanyID = uint(companiesID)
 	}
-	companyID, ok := repository.ResolveCompanyID(currentUser, dataScope, nextCompanyID)
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, nextCompanyID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return

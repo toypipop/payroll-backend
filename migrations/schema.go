@@ -65,42 +65,6 @@ func RenameEmployeeCompanyAccessTable(db *gorm.DB) error {
 	return nil
 }
 
-func BackfillEmployeeCompanyAccess(db *gorm.DB) error {
-	if !db.Migrator().HasTable("employee_company_access") || !db.Migrator().HasTable("employees") {
-		return nil
-	}
-
-	return db.Exec(`
-		INSERT INTO employee_company_access (
-			created_at,
-			updated_at,
-			deleted_at,
-			employee_id,
-			company_id,
-			role_id,
-			is_default,
-			is_active
-		)
-		SELECT
-			NOW(),
-			NOW(),
-			0,
-			e.id,
-			e.companies_id,
-			e.roles_id,
-			TRUE,
-			TRUE
-		FROM employees AS e
-		WHERE e.companies_id <> 0
-			AND e.roles_id <> 0
-		ON CONFLICT (employee_id, company_id, role_id, deleted_at)
-		DO UPDATE SET
-			is_default = TRUE,
-			is_active = TRUE,
-			updated_at = NOW()
-	`).Error
-}
-
 func BackfillSalariesStructureCompanies(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&models.SalariesStructure{}) {
 		return nil

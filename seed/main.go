@@ -59,9 +59,6 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
-	if err := migrations.RunOnce(config.DB, "20260525_backfill_employee_company_access", migrations.BackfillEmployeeCompanyAccess); err != nil {
-		log.Fatalf("Employee-company-access backfill failed: %v", err)
-	}
 
 	// Initialize companies
 	sysComp := models.Companies{Name: "System Administration", TaxID: "0000000000000"}

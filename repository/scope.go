@@ -59,6 +59,42 @@ func AccessibleCompanyIDs(userID uint) []uint {
 	return ids
 }
 
+type CompanyRole struct {
+	CompanyID uint
+	RoleID    uint
+}
+
+// AccessibleCompanyRoles returns the role the employee acts under in each
+// company they can reach: their home role for their home company, and the
+// mapped role for every active employee_company_access company.
+func AccessibleCompanyRoles(userID uint) []CompanyRole {
+	var user models.Employees
+	if err := config.DB.Select("id, companies_id, roles_id").First(&user, userID).Error; err != nil {
+		return nil
+	}
+
+	seen := map[uint]bool{}
+	result := make([]CompanyRole, 0)
+
+	if user.CompaniesID != 0 && user.RolesID != 0 {
+		seen[user.CompaniesID] = true
+		result = append(result, CompanyRole{CompanyID: user.CompaniesID, RoleID: user.RolesID})
+	}
+
+	var mappings []models.EmployeeCompanyAccess
+	if err := config.DB.
+		Where("employee_id = ? AND is_active = ?", userID, true).
+		Find(&mappings).Error; err == nil {
+		for _, m := range mappings {
+			if m.CompanyID != 0 && m.RoleID != 0 && !seen[m.CompanyID] {
+				seen[m.CompanyID] = true
+				result = append(result, CompanyRole{CompanyID: m.CompanyID, RoleID: m.RoleID})
+			}
+		}
+	}
+	return result
+}
+
 func AccessibleRoleIDs(userID uint) []uint {
 	var user models.Employees
 	if err := config.DB.Select("id, roles_id").First(&user, userID).Error; err != nil {
@@ -82,29 +118,6 @@ func AccessibleRoleIDs(userID uint) []uint {
 				seen[m.RoleID] = true
 				ids = append(ids, m.RoleID)
 			}
-		}
-	}
-	return ids
-}
-
-func AccessibleCompanyIDsForRoles(userID uint, roleIDs []uint) []uint {
-	if len(roleIDs) == 0 {
-		return AccessibleCompanyIDs(userID)
-	}
-
-	var mappings []models.EmployeeCompanyAccess
-	if err := config.DB.
-		Where("employee_id = ? AND role_id IN ? AND is_active = ?", userID, roleIDs, true).
-		Find(&mappings).Error; err != nil || len(mappings) == 0 {
-		return nil
-	}
-
-	seen := map[uint]bool{}
-	ids := make([]uint, 0, len(mappings))
-	for _, mapping := range mappings {
-		if mapping.CompanyID != 0 && !seen[mapping.CompanyID] {
-			seen[mapping.CompanyID] = true
-			ids = append(ids, mapping.CompanyID)
 		}
 	}
 	return ids
@@ -137,11 +150,11 @@ func RoleNames(userID uint) []string {
 	return names
 }
 
-func CanAccessCompany(userID uint, scope models.DataScope, companyID uint) bool {
+func CanAccessCompany(c *gin.Context, userID uint, scope models.DataScope, companyID uint) bool {
 	if companyID == 0 {
 		return false
 	}
-	for _, accessibleID := range AccessibleCompanyIDs(userID) {
+	for _, accessibleID := range GetAuthorizedCompanyIDs(c, userID) {
 		if accessibleID == companyID {
 			return true
 		}
@@ -149,19 +162,19 @@ func CanAccessCompany(userID uint, scope models.DataScope, companyID uint) bool 
 	return false
 }
 
-func ResolveCompanyID(user models.Employees, scope models.DataScope, requestedCompanyID uint) (uint, bool) {
+func ResolveCompanyID(c *gin.Context, user models.Employees, scope models.DataScope, requestedCompanyID uint) (uint, bool) {
 	companyID := requestedCompanyID
 	if companyID == 0 {
 		companyID = DefaultCompanyID(user)
 	}
-	return companyID, CanAccessCompany(user.ID, scope, companyID)
+	return companyID, CanAccessCompany(c, user.ID, scope, companyID)
 }
 
 func ResolveEmployeeForCompany(c *gin.Context, user models.Employees, scope models.DataScope, employeeID uint, requestedCompanyID uint) (models.Employees, bool) {
 	if requestedCompanyID == 0 {
 		return models.Employees{}, false
 	}
-	companyID, ok := ResolveCompanyID(user, scope, requestedCompanyID)
+	companyID, ok := ResolveCompanyID(c, user, scope, requestedCompanyID)
 	if !ok || employeeID == 0 {
 		return models.Employees{}, false
 	}

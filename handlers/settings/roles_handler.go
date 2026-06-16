@@ -78,7 +78,7 @@ func UpdateRole(c *gin.Context) {
 		"roles_name":   input.RolesName,
 		"companies_id": input.CompaniesID,
 	}
-	if _, ok := repository.ResolveCompanyID(currentUser, dataScope, input.CompaniesID); !ok {
+	if _, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID); !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
