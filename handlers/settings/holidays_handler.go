@@ -5,6 +5,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,21 +30,37 @@ func GetHolidays(c *gin.Context) {
 }
 
 func CreateHoliday(c *gin.Context) {
-	var holiday models.Holiday
-	if err := c.ShouldBindJSON(&holiday); err != nil {
+	var input struct {
+		CompaniesID uint   `json:"companies_id"`
+		Date        string `json:"date" binding:"required"`
+		Name        string `json:"name" binding:"required"`
+		IsPaid      bool   `json:"is_paid"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	parsedDate, err := time.Parse("2006-01-02", input.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format, expected YYYY-MM-DD"})
+		return
+	}
+
 	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, holiday.CompaniesID)
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
-	holiday.CompaniesID = companyID
 
+	holiday := models.Holiday{
+		CompaniesID: companyID,
+		Date:        parsedDate,
+		Name:        input.Name,
+		IsPaid:      input.IsPaid,
+	}
 	if err := config.DB.Create(&holiday).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create holiday"})
 		return
@@ -78,6 +95,12 @@ func UpdateHoliday(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	parsedDate, err := time.Parse("2006-01-02", input.Date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format, expected YYYY-MM-DD"})
+		return
+	}
+	holiday.Date = parsedDate
 	holiday.Name = input.Name
 	holiday.IsPaid = input.IsPaid
 	config.DB.Save(&holiday)
