@@ -19,16 +19,15 @@ x-backend-env: &backend_env
   COOKIE_SAMESITE: ${COOKIE_SAMESITE:-}
 
 services:
-  caddy:
-    image: caddy:2
-    container_name: payroll-caddy
+  nginx:
+    image: nginx:alpine
+    container_name: payroll-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile.uat:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       frontend:
         condition: service_healthy
@@ -116,5 +115,3 @@ services:
 volumes:
   payroll_postgres_data:
     name: payroll_postgres_data
-  caddy_data:
-  caddy_config:
