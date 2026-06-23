@@ -1,7 +1,0 @@
-pay-app-uat.getpipop.org {
-    reverse_proxy frontend:80
-}
-
-pay-api-uat.getpipop.org {
-    reverse_proxy backend:8000
-}
