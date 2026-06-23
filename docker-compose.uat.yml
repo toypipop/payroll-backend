@@ -19,22 +19,6 @@ x-backend-env: &backend_env
   COOKIE_SAMESITE: ${COOKIE_SAMESITE:-}
 
 services:
-  nginx:
-    image: nginx:alpine
-    container_name: payroll-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      frontend:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-
   backend:
     image: *backend_image
     build: *backend_build
