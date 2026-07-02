@@ -144,7 +144,6 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.UpdateDeductionType)
 		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), middleware.PreventDeleteIfReferenced("deduction_type"), cfghandler.DeleteDeductionType)
 
-
 		api.GET("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "VIEW"), cfghandler.GetEmploymentTypes)
 		api.POST("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "CREATE"), cfghandler.CreateEmploymentType)
 		api.PUT("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "EDIT"), cfghandler.UpdateEmploymentType)
@@ -155,6 +154,8 @@ func SetupRouter() *gin.Engine {
 		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartment)
 		api.PUT("/departments/:id", middleware.CheckPermission("DepartmentSettings", "EDIT"), sethandler.UpdateDepartment)
 		api.DELETE("/departments/:id", middleware.CheckPermission("DepartmentSettings", "DELETE"), middleware.PreventDeleteIfReferenced("department"), sethandler.DeleteDepartment)
+		api.GET("/department-categories", middleware.CheckPermission("DepartmentSettings", "VIEW"), sethandler.GetDepartmentCategories)
+		api.POST("/department-categories", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartmentCategory)
 
 		api.GET("/positions", middleware.CheckPermission("PositionSettings", "VIEW"), sethandler.GetPositions)
 		api.POST("/positions", middleware.CheckPermission("PositionSettings", "CREATE"), sethandler.CreatePosition)
