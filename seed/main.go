@@ -315,14 +315,26 @@ func main() {
 	staffRoleB := models.Roles{RolesName: "STAFF", Description: "View only, department scope", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
 
-	// --- Departments & Positions ---
-	sysDept := models.Department{DeptName: "System IT", CompaniesID: sysComp.ID}
+	// --- Department Categories, Departments & Positions ---
+	// One category per distinct historical dept name — departments sharing a
+	// name across companies (e.g. "Engineering") share one category so a
+	// Department-scoped role can match employees in both.
+	categoryByName := func(name string) models.DepartmentCategory {
+		cat := models.DepartmentCategory{Name: name}
+		config.DB.Where(models.DepartmentCategory{Name: name}).Assign(cat).FirstOrCreate(&cat)
+		return cat
+	}
+	catSystemIT := categoryByName("System IT")
+	catEngineering := categoryByName("Engineering")
+	catHR := categoryByName("HR")
+
+	sysDept := models.Department{DeptName: "System IT", CompaniesID: sysComp.ID, CategoryID: catSystemIT.ID}
 	config.DB.Where(models.Department{DeptName: "System IT", CompaniesID: sysComp.ID}).Assign(sysDept).FirstOrCreate(&sysDept)
-	deptEngA := models.Department{DeptName: "Engineering", CompaniesID: compA.ID}
+	deptEngA := models.Department{DeptName: "Engineering", CompaniesID: compA.ID, CategoryID: catEngineering.ID}
 	config.DB.Where(models.Department{DeptName: "Engineering", CompaniesID: compA.ID}).Assign(deptEngA).FirstOrCreate(&deptEngA)
-	deptHrA := models.Department{DeptName: "HR", CompaniesID: compA.ID}
+	deptHrA := models.Department{DeptName: "HR", CompaniesID: compA.ID, CategoryID: catHR.ID}
 	config.DB.Where(models.Department{DeptName: "HR", CompaniesID: compA.ID}).Assign(deptHrA).FirstOrCreate(&deptHrA)
-	deptEngB := models.Department{DeptName: "Engineering", CompaniesID: compB.ID}
+	deptEngB := models.Department{DeptName: "Engineering", CompaniesID: compB.ID, CategoryID: catEngineering.ID}
 	config.DB.Where(models.Department{DeptName: "Engineering", CompaniesID: compB.ID}).Assign(deptEngB).FirstOrCreate(&deptEngB)
 
 	sysPos := models.Position{PosName: "System Admin", CompaniesID: sysComp.ID}
