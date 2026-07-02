@@ -4,49 +4,29 @@ import (
 	"net/http"
 	"payroll-backend/config"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
 // --- COMPANIES ---
+// Companies has no owning company of its own — every user with CompaniesPage
+// permission sees and manages the full list, gated only by CheckPermission.
 
 func GetCompanies(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
 	var companies []models.Companies
-	// For Companies table, we use "id" as the companies filter column
-	dbResult := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
-	).Find(&companies)
-
-	if dbResult.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": dbResult.Error.Error()})
+	if err := config.DB.Find(&companies).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, companies)
 }
 
 func GetAllCompanies(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
 	var companies []models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
-	).Order("id desc").Find(&companies).Error; err != nil {
+	if err := config.DB.Order("id desc").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
 		return
 	}
-
 	c.JSON(http.StatusOK, companies)
 }
 
@@ -66,17 +46,10 @@ func CreateCompanies(c *gin.Context) {
 
 func UpdateCompanies(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var companies models.Companies
-	// Ensure the user can only update the companies they belong to (unless ScopeAll)
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
-	).First(&companies, id).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this companies"})
+	if err := config.DB.First(&companies, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Companies not found"})
 		return
 	}
 
@@ -98,18 +71,10 @@ func UpdateCompanies(c *gin.Context) {
 
 func DeleteCompanies(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
 
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	// Apply strict scope for deletion
-	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "id"),
-	).Delete(&models.Companies{}, id)
-
+	result := config.DB.Delete(&models.Companies{}, id)
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Companies not found"})
 		return
 	}
 
