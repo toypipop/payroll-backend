@@ -20,6 +20,9 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260525_backfill_salaries_structure_companies", migrations.BackfillSalariesStructureCompanies); err != nil {
 		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
+	if err := migrations.RunOnce(config.DB, "20260702_backfill_department_categories", migrations.BackfillDepartmentCategories); err != nil {
+		log.Fatalf("Department categories backfill failed: %v", err)
+	}
 
 	if err := migrations.AutoMigrateSchema(config.DB); err != nil {
 		log.Fatalf("Migration failed: %v", err)

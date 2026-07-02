@@ -94,6 +94,54 @@ func BackfillSalariesStructureCompanies(db *gorm.DB) error {
 	`).Error
 }
 
+func BackfillDepartmentCategories(db *gorm.DB) error {
+	// Create department_category table if it doesn't exist
+	if !db.Migrator().HasTable("department_category") {
+		if err := db.Migrator().CreateTable(&models.DepartmentCategory{}); err != nil {
+			return fmt.Errorf("create department_category table: %w", err)
+		}
+	}
+
+	// Insert a default category if none exist
+	var count int64
+	if err := db.Model(&models.DepartmentCategory{}).Count(&count).Error; err != nil {
+		return fmt.Errorf("count department_categories: %w", err)
+	}
+
+	if count == 0 {
+		if err := db.Create(&models.DepartmentCategory{Name: "General"}).Error; err != nil {
+			return fmt.Errorf("create default category: %w", err)
+		}
+	}
+
+	// Add category_id column to department if it doesn't exist
+	if !db.Migrator().HasColumn(&models.Department{}, "category_id") {
+		// Add as nullable using raw SQL first
+		if err := db.Exec("ALTER TABLE department ADD COLUMN category_id bigint").Error; err != nil {
+			// Ignore "column already exists" errors
+			if !db.Migrator().HasColumn(&models.Department{}, "category_id") {
+				return fmt.Errorf("add category_id column: %w", err)
+			}
+		}
+
+		// Backfill existing departments with the default category
+		if err := db.Exec(`
+			UPDATE department
+			SET category_id = (SELECT id FROM department_category LIMIT 1)
+			WHERE category_id IS NULL OR category_id = 0
+		`).Error; err != nil {
+			return fmt.Errorf("backfill department categories: %w", err)
+		}
+
+		// Make it NOT NULL after backfilling
+		if err := db.Exec("ALTER TABLE department ALTER COLUMN category_id SET NOT NULL").Error; err != nil {
+			return fmt.Errorf("make category_id not null: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func RemoveLegacyElevatedRole(db *gorm.DB) error {
 	const legacyRoleName = "SUPER_ADMIN"
 	const systemRoleName = "SYSTEM_ADMIN"
