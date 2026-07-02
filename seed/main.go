@@ -199,7 +199,6 @@ func main() {
 	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Full-time").First(&fullTimeEmpTypeA)
 	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Full-time").First(&fullTimeEmpTypeB)
 
-
 	// --- Deduction Categories (Global) ---
 	deductionCats := []models.DeductionCategory{
 		{Name: "Statutory"},
@@ -434,11 +433,11 @@ func main() {
 		}
 
 		// sysComp roles
-		upsert(sysRole.ID, sysComp.ID, models.ScopeAll, true)            // SYSTEM_ADMIN: cross-company
+		upsert(sysRole.ID, sysComp.ID, models.ScopeCompanies, true)      // SYSTEM_ADMIN: cross-company (grant Employee Company Access per company to reach more)
 		upsert(sysStaffRole.ID, sysComp.ID, models.ScopeCompanies, true) // sysStaff: full within company
 
 		// compA roles
-		upsert(adminRoleA.ID, compA.ID, models.ScopeCompanies, true) // ADMIN: all modules, full CRUD
+		upsert(adminRoleA.ID, compA.ID, models.ScopeCompanies, true)   // ADMIN: all modules, full CRUD
 		upsert(staffRoleA.ID, compA.ID, models.ScopeDepartment, false) // STAFF: view only, dept scope
 		if !adminOnlyModules[m.ModuleKey] {
 			upsert(managerRoleA.ID, compA.ID, models.ScopeCompanies, true) // MANAGER: operational only

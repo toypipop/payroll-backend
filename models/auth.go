@@ -83,6 +83,6 @@ type RolesModuleAccess struct {
 	CanCreate   bool                  `json:"can_create"`
 	CanEdit     bool                  `json:"can_edit"`
 	CanDelete   bool                  `json:"can_delete"`
-	DataScope   DataScope             `json:"data_scope" binding:"required,oneof=Own Department Companies All"`
+	DataScope   DataScope             `json:"data_scope" binding:"required,oneof=Own Department Companies"`
 	AppModule   AppModule             `gorm:"foreignKey:ModuleID" json:"app_module"`
 }
