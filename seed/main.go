@@ -61,13 +61,13 @@ func main() {
 	}
 
 	// Initialize companies
-	sysComp := models.Companies{Name: "System Administration", TaxID: "0000000000000", Address: "1 System Rd, Bangkok 10110", Phone: "02-000-0000"}
+	sysComp := models.Companies{Name: "System Administration", TaxID: "0000000000000", Address: "1 System Rd, Bangkok 10110", Phone: "020000000"}
 	config.DB.Where(models.Companies{TaxID: "0000000000000"}).Assign(sysComp).FirstOrCreate(&sysComp)
 
-	compA := models.Companies{Name: "Tech Corp", TaxID: "1111111111111", Address: "111 Sukhumvit Rd, Bangkok 10110", Phone: "02-111-1111"}
+	compA := models.Companies{Name: "Tech Corp", TaxID: "1111111111111", Address: "111 Sukhumvit Rd, Bangkok 10110", Phone: "021111111"}
 	config.DB.Where(models.Companies{TaxID: "1111111111111"}).Assign(compA).FirstOrCreate(&compA)
 
-	compB := models.Companies{Name: "Biz Group", TaxID: "2222222222222", Address: "222 Silom Rd, Bangkok 10500", Phone: "02-222-2222"}
+	compB := models.Companies{Name: "Biz Group", TaxID: "2222222222222", Address: "222 Silom Rd, Bangkok 10500", Phone: "022222222"}
 	config.DB.Where(models.Companies{TaxID: "2222222222222"}).Assign(compB).FirstOrCreate(&compB)
 
 	// Initialize payroll configs
