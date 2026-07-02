@@ -417,6 +417,12 @@ func main() {
 		"EmployeeCompanyAccessPage": true,
 	}
 
+	// CompaniesPage is now unscoped (any holder sees/edits every company) —
+	// only SYSTEM_ADMIN may hold it, not per-company ADMIN/MANAGER/STAFF.
+	systemAdminOnlyModules := map[models.ModuleKey]bool{
+		"CompaniesPage": true,
+	}
+
 	// Wipe and rebuild all seeded role permissions so re-running seed is fully authoritative.
 	seedRoleIDs := []uint{sysRole.ID, sysStaffRole.ID, adminRoleA.ID, managerRoleA.ID, staffRoleA.ID, adminRoleB.ID, managerRoleB.ID, staffRoleB.ID}
 	config.DB.Where("roles_id IN ?", seedRoleIDs).Delete(&models.RolesModuleAccess{})
@@ -445,20 +451,26 @@ func main() {
 		}
 
 		// sysComp roles
-		upsert(sysRole.ID, sysComp.ID, models.ScopeCompanies, true)      // SYSTEM_ADMIN: cross-company (grant Employee Company Access per company to reach more)
-		upsert(sysStaffRole.ID, sysComp.ID, models.ScopeCompanies, true) // sysStaff: full within company
+		upsert(sysRole.ID, sysComp.ID, models.ScopeCompanies, true) // SYSTEM_ADMIN: cross-company (grant Employee Company Access per company to reach more)
+		if !systemAdminOnlyModules[m.ModuleKey] {
+			upsert(sysStaffRole.ID, sysComp.ID, models.ScopeCompanies, true) // sysStaff: full within company
+		}
 
 		// compA roles
-		upsert(adminRoleA.ID, compA.ID, models.ScopeCompanies, true)   // ADMIN: all modules, full CRUD
-		upsert(staffRoleA.ID, compA.ID, models.ScopeDepartment, false) // STAFF: view only, dept scope
-		if !adminOnlyModules[m.ModuleKey] {
+		if !systemAdminOnlyModules[m.ModuleKey] {
+			upsert(adminRoleA.ID, compA.ID, models.ScopeCompanies, true)   // ADMIN: all modules, full CRUD
+			upsert(staffRoleA.ID, compA.ID, models.ScopeDepartment, false) // STAFF: view only, dept scope
+		}
+		if !adminOnlyModules[m.ModuleKey] && !systemAdminOnlyModules[m.ModuleKey] {
 			upsert(managerRoleA.ID, compA.ID, models.ScopeCompanies, true) // MANAGER: operational only
 		}
 
 		// compB roles
-		upsert(adminRoleB.ID, compB.ID, models.ScopeCompanies, true)
-		upsert(staffRoleB.ID, compB.ID, models.ScopeDepartment, false)
-		if !adminOnlyModules[m.ModuleKey] {
+		if !systemAdminOnlyModules[m.ModuleKey] {
+			upsert(adminRoleB.ID, compB.ID, models.ScopeCompanies, true)
+			upsert(staffRoleB.ID, compB.ID, models.ScopeDepartment, false)
+		}
+		if !adminOnlyModules[m.ModuleKey] && !systemAdminOnlyModules[m.ModuleKey] {
 			upsert(managerRoleB.ID, compB.ID, models.ScopeCompanies, true)
 		}
 	}
