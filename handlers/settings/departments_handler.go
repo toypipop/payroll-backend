@@ -22,7 +22,7 @@ func GetDepartments(c *gin.Context) {
 	var departments []models.Department
 	if err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "unused"),
-	).Preload("Companies").Find(&departments).Error; err != nil {
+	).Preload("Companies").Preload("Category").Find(&departments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
 		return
 	}
@@ -33,6 +33,11 @@ func CreateDepartment(c *gin.Context) {
 	var dept models.Department
 	if err := c.ShouldBindJSON(&dept); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if dept.CategoryID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "category_id is required"})
 		return
 	}
 
@@ -75,6 +80,7 @@ func UpdateDepartment(c *gin.Context) {
 	var input struct {
 		DeptName    string `json:"dept_name" binding:"required"`
 		CompaniesID uint   `json:"companies_id"`
+		CategoryID  uint   `json:"category_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -88,6 +94,7 @@ func UpdateDepartment(c *gin.Context) {
 		return
 	}
 	dept.DeptName = input.DeptName
+	dept.CategoryID = input.CategoryID
 	dept.CompaniesID = companyID
 	config.DB.Save(&dept)
 	c.JSON(http.StatusOK, dept)
