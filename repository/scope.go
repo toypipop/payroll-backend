@@ -298,10 +298,20 @@ func scopeDataAccessWithCompanyIDs(user models.Employees, scope models.DataScope
 			if len(companyIDs) == 0 {
 				return db.Where("1 = 0")
 			}
+			var userCategoryID uint
+			db.Session(&gorm.Session{NewDB: true}).
+				Table("department").
+				Select("category_id").
+				Where("id = ?", user.DeptID).
+				Scan(&userCategoryID)
+			if userCategoryID == 0 {
+				return db.Where("1 = 0")
+			}
 			subQuery := db.Session(&gorm.Session{NewDB: true}).
 				Table("employees").
-				Select("id").
-				Where("dept_id = ? AND companies_id IN ?", user.DeptID, companyIDs)
+				Select("employees.id").
+				Joins("JOIN department ON department.id = employees.dept_id AND department.deleted_at = 0").
+				Where("department.category_id = ? AND employees.companies_id IN ?", userCategoryID, companyIDs)
 			return db.Where(col+" IN (?)", subQuery)
 		case models.ScopeCompanies:
 			return db
