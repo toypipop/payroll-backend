@@ -6,6 +6,19 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
+// DepartmentCategory is a company-agnostic classification (e.g. "HR",
+// "Engineering") used to scope Department-level roles across companies —
+// two companies' "HR" departments share one category so a Department-scoped
+// role can match both, instead of only the user's own literal department row.
+type DepartmentCategory struct {
+	ID        uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time             `json:"created_at"`
+	UpdatedAt time.Time             `json:"updated_at"`
+	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_dept_category_name_deleted;not null;default:0" json:"-"`
+
+	Name string `gorm:"uniqueIndex:idx_dept_category_name_deleted;not null;size:100" json:"name"`
+}
+
 type Department struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time `json:"created_at"`
@@ -15,8 +28,10 @@ type Department struct {
 
 	CompaniesID uint   `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null" json:"companies_id"`
 	DeptName    string `gorm:"uniqueIndex:idx_dept_name_companies_deleted;not null;size:255" json:"dept_name"`
+	CategoryID  uint   `gorm:"not null" json:"category_id"`
 
-	Companies Companies `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Companies Companies          `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Category  DepartmentCategory `gorm:"foreignKey:CategoryID" json:"category"`
 }
 
 // Position represents job roles within a companies

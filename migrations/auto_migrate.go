@@ -12,6 +12,7 @@ func AutoMigrateSchema(db *gorm.DB) error {
 		&models.Roles{},
 		&models.AppModule{},
 		&models.RolesModuleAccess{},
+		&models.DepartmentCategory{},
 		&models.Department{},
 		&models.Position{},
 		&models.Employees{},
