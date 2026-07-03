@@ -3,20 +3,20 @@ x-backend-build: &backend_build
   context: .
   dockerfile: Dockerfile
 x-backend-env: &backend_env
-  PGUSER: ${PGUSER:-postgres}
+  PGUSER: ${PGUSER}
   PGPASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
-  PGHOST: ${PGHOST:-postgres}
-  PGPORT: ${PGPORT:-5432}
-  PGDATABASE: ${PGDATABASE:-payrolldb}
-  PGSSLMODE: ${PGSSLMODE:-disable}
-  PGCHANNELBINDING: ${PGCHANNELBINDING:-}
-  DB_TIMEZONE: ${DB_TIMEZONE:-Asia/Bangkok}
+  PGHOST: ${PGHOST}
+  PGPORT: ${PGPORT}
+  PGDATABASE: ${PGDATABASE}
+  PGSSLMODE: ${PGSSLMODE}
+  PGCHANNELBINDING: ${PGCHANNELBINDING}
+  DB_TIMEZONE: ${DB_TIMEZONE}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
   FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
-  APP_ENV: ${APP_ENV:-}
-  GIN_MODE: ${GIN_MODE:-}
-  COOKIE_SECURE: ${COOKIE_SECURE:-}
-  COOKIE_SAMESITE: ${COOKIE_SAMESITE:-}
+  APP_ENV: ${APP_ENV}
+  GIN_MODE: ${GIN_MODE}
+  COOKIE_SECURE: ${COOKIE_SECURE}
+  COOKIE_SAMESITE: ${COOKIE_SAMESITE}
 
 services:
   backend:
@@ -81,9 +81,9 @@ services:
     image: postgres:17
     container_name: payroll-postgres
     environment:
-      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_USER: ${PGUSER}
       POSTGRES_PASSWORD: ${PGPASSWORD:?PGPASSWORD is required}
-      POSTGRES_DB: ${PGDATABASE:-payrolldb}
+      POSTGRES_DB: ${PGDATABASE}
       TZ: Asia/Bangkok
       PGTZ: Asia/Bangkok
     volumes:
