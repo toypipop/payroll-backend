@@ -176,7 +176,9 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/employee-company-access/:id", middleware.CheckPermission("EmployeeCompanyAccessPage", "DELETE"), sethandler.DeleteEmployeeCompanyAccess)
 
 		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetAllCompanies)
-		api.GET("/companies/options", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetCompanies)
+		// No CheckPermission gate: the handler already limits the result to the
+		// caller's accessible companies, and every role needs this dropdown.
+		api.GET("/companies/options", sethandler.GetCompanies)
 		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), sethandler.CreateCompanies)
 		api.PUT("/companies/:id", middleware.CheckPermission("CompaniesPage", "EDIT"), sethandler.UpdateCompanies)
 		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), middleware.PreventDeleteIfReferenced("companies"), sethandler.DeleteCompanies)

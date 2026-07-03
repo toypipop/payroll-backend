@@ -4,17 +4,26 @@ import (
 	"net/http"
 	"payroll-backend/config"
 	"payroll-backend/models"
+	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // --- COMPANIES ---
-// Companies has no owning company of its own — every user with CompaniesPage
-// permission sees and manages the full list, gated only by CheckPermission.
+// Companies has no owning company of its own. /companies/options is limited to
+// the caller's accessible companies (home + employee_company_access), while
+// /companies/all keeps the full list for the management page.
 
 func GetCompanies(c *gin.Context) {
+	userID, _ := repository.GetContextAuth(c)
+	// AccessibleCompanyIDs (home + employee_company_access), not
+	// GetAuthorizedCompanyIDs: the latter is scoped to companies whose role can
+	// view CompaniesPage, which company-level ADMIN intentionally lacks.
+	companyIDs := repository.AccessibleCompanyIDs(userID)
+
 	var companies []models.Companies
-	if err := config.DB.Find(&companies).Error; err != nil {
+	if err := config.DB.Where("id IN ?", companyIDs).Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -30,6 +39,10 @@ func GetAllCompanies(c *gin.Context) {
 	c.JSON(http.StatusOK, companies)
 }
 
+// CreateCompanies bootstraps a usable tenant in one transaction: the company
+// itself, a default ADMIN role with full permissions on every active module
+// (except CompaniesPage, which stays SYSTEM_ADMIN-only per seed convention),
+// and company access for the creator so the new company is immediately usable.
 func CreateCompanies(c *gin.Context) {
 	var companies models.Companies
 	if err := c.ShouldBindJSON(&companies); err != nil {
@@ -37,7 +50,63 @@ func CreateCompanies(c *gin.Context) {
 		return
 	}
 
-	if err := config.DB.Create(&companies).Error; err != nil {
+	userID, _ := repository.GetContextAuth(c)
+
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&companies).Error; err != nil {
+			return err
+		}
+
+		adminRole := models.Roles{
+			CompaniesID: companies.ID,
+			RolesName:   "ADMIN",
+			Description: "Company Admin - full access to all modules",
+		}
+		if err := tx.Create(&adminRole).Error; err != nil {
+			return err
+		}
+
+		var modules []models.AppModule
+		if err := tx.Where("is_active = ?", true).Find(&modules).Error; err != nil {
+			return err
+		}
+
+		accesses := make([]models.RolesModuleAccess, 0, len(modules))
+		for _, m := range modules {
+			if m.ModuleKey == "CompaniesPage" {
+				continue
+			}
+			accesses = append(accesses, models.RolesModuleAccess{
+				CompaniesID: companies.ID,
+				RolesID:     adminRole.ID,
+				ModuleID:    m.ID,
+				CanView:     true,
+				CanCreate:   true,
+				CanEdit:     true,
+				CanDelete:   true,
+				DataScope:   models.ScopeCompanies,
+			})
+		}
+		if len(accesses) > 0 {
+			if err := tx.Create(&accesses).Error; err != nil {
+				return err
+			}
+		}
+
+		if userID != 0 {
+			creatorAccess := models.EmployeeCompanyAccess{
+				EmployeeID: userID,
+				CompanyID:  companies.ID,
+				RoleID:     adminRole.ID,
+				IsActive:   true,
+			}
+			if err := tx.Create(&creatorAccess).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create companies"})
 		return
 	}
