@@ -20,6 +20,9 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260525_backfill_salaries_structure_companies", migrations.BackfillSalariesStructureCompanies); err != nil {
 		log.Fatalf("Salaries company backfill failed: %v", err)
 	}
+	if err := migrations.RunOnce(config.DB, "20260703_recreate_taxid_partial_index", migrations.RecreateTaxIDPartialIndex); err != nil {
+		log.Fatalf("Tax ID partial index recreate failed: %v", err)
+	}
 
 	if err := migrations.AutoMigrateSchema(config.DB); err != nil {
 		log.Fatalf("Migration failed: %v", err)

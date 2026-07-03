@@ -55,7 +55,7 @@ type Companies struct {
 	UpdatedAt        time.Time               `json:"updated_at"`
 	DeletedAt        soft_delete.DeletedAt   `gorm:"uniqueIndex:idx_taxid_deleted;not null;default:0" json:"-"`
 	Name             string                  `gorm:"not null" json:"name"`
-	TaxID            string                  `gorm:"uniqueIndex:idx_taxid_deleted;not null;size:50" json:"tax_id"`
+	TaxID            string                  `gorm:"uniqueIndex:idx_taxid_deleted,where:tax_id <> '';not null;size:50" json:"tax_id"`
 	Address          string                  `json:"address"`
 	Phone            string                  `json:"phone"`
 	PayrollConfig    *PayrollConfig          `gorm:"foreignKey:CompaniesID" json:"payroll_config"`
