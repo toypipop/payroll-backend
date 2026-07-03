@@ -231,6 +231,16 @@ func DeleteLeaveRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }
 
+// pendingLeaveResponse decorates a pending request with yearly quota usage so
+// the approval page can warn (not block) when the employee would exceed
+// MaxDaysPerYear of the leave type.
+type pendingLeaveResponse struct {
+	models.LeaveRequest
+	QuotaMaxDays  float64 `json:"quota_max_days"`
+	QuotaUsedDays float64 `json:"quota_used_days"`
+	QuotaExceeded bool    `json:"quota_exceeded"`
+}
+
 func GetPendingLeaveRequests(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees
@@ -240,13 +250,32 @@ func GetPendingLeaveRequests(c *gin.Context) {
 	// filter only 'Pending' status for approval page (English Comment)
 	err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
-	).Preload("Employees").Preload("Employees.Companies").Where("status = ?", models.LeaveStatusPending).Find(&leaves).Error
+	).Preload("Employees").Preload("Employees.Companies").Preload("LeaveTypeMaster").Where("status = ?", models.LeaveStatusPending).Find(&leaves).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, leaves)
+
+	responses := make([]pendingLeaveResponse, 0, len(leaves))
+	for _, leave := range leaves {
+		resp := pendingLeaveResponse{LeaveRequest: leave}
+		if leave.LeaveTypeID != nil && leave.LeaveTypeMaster != nil && leave.LeaveTypeMaster.MaxDaysPerYear > 0 {
+			resp.QuotaMaxDays = leave.LeaveTypeMaster.MaxDaysPerYear
+
+			var used float64
+			config.DB.Model(&models.LeaveRequest{}).
+				Where("employees_id = ? AND leave_type_id = ? AND status = ?", leave.EmployeesID, *leave.LeaveTypeID, models.LeaveStatusApproved).
+				Where("EXTRACT(YEAR FROM start_date) = ?", leave.StartDate.Year()).
+				Select("COALESCE(SUM(total_days), 0)").
+				Scan(&used)
+
+			resp.QuotaUsedDays = used
+			resp.QuotaExceeded = used+leave.TotalDays > resp.QuotaMaxDays
+		}
+		responses = append(responses, resp)
+	}
+	c.JSON(http.StatusOK, responses)
 }
 
 func ApproveLeaveRequest(c *gin.Context) {
