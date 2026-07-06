@@ -32,6 +32,57 @@ func GetAttendanceConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, companies)
 }
 
+// GetTimelogScheduleConfig returns a minimal, per-company work schedule for the
+// Time Logs page. It is gated by TimelogsListPage permission (not
+// AttendanceSettingsPage) and intentionally omits deduction/earning rates so a
+// timelog-only user can auto-fill check in/out without seeing payroll rate data.
+func GetTimelogScheduleConfig(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	var companies []models.Companies
+	err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+	).Preload("AttendanceConfig").Find(&companies).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	formatTime := func(t *time.Time) string {
+		if t == nil {
+			return ""
+		}
+		return t.Format("15:04")
+	}
+
+	type scheduleItem struct {
+		CompaniesID   uint   `json:"companies_id"`
+		WorkStartTime string `json:"work_start_time"`
+		WorkEndTime   string `json:"work_end_time"`
+		IsConfigured  bool   `json:"is_configured"`
+	}
+
+	result := make([]scheduleItem, 0, len(companies))
+	for _, comp := range companies {
+		cfg := comp.AttendanceConfig
+		item := scheduleItem{CompaniesID: comp.ID}
+		if cfg != nil && cfg.WorkStartTime != nil && cfg.WorkEndTime != nil {
+			item.WorkStartTime = formatTime(cfg.WorkStartTime)
+			item.WorkEndTime = formatTime(cfg.WorkEndTime)
+			item.IsConfigured = true
+		}
+		result = append(result, item)
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func parseTimeString(timeStr string) *time.Time {
 	if timeStr == "" {
 		return nil

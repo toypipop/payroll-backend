@@ -93,6 +93,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/timelogs", middleware.CheckPermission("TimelogsListPage", "CREATE"), atthandler.CreateTimeLog)
 		api.PUT("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "EDIT"), atthandler.UpdateTimeLog)
 		api.DELETE("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "DELETE"), atthandler.DeleteTimeLog)
+		api.GET("/timelogs/schedule-config", middleware.CheckPermission("TimelogsListPage", "VIEW"), atthandler.GetTimelogScheduleConfig)
 
 		api.GET("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "VIEW"), atthandler.GetLeaveRequests)
 		api.POST("/leaves/requests", middleware.CheckPermission("LeaveRequestsPage", "CREATE"), atthandler.CreateLeaveRequest)
