@@ -29,6 +29,40 @@ func GetDepartments(c *gin.Context) {
 	c.JSON(http.StatusOK, departments)
 }
 
+// GetDepartmentOptions returns a minimal id/name list for dropdowns. Ungated
+// by page permission (mirrors GetCompanies) since any role filling out an
+// employee-linked form needs to know whether departments exist for a
+// company, not just users who can manage DepartmentSettings.
+func GetDepartmentOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var departments []models.Department
+	if err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "unused"),
+	).Find(&departments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
+		return
+	}
+
+	options := make([]option, 0, len(departments))
+	for _, d := range departments {
+		options = append(options, option{ID: d.ID, Name: d.DeptName, CompaniesID: d.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func CreateDepartment(c *gin.Context) {
 	var dept models.Department
 	if err := c.ShouldBindJSON(&dept); err != nil {

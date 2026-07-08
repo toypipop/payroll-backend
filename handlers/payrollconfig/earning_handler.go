@@ -31,6 +31,41 @@ func GetEarningTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, earnings)
 }
 
+// GetEarningTypeOptions returns a minimal id/name list for dropdowns.
+// Ungated by page permission (mirrors GetCompanies) so any role assigning
+// employee/cycle earnings can see whether earning types exist for a company.
+func GetEarningTypeOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+	var currentUser models.Employees
+
+	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var earnings []models.EarningType
+	err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
+	).Find(&earnings).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	options := make([]option, 0, len(earnings))
+	for _, e := range earnings {
+		options = append(options, option{ID: e.ID, Name: e.Name, CompaniesID: e.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 // POST: Create a new earning type (English Comment)
 func CreateEarningType(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)

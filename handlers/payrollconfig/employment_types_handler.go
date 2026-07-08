@@ -27,6 +27,38 @@ func GetEmploymentTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, types)
 }
 
+// GetEmploymentTypeOptions returns a minimal id/name list for dropdowns.
+// Ungated by page permission (mirrors GetCompanies) so any role filling out
+// an employee-linked form can see whether employment types exist for a company.
+func GetEmploymentTypeOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+	var currentUser models.Employees
+	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var types []models.EmploymentType
+	if err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
+	).Order("name").Find(&types).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employment types"})
+		return
+	}
+
+	options := make([]option, 0, len(types))
+	for _, t := range types {
+		options = append(options, option{ID: t.ID, Name: t.Name, CompaniesID: t.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func CreateEmploymentType(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 	var currentUser models.Employees

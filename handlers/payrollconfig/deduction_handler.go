@@ -31,6 +31,41 @@ func GetDeductionTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, deductions)
 }
 
+// GetDeductionTypeOptions returns a minimal id/name list for dropdowns.
+// Ungated by page permission (mirrors GetCompanies) so any role assigning
+// employee/cycle deductions can see whether deduction types exist for a company.
+func GetDeductionTypeOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+	var currentUser models.Employees
+
+	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var deductions []models.DeductionType
+	err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
+	).Find(&deductions).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	options := make([]option, 0, len(deductions))
+	for _, d := range deductions {
+		options = append(options, option{ID: d.ID, Name: d.Name, CompaniesID: d.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 // POST: Create a new deduction type (English Comment)
 func CreateDeductionType(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)

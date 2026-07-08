@@ -20,6 +20,40 @@ func GetRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, roles)
 }
 
+// GetRoleOptions returns a minimal id/name list for dropdowns, scoped to the
+// caller's accessible companies. Ungated by page permission (mirrors
+// GetCompanies) so any role filling out an employee-linked form or granting
+// company access can see whether roles exist for a company.
+func GetRoleOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var roles []models.Roles
+	if err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "unused"),
+	).Find(&roles).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
+		return
+	}
+
+	options := make([]option, 0, len(roles))
+	for _, r := range roles {
+		options = append(options, option{ID: r.ID, Name: r.RolesName, CompaniesID: r.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 // POST: Create a new role (English Comment)
 func CreateRole(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)

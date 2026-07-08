@@ -27,6 +27,36 @@ func GetPositions(c *gin.Context) {
 	c.JSON(http.StatusOK, positions)
 }
 
+// GetPositionOptions returns a minimal id/name list for dropdowns. Ungated
+// by page permission (mirrors GetCompanies) so any role filling out an
+// employee-linked form can see whether positions exist for a company.
+func GetPositionOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var positions []models.Position
+	if err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "unused"),
+	).Find(&positions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
+		return
+	}
+
+	options := make([]option, 0, len(positions))
+	for _, p := range positions {
+		options = append(options, option{ID: p.ID, Name: p.PosName, CompaniesID: p.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func CreatePosition(c *gin.Context) {
 	var pos models.Position
 	if err := c.ShouldBindJSON(&pos); err != nil {

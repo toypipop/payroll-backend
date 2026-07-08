@@ -28,6 +28,39 @@ func GetLeaveTypeSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, leaveTypes)
 }
 
+// GetLeaveTypeOptions returns a minimal id/name list for dropdowns. Ungated
+// by page permission (mirrors GetCompanies) so any role submitting a leave
+// request can see whether leave types exist for a company.
+func GetLeaveTypeOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	type option struct {
+		ID          uint   `json:"id"`
+		Name        string `json:"name"`
+		CompaniesID uint   `json:"companies_id"`
+	}
+
+	var leaveTypes []models.LeaveTypeSetting
+	if err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+	).Order("name").Find(&leaveTypes).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave types"})
+		return
+	}
+
+	options := make([]option, 0, len(leaveTypes))
+	for _, lt := range leaveTypes {
+		options = append(options, option{ID: lt.ID, Name: lt.Name, CompaniesID: lt.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func CreateLeaveTypeSetting(c *gin.Context) {
 	var lt models.LeaveTypeSetting
 	if err := c.ShouldBindJSON(&lt); err != nil {
