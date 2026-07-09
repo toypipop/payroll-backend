@@ -42,6 +42,10 @@ func CreateTimeLog(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Employee is required"})
 		return
 	}
+	if input.WorkLocationID == nil || *input.WorkLocationID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Work location is required"})
+		return
+	}
 
 	// 1. Validate CheckIn and CheckOut sequence (English Comment)
 	if input.CheckIn != nil && input.CheckOut != nil {
@@ -100,6 +104,10 @@ func UpdateTimeLog(c *gin.Context) {
 	}
 	if input.EmployeesID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Employee is required"})
+		return
+	}
+	if input.WorkLocationID == nil || *input.WorkLocationID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Work location is required"})
 		return
 	}
 

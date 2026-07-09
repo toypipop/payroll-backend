@@ -45,8 +45,8 @@ type TimeLog struct {
 	CheckIn        *time.Time            `json:"check_in"`
 	CheckOut       *time.Time            `json:"check_out"`
 	Status         AttendanceStatus      `gorm:"size:50;not null;default:on_time" json:"status" binding:"omitempty,oneof=on_time late absent leave holiday"`
-	WorkLocationID *uint                 `json:"work_location_id"`            // FK: WorkLocation
-	LocationIn     string                `gorm:"size:255" json:"location_in"` // Legacy field
+	WorkLocationID *uint                 `gorm:"not null" json:"work_location_id"` // FK: WorkLocation
+	LocationIn     string                `gorm:"size:255" json:"location_in"`      // Legacy field
 	Remark         string                `gorm:"size:255" json:"remark"`
 	Employees      Employees             `gorm:"foreignKey:EmployeesID" json:"employees"`
 	WorkLocation   *WorkLocation         `gorm:"foreignKey:WorkLocationID" json:"work_location"`

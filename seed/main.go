@@ -878,17 +878,30 @@ func main() {
 		{frank.ID, compB.ID, ciFkFebExtra3, coFkFebExtra3, models.StatusHoliday, "Holiday work"},
 	}
 
+	defaultLocationByCompany := map[uint]uint{}
+	for _, tl := range timelogs {
+		if _, ok := defaultLocationByCompany[tl.compID]; ok {
+			continue
+		}
+		var loc models.WorkLocation
+		if err := config.DB.Where("companies_id = ?", tl.compID).Order("name ASC").First(&loc).Error; err == nil {
+			defaultLocationByCompany[tl.compID] = loc.ID
+		}
+	}
+
 	for _, tl := range timelogs {
 		if tl.empID == 0 {
 			continue // skip if employee wasn't seeded
 		}
+		locID := defaultLocationByCompany[tl.compID]
 		log := models.TimeLog{
-			CompaniesID: tl.compID,
-			EmployeesID: tl.empID,
-			CheckIn:     tl.checkIn,
-			CheckOut:    tl.checkOut,
-			Status:      models.StatusOnTime,
-			Remark:      tl.remark,
+			CompaniesID:    tl.compID,
+			EmployeesID:    tl.empID,
+			CheckIn:        tl.checkIn,
+			CheckOut:       tl.checkOut,
+			Status:         models.StatusOnTime,
+			WorkLocationID: &locID,
+			Remark:         tl.remark,
 		}
 		if tl.checkIn == nil || tl.checkOut == nil {
 			log.Status = models.StatusAbsent
@@ -1746,7 +1759,7 @@ func main() {
 			}
 			addTotals(p.emp.Email, day.Month(), delta)
 			var locID *uint
-			if locs := locationByCompany[p.companyID]; len(locs) > 0 && checkIn != nil {
+			if locs := locationByCompany[p.companyID]; len(locs) > 0 {
 				loc := locs[day.Day()%len(locs)]
 				locID = &loc.ID
 			}
