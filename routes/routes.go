@@ -204,6 +204,10 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), middleware.PreventDeleteIfReferenced("companies"), sethandler.DeleteCompanies)
 
 		api.GET("/master/banks", middleware.CheckPermission("MasterBankPage", "VIEW"), sethandler.GetBanks)
+		// No CheckPermission gate: handler returns global reference data (not
+		// company-scoped), and any role filling out a bank-account field needs
+		// this dropdown, not just MasterBankPage users.
+		api.GET("/master/banks/options", sethandler.GetBankOptions)
 		api.POST("/master/banks", middleware.CheckPermission("MasterBankPage", "CREATE"), sethandler.CreateBank)
 		api.PUT("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "EDIT"), sethandler.UpdateBank)
 		api.DELETE("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "DELETE"), middleware.PreventDeleteIfReferenced("bank"), sethandler.DeleteBank)
@@ -220,6 +224,9 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/master/day-offs/:id", middleware.CheckPermission("DayOffPage", "DELETE"), sethandler.DeleteDayOff)
 
 		api.GET("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "VIEW"), sethandler.GetWorkLocations)
+		// No CheckPermission gate: handler limits results to caller's accessible
+		// companies, and any role filling out a time log needs this dropdown.
+		api.GET("/master/work-locations/options", sethandler.GetWorkLocationOptions)
 		api.POST("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "CREATE"), sethandler.CreateWorkLocation)
 		api.PUT("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "EDIT"), sethandler.UpdateWorkLocation)
 		api.DELETE("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "DELETE"), middleware.PreventDeleteIfReferenced("work_location"), sethandler.DeleteWorkLocation)

@@ -17,6 +17,30 @@ func GetBanks(c *gin.Context) {
 	c.JSON(http.StatusOK, banks)
 }
 
+// GetBankOptions returns a minimal list for dropdowns. Ungated by page
+// permission (mirrors GetCompanies) so any role filling out a
+// bank-account field needs this dropdown, not just MasterBankPage users.
+// Banks are global (not company-scoped), so no data-access check applies.
+func GetBankOptions(c *gin.Context) {
+	var banks []models.Bank
+	if err := config.DB.Order("bank_code").Find(&banks).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch banks"})
+		return
+	}
+
+	type option struct {
+		ID       uint   `json:"id"`
+		BankCode string `json:"bank_code"`
+		BankName string `json:"bank_name"`
+	}
+
+	options := make([]option, 0, len(banks))
+	for _, b := range banks {
+		options = append(options, option{ID: b.ID, BankCode: b.BankCode, BankName: b.BankName})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func CreateBank(c *gin.Context) {
 	var bank models.Bank
 	if err := c.ShouldBindJSON(&bank); err != nil {
