@@ -74,14 +74,6 @@ func CreateEmployees(c *gin.Context) {
 		return
 	}
 
-	// Resolve bank_name from bank_id if provided
-	if input.BankID != nil && *input.BankID != 0 {
-		var bank models.Bank
-		if err := config.DB.First(&bank, *input.BankID).Error; err == nil {
-			input.BankName = bank.BankName
-		}
-	}
-
 	if err := config.DB.Create(&input).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -114,16 +106,13 @@ func UpdateEmployees(c *gin.Context) {
 		return
 	}
 
-	nextCompanyID := emp.CompaniesID
-	if companiesID, ok := data["companies_id"].(float64); ok {
-		nextCompanyID = uint(companiesID)
-	}
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, nextCompanyID)
+	// Company is immutable after creation — ignore any companies_id sent in the request
+	delete(data, "companies_id")
+	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, emp.CompaniesID)
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
-	data["companies_id"] = companyID
 
 	nextRoleID := emp.RolesID
 	if rolesID, ok := data["roles_id"].(float64); ok {
@@ -142,24 +131,18 @@ func UpdateEmployees(c *gin.Context) {
 		delete(data, "password")
 	}
 
-	// Handle bank_id: convert float64 (from JSON) to *uint, or explicit null → nil + clear bank_name
+	// Handle bank_id: convert float64 (from JSON) to *uint, or explicit null → nil
 	switch v := data["bank_id"].(type) {
 	case float64:
 		bankIDUint := uint(v)
 		if bankIDUint == 0 {
 			data["bank_id"] = gorm.Expr("NULL")
-			data["bank_name"] = ""
 		} else {
 			data["bank_id"] = bankIDUint
-			var bank models.Bank
-			if err := config.DB.First(&bank, bankIDUint).Error; err == nil {
-				data["bank_name"] = bank.BankName
-			}
 		}
 	case nil:
 		if _, exists := data["bank_id"]; exists {
 			data["bank_id"] = gorm.Expr("NULL")
-			data["bank_name"] = ""
 		}
 	}
 

@@ -34,8 +34,7 @@ type Employees struct {
 	IsActive bool `gorm:"default:true" json:"is_active"`
 
 	// Bank account fields (merged from employee_bank_account table)
-	BankID      *uint  `json:"bank_id"`                   // FK -> Bank
-	BankName    string `gorm:"size:100" json:"bank_name"` // cached display name
+	BankID      *uint  `json:"bank_id"` // FK -> Bank; BankName is resolved live via the Bank relation
 	AccountName string `gorm:"size:200" json:"account_name"`
 	AccountNo   string `gorm:"size:50" json:"account_no"`
 

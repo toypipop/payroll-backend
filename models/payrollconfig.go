@@ -9,7 +9,7 @@ import (
 
 type PayrollConfig struct {
 	ID             uint           `gorm:"primaryKey" json:"id"`
-	CompaniesID    uint           `gorm:"not null;index" json:"companies_id"`
+	CompaniesID    uint           `gorm:"not null;uniqueIndex" json:"companies_id"`
 	SsoRate        float64        `gorm:"type:decimal(5,2);default:5.0" json:"sso_rate"`
 	SsoMaxAmount   float64        `gorm:"type:decimal(10,2);default:750" json:"sso_max_amount"`
 	SsoMinSalary   float64        `gorm:"type:decimal(10,2);default:1650" json:"sso_min_salary"`

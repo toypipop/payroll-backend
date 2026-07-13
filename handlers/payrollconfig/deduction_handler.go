@@ -118,11 +118,11 @@ func UpdateDeductionType(c *gin.Context) {
 		return
 	}
 
+	// Company is immutable after creation — ignore companies_id from the request
 	updateData := map[string]interface{}{
 		"name":              input.Name,
 		"is_tax_deductible": input.IsTaxDeductible,
 		"is_sso_deductible": input.IsSsoDeductible,
-		"companies_id":      input.CompaniesID,
 	}
 
 	if err := config.DB.Model(&deduction).Updates(updateData).Error; err != nil {

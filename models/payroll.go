@@ -34,11 +34,19 @@ type PayrollTransaction struct {
 	CycleID        uint                  `gorm:"not null" json:"cycle_id"`
 	EmployeesID    uint                  `gorm:"not null" json:"employees_id"`
 	SalariesAtTime float64               `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
-	TotalEarning   float64               `gorm:"type:decimal(15,2)" json:"total_earning"`
-	TotalDeduction float64               `gorm:"type:decimal(15,2)" json:"total_deduction"`
-	SsoAmount      float64               `gorm:"type:decimal(15,2)" json:"sso_amount"`
-	TaxAmount      float64               `gorm:"type:decimal(15,2)" json:"tax_amount"`
-	NetPay         float64               `gorm:"type:decimal(15,2)" json:"net_pay"`
+	// Snapshot fields: captured at calculation time so historical payslips stay accurate
+	// even if the employee's position/department/bank changes afterward (English Comment)
+	PositionName       string  `gorm:"size:255" json:"position_name"`
+	DepartmentName     string  `gorm:"size:255" json:"department_name"`
+	EmploymentTypeName string  `gorm:"size:100" json:"employment_type_name"`
+	BankName           string  `gorm:"size:100" json:"bank_name"`
+	BankAccountName    string  `gorm:"size:200" json:"bank_account_name"`
+	BankAccountNo      string  `gorm:"size:50" json:"bank_account_no"`
+	TotalEarning       float64 `gorm:"type:decimal(15,2)" json:"total_earning"`
+	TotalDeduction     float64 `gorm:"type:decimal(15,2)" json:"total_deduction"`
+	SsoAmount          float64 `gorm:"type:decimal(15,2)" json:"sso_amount"`
+	TaxAmount          float64 `gorm:"type:decimal(15,2)" json:"tax_amount"`
+	NetPay             float64 `gorm:"type:decimal(15,2)" json:"net_pay"`
 	// Relations (English Comment)
 	Details   []PayrollTransactionDetail `gorm:"foreignKey:TransactionID" json:"details"`
 	Employees Employees                  `gorm:"foreignKey:EmployeesID" json:"employees"`

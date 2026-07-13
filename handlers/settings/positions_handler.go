@@ -107,13 +107,8 @@ func UpdatePosition(c *gin.Context) {
 	}
 
 	// Position name is non-calculation metadata and can be updated even if used.
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
+	// Company is immutable after creation — ignore companies_id from the request.
 	pos.PosName = input.PosName
-	pos.CompaniesID = companyID
 	config.DB.Save(&pos)
 	c.JSON(http.StatusOK, pos)
 }

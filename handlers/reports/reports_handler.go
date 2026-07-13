@@ -125,9 +125,9 @@ func GetBankTransferReport(c *gin.Context) {
 			LastName:      tx.Employees.LastName,
 			NetPay:        tx.NetPay,
 			CompaniesName: tx.Employees.Companies.Name,
-			BankName:      tx.Employees.BankName,
-			AccountNo:     tx.Employees.AccountNo,
-			AccountName:   tx.Employees.AccountName,
+			BankName:      tx.BankName,
+			AccountNo:     tx.BankAccountNo,
+			AccountName:   tx.BankAccountName,
 		}
 
 		rows = append(rows, row)

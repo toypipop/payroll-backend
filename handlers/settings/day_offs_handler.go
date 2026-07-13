@@ -121,19 +121,7 @@ func UpdateDayOff(c *gin.Context) {
 		return
 	}
 
-	targetCompanyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-
-	var company models.Companies
-	if err := config.DB.Select("id").First(&company, targetCompanyID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid company"})
-		return
-	}
-
-	dayOff.CompaniesID = targetCompanyID
+	// Company is immutable after creation — ignore companies_id from the request.
 	dayOff.Weekday = input.Weekday
 	dayOff.Name = input.Name
 	dayOff.IsPaid = input.IsPaid

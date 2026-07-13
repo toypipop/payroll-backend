@@ -497,19 +497,18 @@ func main() {
 		emp         models.Employees
 		salary      float64
 		bankID      *uint
-		bankName    string
 		accountName string
 		accountNo   string
 	}
 
 	usersToSeed := []empSeed{
-		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpTypeSys.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0, &bankTTB.ID, bankTTB.BankName, "Test Staff", "6789012345"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: adminRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson", "1234567890"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, bankSCB.BankName, "Bob Smith", "2345678901"},
-		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, bankBBL.BankName, "Carol Davis", "3456789012"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: adminRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, bankKTB.BankName, "David Wilson", "4567890123"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, bankBAY.BankName, "Eve Brown", "5678901234"},
-		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, bankBBL.BankName, "Frank Garcia", "6789012345"},
+		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpTypeSys.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0, &bankTTB.ID, "Test Staff", "6789012345"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: adminRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, "Alice Johnson", "1234567890"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, "Bob Smith", "2345678901"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, "Carol Davis", "3456789012"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: adminRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, "David Wilson", "4567890123"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, "Eve Brown", "5678901234"},
+		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, "Frank Garcia", "6789012345"},
 	}
 
 	effDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -521,7 +520,6 @@ func main() {
 		// Update bank fields on employee
 		config.DB.Model(&existingEmp).Updates(map[string]interface{}{
 			"bank_id":      s.bankID,
-			"bank_name":    s.bankName,
 			"account_name": s.accountName,
 			"account_no":   s.accountNo,
 		})
@@ -1364,17 +1362,16 @@ func main() {
 		role    uint
 		salary  float64
 		bankID  *uint
-		bank    string
 		account string
 	}{
-		{&admin, "admin@admin.com", sysComp.ID, sysRole.ID, 0, &bankTTB.ID, bankTTB.BankName, "Payroll Pro Admin"},
-		{&staff, "staff@admin.com", sysComp.ID, sysStaffRole.ID, 42000, &bankTTB.ID, bankTTB.BankName, "Test Staff"},
-		{&alice, "alice@techa.com", compA.ID, adminRoleA.ID, 78000, &bankKBANK.ID, bankKBANK.BankName, "Alice Johnson"},
-		{&bob, "bob@techa.com", compA.ID, staffRoleA.ID, 52000, &bankSCB.ID, bankSCB.BankName, "Bob Smith"},
-		{&carol, "carol@techa.com", compA.ID, staffRoleA.ID, 32500, &bankBBL.ID, bankBBL.BankName, "Carol Davis"},
-		{&david, "david@bizgroup.com", compB.ID, adminRoleB.ID, 86000, &bankKTB.ID, bankKTB.BankName, "David Wilson"},
-		{&eve, "eve@bizgroup.com", compB.ID, staffRoleB.ID, 47000, &bankBAY.ID, bankBAY.BankName, "Eve Brown"},
-		{&frank, "frank@bizgroup.com", compB.ID, staffRoleB.ID, 29500, &bankBBL.ID, bankBBL.BankName, "Frank Garcia"},
+		{&admin, "admin@admin.com", sysComp.ID, sysRole.ID, 0, &bankTTB.ID, "Payroll Pro Admin"},
+		{&staff, "staff@admin.com", sysComp.ID, sysStaffRole.ID, 42000, &bankTTB.ID, "Test Staff"},
+		{&alice, "alice@techa.com", compA.ID, adminRoleA.ID, 78000, &bankKBANK.ID, "Alice Johnson"},
+		{&bob, "bob@techa.com", compA.ID, staffRoleA.ID, 52000, &bankSCB.ID, "Bob Smith"},
+		{&carol, "carol@techa.com", compA.ID, staffRoleA.ID, 32500, &bankBBL.ID, "Carol Davis"},
+		{&david, "david@bizgroup.com", compB.ID, adminRoleB.ID, 86000, &bankKTB.ID, "David Wilson"},
+		{&eve, "eve@bizgroup.com", compB.ID, staffRoleB.ID, 47000, &bankBAY.ID, "Eve Brown"},
+		{&frank, "frank@bizgroup.com", compB.ID, staffRoleB.ID, 29500, &bankBBL.ID, "Frank Garcia"},
 	}
 
 	for idx, u := range devUsers {
@@ -1385,7 +1382,6 @@ func main() {
 			"roles_id":     u.role,
 			"companies_id": u.company,
 			"bank_id":      u.bankID,
-			"bank_name":    u.bank,
 			"account_name": u.account,
 			"account_no":   "2027" + time.Date(2027, time.January, idx+1, 0, 0, 0, 0, time.UTC).Format("0102") + "000",
 		})

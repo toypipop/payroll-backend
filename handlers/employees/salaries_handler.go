@@ -66,6 +66,16 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
+	// Block backdating into a period that's already been paid out and closed
+	var closedCycleCount int64
+	config.DB.Model(&models.PayrollCycle{}).
+		Where("companies_id = ? AND is_closed = ? AND start_date <= ? AND end_date >= ?", emp.CompaniesID, true, parsedDate, parsedDate).
+		Count(&closedCycleCount)
+	if closedCycleCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Effective date falls within an already-closed payroll cycle and cannot be used"})
+		return
+	}
+
 	var activeRecords []models.SalariesStructure
 	for _, rec := range existing {
 		if rec.DeletedAt == 0 {

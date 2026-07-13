@@ -118,12 +118,12 @@ func UpdateEarningType(c *gin.Context) {
 		return
 	}
 
+	// Company is immutable after creation — ignore companies_id from the request
 	updateData := map[string]interface{}{
 		"name":         input.Name,
 		"is_taxable":   input.IsTaxable,
 		"is_sso":       input.IsSso,
 		"is_permanent": input.IsPermanent,
-		"companies_id": input.CompaniesID,
 	}
 
 	if err := config.DB.Model(&earning).Updates(updateData).Error; err != nil {

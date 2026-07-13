@@ -108,13 +108,9 @@ func UpdateRole(c *gin.Context) {
 		return
 	}
 
+	// Company is immutable after creation — ignore companies_id from the request.
 	updateData := map[string]interface{}{
-		"roles_name":   input.RolesName,
-		"companies_id": input.CompaniesID,
-	}
-	if _, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID); !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
+		"roles_name": input.RolesName,
 	}
 
 	if err := config.DB.Model(&role).Updates(updateData).Error; err != nil {
