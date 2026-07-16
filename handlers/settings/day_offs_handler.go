@@ -29,6 +29,40 @@ func GetDayOffs(c *gin.Context) {
 	c.JSON(http.StatusOK, dayOffs)
 }
 
+// GetDayOffOptions returns a minimal id/weekday/companies_id list. Ungated by
+// page permission (mirrors GetWorkLocationOptions) so other pages (e.g. the
+// Time Log bulk-add form) can default weekday selection to a company's
+// configured day-offs without needing DayOffPage permission.
+func GetDayOffOptions(c *gin.Context) {
+	userID, dataScope := repository.GetContextAuth(c)
+
+	var currentUser models.Employees
+	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return
+	}
+
+	type option struct {
+		ID          uint `json:"id"`
+		Weekday     int  `json:"weekday"`
+		CompaniesID uint `json:"companies_id"`
+	}
+
+	var dayOffs []models.DayOff
+	if err := config.DB.Scopes(
+		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
+	).Find(&dayOffs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch day offs"})
+		return
+	}
+
+	options := make([]option, 0, len(dayOffs))
+	for _, d := range dayOffs {
+		options = append(options, option{ID: d.ID, Weekday: d.Weekday, CompaniesID: d.CompaniesID})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func GetDayOffCompanies(c *gin.Context) {
 	userID, dataScope := repository.GetContextAuth(c)
 

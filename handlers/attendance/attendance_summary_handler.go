@@ -7,6 +7,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -185,9 +186,9 @@ func GetAttendanceSummary(c *gin.Context) {
 		workStartHour := 9
 		workStartMin := 0
 		if cfg.WorkStartTime != nil {
-			utcTime := cfg.WorkStartTime.UTC()
-			workStartHour = utcTime.Hour()
-			workStartMin = utcTime.Minute()
+			bkkTime := timeutil.ToBangkok(*cfg.WorkStartTime)
+			workStartHour = bkkTime.Hour()
+			workStartMin = bkkTime.Minute()
 		}
 
 		for day := dayStart(fromDate); !day.After(dayStart(toDate)); day = day.AddDate(0, 0, 1) {
@@ -205,7 +206,7 @@ func GetAttendanceSummary(c *gin.Context) {
 				continue
 			}
 
-			scheduled := time.Date(day.Year(), day.Month(), day.Day(), workStartHour, workStartMin, 0, 0, time.UTC)
+			scheduled := time.Date(day.Year(), day.Month(), day.Day(), workStartHour, workStartMin, 0, 0, timeutil.BangkokLocation)
 			if rec.earliestCheckIn != nil && rec.earliestCheckIn.After(scheduled) {
 				s.lateMins += rec.earliestCheckIn.Sub(scheduled).Minutes()
 			} else if rec.hasLateStatus {
@@ -263,14 +264,18 @@ func GetAttendanceSummary(c *gin.Context) {
 	})
 }
 
+// dayStart, dayKey, and employeeDayKey normalize to the business timezone
+// (Asia/Bangkok) before extracting Y/M/D: a time.Time read back from
+// Postgres carries whatever session timezone the driver attached, so
+// reading Year()/Month()/Day() directly can land on the wrong calendar day.
 func dayStart(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	return timeutil.DayStart(t)
 }
 
 func dayKey(companiesID uint, day time.Time) string {
-	return fmt.Sprintf("%d|%s", companiesID, time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02"))
+	return fmt.Sprintf("%d|%s", companiesID, timeutil.DateKey(day))
 }
 
 func employeeDayKey(employeeID uint, day time.Time) string {
-	return fmt.Sprintf("%d|%s", employeeID, time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02"))
+	return fmt.Sprintf("%d|%s", employeeID, timeutil.DateKey(day))
 }

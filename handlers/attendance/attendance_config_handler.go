@@ -5,6 +5,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -58,7 +59,7 @@ func GetTimelogScheduleConfig(c *gin.Context) {
 		if t == nil {
 			return ""
 		}
-		return t.Format("15:04")
+		return timeutil.ToBangkok(*t).Format("15:04")
 	}
 
 	type scheduleItem struct {
@@ -91,8 +92,8 @@ func parseTimeString(timeStr string) *time.Time {
 	if err != nil {
 		return nil
 	}
-	now := time.Now()
-	result := time.Date(now.Year(), now.Month(), now.Day(), parsed.Hour(), parsed.Minute(), 0, 0, now.Location())
+	now := timeutil.ToBangkok(time.Now())
+	result := time.Date(now.Year(), now.Month(), now.Day(), parsed.Hour(), parsed.Minute(), 0, 0, timeutil.BangkokLocation)
 	return &result
 }
 

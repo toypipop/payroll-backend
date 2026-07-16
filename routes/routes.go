@@ -91,6 +91,7 @@ func SetupRouter() *gin.Engine {
 		// --- Attendance ---
 		api.GET("/timelogs", middleware.CheckPermission("TimelogsListPage", "VIEW"), atthandler.GetTimeLogs)
 		api.POST("/timelogs", middleware.CheckPermission("TimelogsListPage", "CREATE"), atthandler.CreateTimeLog)
+		api.POST("/timelogs/bulk", middleware.CheckPermission("TimelogsListPage", "CREATE"), atthandler.BulkCreateTimeLog)
 		api.PUT("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "EDIT"), atthandler.UpdateTimeLog)
 		api.DELETE("/timelogs/:id", middleware.CheckPermission("TimelogsListPage", "DELETE"), atthandler.DeleteTimeLog)
 		api.GET("/timelogs/schedule-config", middleware.CheckPermission("TimelogsListPage", "VIEW"), atthandler.GetTimelogScheduleConfig)
@@ -218,6 +219,7 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/master/holidays/:id", middleware.CheckPermission("HolidayCalendarPage", "DELETE"), middleware.PreventDeleteIfReferenced("holiday"), sethandler.DeleteHoliday)
 
 		api.GET("/master/day-offs", middleware.CheckPermission("DayOffPage", "VIEW"), sethandler.GetDayOffs)
+		api.GET("/master/day-offs/options", sethandler.GetDayOffOptions)
 		api.GET("/master/day-offs/companies", middleware.CheckPermission("DayOffPage", "VIEW"), sethandler.GetDayOffCompanies)
 		api.POST("/master/day-offs", middleware.CheckPermission("DayOffPage", "CREATE"), sethandler.CreateDayOff)
 		api.PUT("/master/day-offs/:id", middleware.CheckPermission("DayOffPage", "EDIT"), sethandler.UpdateDayOff)

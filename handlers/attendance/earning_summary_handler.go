@@ -6,6 +6,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -174,12 +175,12 @@ func GetEarningSummary(c *gin.Context) {
 		startHour, startMin := 9, 0
 		endHour, endMin := 18, 0
 		if cfg.WorkStartTime != nil {
-			utcTime := cfg.WorkStartTime.UTC()
-			startHour, startMin = utcTime.Hour(), utcTime.Minute()
+			bkkTime := timeutil.ToBangkok(*cfg.WorkStartTime)
+			startHour, startMin = bkkTime.Hour(), bkkTime.Minute()
 		}
 		if cfg.WorkEndTime != nil {
-			utcTime := cfg.WorkEndTime.UTC()
-			endHour, endMin = utcTime.Hour(), utcTime.Minute()
+			bkkTime := timeutil.ToBangkok(*cfg.WorkEndTime)
+			endHour, endMin = bkkTime.Hour(), bkkTime.Minute()
 		}
 
 		for day := dayStart(fromDate); !day.After(dayStart(toDate)); day = day.AddDate(0, 0, 1) {
@@ -195,7 +196,7 @@ func GetEarningSummary(c *gin.Context) {
 				continue
 			}
 
-			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMin, 0, 0, time.UTC)
+			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMin, 0, 0, timeutil.BangkokLocation)
 			if endHour < startHour || (endHour == startHour && endMin <= startMin) {
 				scheduledEnd = scheduledEnd.AddDate(0, 0, 1)
 			}

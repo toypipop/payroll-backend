@@ -4,6 +4,7 @@ import (
 	"math"
 	"payroll-backend/config"
 	"payroll-backend/models"
+	"payroll-backend/timeutil"
 	"strings"
 	"time"
 
@@ -149,13 +150,13 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		// Resolve work times from config
 		endHour, endMin := 18, 0
 		if attendanceConfig.WorkEndTime != nil {
-			utcEnd := attendanceConfig.WorkEndTime.UTC()
-			endHour, endMin = utcEnd.Hour(), utcEnd.Minute()
+			bkkEnd := timeutil.ToBangkok(*attendanceConfig.WorkEndTime)
+			endHour, endMin = bkkEnd.Hour(), bkkEnd.Minute()
 		}
 		startHour, startMin := 9, 0
 		if attendanceConfig.WorkStartTime != nil {
-			utcStart := attendanceConfig.WorkStartTime.UTC()
-			startHour, startMin = utcStart.Hour(), utcStart.Minute()
+			bkkStart := timeutil.ToBangkok(*attendanceConfig.WorkStartTime)
+			startHour, startMin = bkkStart.Hour(), bkkStart.Minute()
 		}
 
 		// Build day → check-pair map while computing OT and extra days
@@ -170,7 +171,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			if log.CheckIn == nil || log.CheckOut == nil {
 				continue
 			}
-			day := log.CheckIn.UTC().Truncate(24 * time.Hour)
+			day := timeutil.DayStart(*log.CheckIn)
 			dateStr := day.Format("2006-01-02")
 			isExtraDay := holidaySet[dateStr] || dayOffWeekdays[int(day.Weekday())]
 
@@ -182,21 +183,21 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			// Track earliest check-in per day for late detection
 			rec := logsByDay[dateStr]
 			if rec == nil {
-				rec = &logDayRecord{earliestCheckIn: log.CheckIn.UTC()}
+				rec = &logDayRecord{earliestCheckIn: *log.CheckIn}
 				logsByDay[dateStr] = rec
 			}
 			rec.hasCheckPair = true
-			if log.CheckIn.UTC().Before(rec.earliestCheckIn) {
-				rec.earliestCheckIn = log.CheckIn.UTC()
+			if log.CheckIn.Before(rec.earliestCheckIn) {
+				rec.earliestCheckIn = *log.CheckIn
 			}
 
 			// OT: minutes worked beyond scheduled end
-			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMin, 0, 0, time.UTC)
+			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMin, 0, 0, timeutil.BangkokLocation)
 			if endHour < startHour || (endHour == startHour && endMin <= startMin) {
 				scheduledEnd = scheduledEnd.AddDate(0, 0, 1)
 			}
-			if log.CheckOut.UTC().After(scheduledEnd) {
-				totalOTMins += log.CheckOut.UTC().Sub(scheduledEnd).Minutes()
+			if log.CheckOut.After(scheduledEnd) {
+				totalOTMins += log.CheckOut.Sub(scheduledEnd).Minutes()
 			}
 		}
 
@@ -289,7 +290,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 				totalAbsentDays++
 				continue
 			}
-			scheduled := time.Date(d.Year(), d.Month(), d.Day(), startHour, startMin, 0, 0, time.UTC)
+			scheduled := time.Date(d.Year(), d.Month(), d.Day(), startHour, startMin, 0, 0, timeutil.BangkokLocation)
 			if rec.earliestCheckIn.After(scheduled) {
 				totalLateMins += rec.earliestCheckIn.Sub(scheduled).Minutes()
 			}
