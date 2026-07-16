@@ -21,6 +21,7 @@ Check `../payroll-frontend/CLAUDE.md` when changing frontend-facing routes, modu
 - `models/employees.go` — employees, salary structures, employee earnings/deductions.
 - `models/settings.go` — companies, departments, positions, banks, holidays, work locations, leave types.
 - `repository/*` — query scopes and shared checks.
+- `timeutil/timeutil.go` — the ONLY source of truth for the business timezone (see Timezone Handling below).
 - `migrations/*` — raw/schema repairs not safely covered by AutoMigrate.
 - `seed/main.go` — local/test data, modules, permissions.
 
@@ -64,6 +65,15 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 - Companies list: `GET /api/v1/companies/all` (not `/companies`).
 - Payroll categories: `/api/v1/master/earning-categories`, `/api/v1/master/deduction-categories`.
 
+### Master-data `/options` convention
+
+Any master-data type consumed by a page other than its own "owning" settings page (a cross-page dropdown) needs a dedicated, **ungated** `GET .../options` sibling endpoint — do not loosen `CheckPermission` on the main CRUD endpoint instead. Pattern (mirrors `GetCompanies`/`GetCompaniesOptions`):
+- No `middleware.CheckPermission(...)` on the route.
+- Scoped only by `repository.ApplyContextScopes(...)` (company data-access), never by page permission.
+- Returns minimal fields only (`id`, `name`, `companies_id` — never sensitive/rate fields).
+- Existing examples: `/departments/options`, `/positions/options`, `/roles/options`, `/master/employment-types/options`, `/earning-types/options`, `/deduction-types/options`, `/master/leave-types/options`, `/master/banks/options`, `/master/work-locations/options`, `/master/day-offs/options`.
+- Exception: if the underlying model has genuinely sensitive fields (e.g. `AttendanceConfig` payroll rates), build a separate purpose-built endpoint instead of a generic `/options` list (see `GetTimelogScheduleConfig`).
+
 ## Business Rules
 
 - `employees.companies_id` = home company for payroll, attendance, salary, department, position, employment type.
@@ -74,3 +84,11 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 - Attendance config: end <= start means overnight, e.g. `16:00` → `00:00` checks out next day.
 - Leave request dates are date-only, normalized to midnight UTC.
 - Leave Requests: only `Pending` can edit; any accessible status can be soft-deleted with delete permission.
+- **`companies_id` is immutable after creation** on every model (Employees, Departments, Positions, Roles, EarningType, DeductionType, DayOff, ...). Update handlers must never write `companies_id` from request input — re-derive/ignore it. Create handlers are the only place it's settable.
+- `SalariesStructure` edits are blocked if `effective_date` falls inside an already-closed `PayrollCycle` for that employee's company (see `UpdateSalariesStructure`).
+- `PayrollTransaction` snapshots `PositionName`/`DepartmentName`/`EmploymentTypeName`/`BankName`/`BankAccountName`/`BankAccountNo` at calculation time (`runPayrollSnapshot`) so closed-cycle payslips/reports stay accurate even if the employee's position/department/bank changes later. Any new closed-cycle report must read these snapshot fields, not `PayrollTransaction.Employees.*` (which reflects the employee's *current* state).
+- `Employees.BankName` does not exist — bank name is always resolved live via the `Bank` relation (`Preload("Bank")`), except in the payroll snapshot above.
+
+## Timezone Handling
+
+The business timezone is fixed to **Asia/Bangkok (UTC+7, no DST)** — see `timeutil/timeutil.go`. Never use `time.Now().Location()`, a bare `.UTC()`, or a DB/driver's ambient session timezone to read or write a wall-clock time-of-day value (`AttendanceConfig.WorkStartTime/WorkEndTime`, `TimeLog.CheckIn/CheckOut`, or anything grouped/compared by calendar day). Always go through `timeutil.BangkokLocation` / `timeutil.ToBangkok(t)` / `timeutil.DayStart(t)` / `timeutil.DateKey(t)`. A `*time.Time` read back from Postgres carries whatever timezone the session/driver attached, not what was originally typed — extracting `.Hour()`/`.Year()`/`.Weekday()` etc. directly without normalizing through `timeutil` first is the exact bug class that shifted schedule times and misattributed late-night check-ins to the wrong day. `CreatedAt`/`UpdatedAt` and pure calendar-date fields (`Holiday.Date`, `PayrollCycle.Start/EndDate`, `LeaveRequest.Start/EndDate`, `SalariesStructure.EffectiveDate`) are NOT subject to this — they're either audit instants (must stay real time, compared against real "now") or date-only values with no time-of-day component.
