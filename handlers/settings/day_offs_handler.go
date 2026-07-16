@@ -86,7 +86,7 @@ func GetDayOffCompanies(c *gin.Context) {
 func CreateDayOff(c *gin.Context) {
 	var input struct {
 		CompaniesID uint   `json:"companies_id"`
-		Weekday     int    `json:"weekday" binding:"required,min=0,max=6"`
+		Weekday     int    `json:"weekday" binding:"min=0,max=6"`
 		Name        string `json:"name" binding:"required"`
 		IsPaid      bool   `json:"is_paid"`
 	}
@@ -146,7 +146,7 @@ func UpdateDayOff(c *gin.Context) {
 
 	var input struct {
 		CompaniesID uint   `json:"companies_id"`
-		Weekday     int    `json:"weekday" binding:"required,min=0,max=6"`
+		Weekday     int    `json:"weekday" binding:"min=0,max=6"`
 		Name        string `json:"name" binding:"required"`
 		IsPaid      bool   `json:"is_paid"`
 	}

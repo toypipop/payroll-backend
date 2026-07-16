@@ -23,7 +23,7 @@ func GetCompanies(c *gin.Context) {
 	companyIDs := repository.AccessibleCompanyIDs(userID)
 
 	var companies []models.Companies
-	if err := config.DB.Where("id IN ?", companyIDs).Find(&companies).Error; err != nil {
+	if err := config.DB.Where("id IN ?", companyIDs).Order("id ASC").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
