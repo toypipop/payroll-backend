@@ -15,6 +15,29 @@ func ptr(u uint) *uint {
 	return &u
 }
 
+// payrollSnapshotFields mirrors what runPayrollSnapshot captures on a real
+// calculation, so mock transactions look the same as real ones instead of
+// showing blank position/department/bank on historical payslip views.
+func payrollSnapshotFields(employeeID uint) (posName, deptName, empTypeName, bankName, accName, accNo string) {
+	var emp models.Employees
+	config.DB.
+		Preload("Position").
+		Preload("Department").
+		Preload("EmploymentType").
+		Preload("Bank").
+		First(&emp, employeeID)
+
+	posName = emp.Position.PosName
+	deptName = emp.Department.DeptName
+	if emp.EmploymentType != nil {
+		empTypeName = emp.EmploymentType.Name
+	}
+	if emp.Bank != nil {
+		bankName = emp.Bank.BankName
+	}
+	return posName, deptName, empTypeName, bankName, emp.AccountName, emp.AccountNo
+}
+
 func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint) {
 	mapping := models.EmployeeCompanyAccess{
 		EmployeeID: employeeID,
@@ -198,16 +221,6 @@ func main() {
 	config.DB.Where("companies_id = ? AND name = ?", sysComp.ID, "Full-time").First(&fullTimeEmpTypeSys)
 	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Full-time").First(&fullTimeEmpTypeA)
 	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Full-time").First(&fullTimeEmpTypeB)
-
-	// --- Deduction Categories (Global) ---
-	deductionCats := []models.DeductionCategory{
-		{Name: "Statutory"},
-		{Name: "Voluntary"},
-		{Name: "Loan"},
-	}
-	for _, dc := range deductionCats {
-		config.DB.Where(models.DeductionCategory{Name: dc.Name}).Assign(dc).FirstOrCreate(&dc)
-	}
 
 	// --- Per-Company Master Data ---
 	for _, comp := range []models.Companies{sysComp, compA, compB} {
@@ -525,7 +538,7 @@ func main() {
 		})
 
 		if s.salary > 0 {
-			salary := models.SalariesStructure{CompaniesID: existingEmp.CompaniesID, EmployeesID: existingEmp.ID, BaseSalaries: s.salary, EffectiveDate: effDate}
+			salary := models.SalariesStructure{CompaniesID: existingEmp.CompaniesID, EmployeesID: existingEmp.ID, BaseSalaries: s.salary, EffectiveDate: effDate, IsActive: true}
 			config.DB.Where(models.SalariesStructure{EmployeesID: existingEmp.ID}).Assign(salary).FirstOrCreate(&salary)
 		} else {
 			var existing models.SalariesStructure
@@ -1326,16 +1339,27 @@ func main() {
 			continue
 		}
 		if result.RowsAffected == 0 {
+			var salaryRec models.SalariesStructure
+			config.DB.Where("employees_id = ? AND deleted_at = 0", s.emp.ID).First(&salaryRec)
+			posName, deptName, empTypeName, bankName, accName, accNo := payrollSnapshotFields(s.emp.ID)
+
 			// Create the transaction
 			tx = models.PayrollTransaction{
-				CycleID:        s.cycleID,
-				EmployeesID:    s.emp.ID,
-				SalariesAtTime: s.salaries,
-				TotalEarning:   s.totalEarning,
-				TotalDeduction: s.totalDeduction,
-				SsoAmount:      s.ssoAmount,
-				TaxAmount:      s.taxAmount,
-				NetPay:         s.netPay,
+				CycleID:             s.cycleID,
+				EmployeesID:         s.emp.ID,
+				SalariesStructureID: salaryRec.ID,
+				SalariesAtTime:      s.salaries,
+				TotalEarning:        s.totalEarning,
+				TotalDeduction:      s.totalDeduction,
+				SsoAmount:           s.ssoAmount,
+				TaxAmount:           s.taxAmount,
+				NetPay:              s.netPay,
+				PositionName:        posName,
+				DepartmentName:      deptName,
+				EmploymentTypeName:  empTypeName,
+				BankName:            bankName,
+				BankAccountName:     accName,
+				BankAccountNo:       accNo,
 			}
 			if err := config.DB.Create(&tx).Error; err != nil {
 				log.Printf("Failed to create mock transaction for emp %d: %v", s.emp.ID, err)
@@ -1392,6 +1416,7 @@ func main() {
 				EmployeesID:   u.emp.ID,
 				BaseSalaries:  u.salary,
 				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+				IsActive:      true,
 			}
 			config.DB.Where(models.SalariesStructure{EmployeesID: u.emp.ID, EffectiveDate: salary.EffectiveDate}).
 				Assign(salary).FirstOrCreate(&salary)
@@ -1841,9 +1866,15 @@ func main() {
 			tax := monthlyTax(totalEarning - p.provident)
 			netPay := roundMoney(totalEarning - totalDeduction - sso - tax)
 
+			var salaryRec models.SalariesStructure
+			config.DB.Where("employees_id = ? AND deleted_at = 0", p.emp.ID).First(&salaryRec)
+			posName, deptName, empTypeName, bankName, accName, accNo := payrollSnapshotFields(p.emp.ID)
+
 			tx := models.PayrollTransaction{
-				CycleID: cycle.ID, EmployeesID: p.emp.ID, SalariesAtTime: p.salary,
+				CycleID: cycle.ID, EmployeesID: p.emp.ID, SalariesStructureID: salaryRec.ID, SalariesAtTime: p.salary,
 				TotalEarning: totalEarning, TotalDeduction: totalDeduction, SsoAmount: sso, TaxAmount: tax, NetPay: netPay,
+				PositionName: posName, DepartmentName: deptName, EmploymentTypeName: empTypeName,
+				BankName: bankName, BankAccountName: accName, BankAccountNo: accNo,
 			}
 			var existingTx models.PayrollTransaction
 			result := config.DB.Where("cycle_id = ? AND employees_id = ?", cycle.ID, p.emp.ID).Limit(1).Find(&existingTx)

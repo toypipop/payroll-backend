@@ -37,8 +37,6 @@ func AutoMigrateSchema(db *gorm.DB) error {
 		&models.DayOff{},
 		&models.WorkLocation{},
 		&models.LeaveTypeSetting{},
-		&models.EarningCategory{},
-		&models.DeductionCategory{},
 		&models.EmployeeCompanyAccess{},
 	)
 }

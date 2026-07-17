@@ -9,6 +9,7 @@ import (
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func UpdateSalariesStructure(c *gin.Context) {
@@ -52,8 +53,8 @@ func UpdateSalariesStructure(c *gin.Context) {
 
 	if shouldDelete {
 		for i := range existing {
-			if existing[i].DeletedAt == 0 {
-				if err := config.DB.Model(&models.SalariesStructure{}).Where("id = ?", existing[i].ID).Update("deleted_at", time.Now().UnixNano()).Error; err != nil {
+			if existing[i].IsActive {
+				if err := archiveSalaryRecord(config.DB, existing[i]); err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable salaries record"})
 					return
 				}
@@ -76,9 +77,19 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
+	// Effective date must not move backward from the most recent record
+	// (active or not), so history never goes out of chronological order.
+	if len(existing) > 0 {
+		lastRecord := existing[len(existing)-1]
+		if parsedDate.Before(lastRecord.EffectiveDate) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Effective date cannot be before the most recent salary record's effective date"})
+			return
+		}
+	}
+
 	var activeRecords []models.SalariesStructure
 	for _, rec := range existing {
-		if rec.DeletedAt == 0 {
+		if rec.IsActive {
 			activeRecords = append(activeRecords, rec)
 		}
 	}
@@ -86,7 +97,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 	tx := config.DB.Begin()
 
 	for i := range activeRecords {
-		if err := tx.Model(&models.SalariesStructure{}).Where("id = ?", activeRecords[i].ID).Update("deleted_at", time.Now().UnixNano()).Error; err != nil {
+		if err := archiveSalaryRecord(tx, activeRecords[i]); err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to archive previous salaries record"})
 			return
@@ -98,6 +109,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 		EmployeesID:   input.EmployeesID,
 		BaseSalaries:  input.BaseSalaries,
 		EffectiveDate: parsedDate,
+		IsActive:      true,
 	}
 	if err := tx.Create(&salaries).Error; err != nil {
 		tx.Rollback()
@@ -110,4 +122,19 @@ func UpdateSalariesStructure(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Salaries structure saved successfully",
 	})
+}
+
+// archiveSalaryRecord retires a record that's no longer the current one. If it
+// was ever actually used in a real payroll calculation, it's kept forever
+// (IsActive=false, DeletedAt untouched) so history stays intact; otherwise it
+// never mattered and is safe to erase outright.
+func archiveSalaryRecord(db *gorm.DB, record models.SalariesStructure) error {
+	var usedCount int64
+	if err := db.Model(&models.PayrollTransaction{}).Where("salaries_structure_id = ?", record.ID).Count(&usedCount).Error; err != nil {
+		return err
+	}
+	if usedCount > 0 {
+		return db.Model(&models.SalariesStructure{}).Where("id = ?", record.ID).Update("is_active", false).Error
+	}
+	return db.Model(&models.SalariesStructure{}).Where("id = ?", record.ID).Update("deleted_at", time.Now().UnixNano()).Error
 }

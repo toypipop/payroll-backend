@@ -50,6 +50,10 @@ type Employees struct {
 }
 
 // SalariesStructure defines the base pay for each Employees
+// IsActive marks the single record currently in force for an employee.
+// A record can be superseded (IsActive=false) yet kept forever (DeletedAt=0)
+// once it has been used in a real payroll calculation — DeletedAt is reserved
+// for records that were never actually used, which are safe to erase outright.
 type SalariesStructure struct {
 	ID            uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt     time.Time             `json:"created_at"`
@@ -59,6 +63,7 @@ type SalariesStructure struct {
 	EmployeesID   uint                  `gorm:"not null;index;uniqueIndex:idx_emp_sal_eff_deleted" json:"employees_id"`
 	BaseSalaries  float64               `gorm:"type:decimal(15,2)" json:"base_salaries"`
 	EffectiveDate time.Time             `gorm:"not null;uniqueIndex:idx_emp_sal_eff_deleted" json:"effective_date"`
+	IsActive      bool                  `gorm:"not null;default:true" json:"is_active"`
 	Companies     Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
 	Employees     *Employees            `gorm:"foreignKey:EmployeesID" json:"employees,omitempty"`
 }

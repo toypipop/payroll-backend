@@ -1,6 +1,7 @@
 package payroll
 
 import (
+	"fmt"
 	"math"
 	"payroll-backend/config"
 	"payroll-backend/models"
@@ -83,16 +84,53 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 	var lastErr error
 
 	for _, emp := range employees {
+		// A salary adjustment only takes effect on the cycle whose period it
+		// aligns with the start of — one effective mid-cycle applies from the
+		// next cycle onward, never retroactively within the current one.
 		var salaryRecord models.SalariesStructure
-		if err := config.DB.
-			Where("employees_id = ? AND effective_date <= ?", emp.ID, cycle.EndDate).
+		isProrated := false
+		err := config.DB.
+			Where("employees_id = ? AND effective_date <= ?", emp.ID, cycle.StartDate).
 			Order("effective_date DESC, created_at DESC").
-			First(&salaryRecord).Error; err != nil {
-			skippedCount++
-			skippedNames = append(skippedNames, emp.FirstName+" "+emp.LastName)
-			continue
+			First(&salaryRecord).Error
+
+		if err != nil {
+			// No record covers the cycle's start — this can only be a brand
+			// new hire whose very first salary record lands mid-cycle (any
+			// existing employee already has an earlier record satisfying the
+			// check above). Prorate that first, partial cycle by days worked.
+			err = config.DB.
+				Where("employees_id = ? AND effective_date <= ?", emp.ID, cycle.EndDate).
+				Order("effective_date ASC, created_at ASC").
+				First(&salaryRecord).Error
+			if err != nil {
+				skippedCount++
+				skippedNames = append(skippedNames, emp.FirstName+" "+emp.LastName)
+
+				// Remove any stale transaction from a prior calculation where this
+				// employee did have a valid salary record — otherwise it keeps
+				// showing up even though this run skipped them.
+				var staleTx models.PayrollTransaction
+				if err := config.DB.Where("cycle_id = ? AND employees_id = ?", cycle.ID, emp.ID).First(&staleTx).Error; err == nil {
+					config.DB.Where("transaction_id = ?", staleTx.ID).Delete(&models.PayrollTransactionDetail{})
+					config.DB.Delete(&staleTx)
+				}
+				continue
+			}
+			isProrated = true
 		}
+
 		baseSalary := salaryRecord.BaseSalaries
+		proratedDays, proratedTotalDays := 0, 0
+		if isProrated {
+			periodStart := cycle.StartDate.Truncate(24 * time.Hour)
+			periodEnd := cycle.EndDate.Truncate(24 * time.Hour)
+			effStart := salaryRecord.EffectiveDate.Truncate(24 * time.Hour)
+			proratedTotalDays = int(periodEnd.Sub(periodStart).Hours()/24) + 1
+			proratedDays = int(periodEnd.Sub(effStart).Hours()/24) + 1
+			ratio := float64(proratedDays) / float64(proratedTotalDays)
+			baseSalary = math.Round(baseSalary*ratio*100) / 100
+		}
 
 		taxableBase := baseSalary
 		ssoBase := baseSalary
@@ -346,6 +384,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 
 		transaction.CycleID = cycle.ID
 		transaction.EmployeesID = emp.ID
+		transaction.SalariesStructureID = salaryRecord.ID
 		transaction.SalariesAtTime = baseSalary
 		transaction.TotalEarning = totalEarning
 		transaction.TotalDeduction = totalDeduction
@@ -382,8 +421,12 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			}
 		}
 
+		baseSalaryLabel := "Base Salary"
+		if isProrated {
+			baseSalaryLabel = fmt.Sprintf("Base Salary (Prorated %d/%d days)", proratedDays, proratedTotalDays)
+		}
 		var details []models.PayrollTransactionDetail
-		details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Base Salary", Amount: baseSalary, Type: "earning"})
+		details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: baseSalaryLabel, Amount: baseSalary, Type: "earning"})
 		for _, ei := range earningItems {
 			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: ei.name, Amount: ei.amount, Type: "earning", EarningTypeID: ei.earningTypeID})
 		}

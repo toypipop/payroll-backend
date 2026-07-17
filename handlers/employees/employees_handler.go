@@ -27,7 +27,7 @@ func GetEmployees(c *gin.Context) {
 		Preload("Position").
 		Preload("Companies").
 		Preload("Roles").
-		Preload("SalariesStructure").
+		Preload("SalariesStructure", "is_active = ?", true).
 		Preload("Bank").
 		Preload("EmploymentType").
 		Find(&employees).Error; err != nil {
@@ -151,7 +151,7 @@ func UpdateEmployees(c *gin.Context) {
 		return
 	}
 
-	config.DB.Preload("Department").Preload("Position").Preload("SalariesStructure").Preload("Bank").First(&emp, id)
+	config.DB.Preload("Department").Preload("Position").Preload("SalariesStructure", "is_active = ?", true).Preload("Bank").First(&emp, id)
 	c.JSON(http.StatusOK, emp)
 }
 

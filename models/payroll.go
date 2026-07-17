@@ -33,7 +33,10 @@ type PayrollTransaction struct {
 	DeletedAt      soft_delete.DeletedAt `gorm:"index" json:"-"`
 	CycleID        uint                  `gorm:"not null" json:"cycle_id"`
 	EmployeesID    uint                  `gorm:"not null" json:"employees_id"`
-	SalariesAtTime float64               `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
+	// Which salary record produced SalariesAtTime — lets the salary handler tell
+	// whether a superseded record was ever actually used in a real calculation.
+	SalariesStructureID uint    `gorm:"not null;index" json:"salaries_structure_id"`
+	SalariesAtTime      float64 `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
 	// Snapshot fields: captured at calculation time so historical payslips stay accurate
 	// even if the employee's position/department/bank changes afterward (English Comment)
 	PositionName       string  `gorm:"size:255" json:"position_name"`
