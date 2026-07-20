@@ -68,8 +68,7 @@ func GetSalaryHistory(c *gin.Context) {
 	}
 	rows := make([]historyRow, 0, len(records))
 	for _, rec := range records {
-		var usedCount int64
-		config.DB.Model(&models.PayrollTransaction{}).Where("salaries_structure_id = ?", rec.ID).Count(&usedCount)
+		usedCount, _ := usedInClosedCycleCount(config.DB, rec.ID)
 		rows = append(rows, historyRow{SalariesStructure: rec, CanDelete: usedCount == 0})
 	}
 
@@ -100,10 +99,13 @@ func DeleteSalaryRecord(c *gin.Context) {
 		return
 	}
 
-	var usedCount int64
-	config.DB.Model(&models.PayrollTransaction{}).Where("salaries_structure_id = ?", record.ID).Count(&usedCount)
+	usedCount, err := usedInClosedCycleCount(config.DB, record.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	if usedCount > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete — this record was already used in a real payroll calculation. Disable it instead if it should no longer apply."})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete — this record was already used in a closed payroll cycle's calculation. Disable it instead if it should no longer apply."})
 		return
 	}
 

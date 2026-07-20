@@ -125,16 +125,29 @@ func UpdateSalariesStructure(c *gin.Context) {
 }
 
 // archiveSalaryRecord retires a record that's no longer the current one. If it
-// was ever actually used in a real payroll calculation, it's kept forever
-// (IsActive=false, DeletedAt untouched) so history stays intact; otherwise it
-// never mattered and is safe to erase outright.
+// was ever actually used in a closed payroll cycle's calculation, it's kept
+// forever (IsActive=false, DeletedAt untouched) so history stays intact.
+// Usage in a still-open cycle doesn't count — that transaction is a draft
+// that gets recalculated whenever payroll reruns, so it's still safe to erase.
 func archiveSalaryRecord(db *gorm.DB, record models.SalariesStructure) error {
-	var usedCount int64
-	if err := db.Model(&models.PayrollTransaction{}).Where("salaries_structure_id = ?", record.ID).Count(&usedCount).Error; err != nil {
+	usedCount, err := usedInClosedCycleCount(db, record.ID)
+	if err != nil {
 		return err
 	}
 	if usedCount > 0 {
 		return db.Model(&models.SalariesStructure{}).Where("id = ?", record.ID).Update("is_active", false).Error
 	}
 	return db.Model(&models.SalariesStructure{}).Where("id = ?", record.ID).Update("deleted_at", time.Now().UnixNano()).Error
+}
+
+// usedInClosedCycleCount counts payroll transactions produced by this salary
+// record that belong to a closed (finalized) cycle. Transactions in still-open
+// cycles are drafts and don't make a record undeletable.
+func usedInClosedCycleCount(db *gorm.DB, salariesStructureID uint) (int64, error) {
+	var count int64
+	err := db.Model(&models.PayrollTransaction{}).
+		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id").
+		Where("payroll_transaction.salaries_structure_id = ? AND payroll_cycle.is_closed = ?", salariesStructureID, true).
+		Count(&count).Error
+	return count, err
 }

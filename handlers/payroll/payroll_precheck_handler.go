@@ -77,7 +77,7 @@ func PreCheckPayroll(c *gin.Context) {
 	var salaryRows []salaryRow
 	config.DB.Model(&models.SalariesStructure{}).
 		Select("DISTINCT employees_id").
-		Where("employees_id IN ? AND effective_date <= ?", empIDs, cycle.EndDate).
+		Where("employees_id IN ? AND is_active = ? AND effective_date <= ?", empIDs, true, cycle.EndDate).
 		Scan(&salaryRows)
 
 	hasSalary := make(map[uint]bool, len(salaryRows))

@@ -90,7 +90,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		var salaryRecord models.SalariesStructure
 		isProrated := false
 		err := config.DB.
-			Where("employees_id = ? AND effective_date <= ?", emp.ID, cycle.StartDate).
+			Where("employees_id = ? AND is_active = ? AND effective_date <= ?", emp.ID, true, cycle.StartDate).
 			Order("effective_date DESC, created_at DESC").
 			First(&salaryRecord).Error
 
@@ -100,7 +100,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			// existing employee already has an earlier record satisfying the
 			// check above). Prorate that first, partial cycle by days worked.
 			err = config.DB.
-				Where("employees_id = ? AND effective_date <= ?", emp.ID, cycle.EndDate).
+				Where("employees_id = ? AND is_active = ? AND effective_date <= ?", emp.ID, true, cycle.EndDate).
 				Order("effective_date ASC, created_at ASC").
 				First(&salaryRecord).Error
 			if err != nil {

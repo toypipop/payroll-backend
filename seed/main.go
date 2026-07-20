@@ -38,6 +38,19 @@ func payrollSnapshotFields(employeeID uint) (posName, deptName, empTypeName, ban
 	return posName, deptName, empTypeName, bankName, emp.AccountName, emp.AccountNo
 }
 
+// pickSalaryRecordForCycle mirrors runPayrollSnapshot's selection: the most
+// recent non-deleted salary record whose effective_date is on or before the
+// cycle's start date. Mock transactions must reference the same record real
+// payroll would have used for that cycle, not just whichever record happens
+// to have the lowest ID.
+func pickSalaryRecordForCycle(employeeID uint, cycleStart time.Time) models.SalariesStructure {
+	var rec models.SalariesStructure
+	config.DB.Where("employees_id = ? AND deleted_at = 0 AND effective_date <= ?", employeeID, cycleStart).
+		Order("effective_date DESC, id DESC").
+		First(&rec)
+	return rec
+}
+
 func upsertEmployeeCompanyAccess(employeeID, companyID, roleID uint) {
 	mapping := models.EmployeeCompanyAccess{
 		EmployeeID: employeeID,
@@ -515,7 +528,7 @@ func main() {
 	}
 
 	usersToSeed := []empSeed{
-		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpTypeSys.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 0, &bankTTB.ID, "Test Staff", "6789012345"},
+		{models.Employees{CompaniesID: sysComp.ID, RolesID: sysStaffRole.ID, DeptID: sysDept.ID, PosID: sysPos.ID, EmploymentTypeID: &fullTimeEmpTypeSys.ID, EmployeesCode: "SYS-002", FirstName: "Test", LastName: "Staff", Email: "staff@admin.com", Password: hashStr, IsActive: true}, 40000, &bankTTB.ID, "Test Staff", "6789012345"},
 		{models.Employees{CompaniesID: compA.ID, RolesID: adminRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, "Alice Johnson", "1234567890"},
 		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, "Bob Smith", "2345678901"},
 		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, "Carol Davis", "3456789012"},
@@ -1339,8 +1352,13 @@ func main() {
 			continue
 		}
 		if result.RowsAffected == 0 {
-			var salaryRec models.SalariesStructure
-			config.DB.Where("employees_id = ? AND deleted_at = 0", s.emp.ID).First(&salaryRec)
+			var cyc models.PayrollCycle
+			config.DB.Select("start_date").First(&cyc, s.cycleID)
+			salaryRec := pickSalaryRecordForCycle(s.emp.ID, cyc.StartDate)
+			if salaryRec.ID == 0 {
+				log.Printf("Skipping mock transaction for emp %d cycle %d: no salary record covers this cycle", s.emp.ID, s.cycleID)
+				continue
+			}
 			posName, deptName, empTypeName, bankName, accName, accNo := payrollSnapshotFields(s.emp.ID)
 
 			// Create the transaction
@@ -1420,6 +1438,11 @@ func main() {
 			}
 			config.DB.Where(models.SalariesStructure{EmployeesID: u.emp.ID, EffectiveDate: salary.EffectiveDate}).
 				Assign(salary).FirstOrCreate(&salary)
+			// Only one record can be "current" at a time — retire whatever was
+			// active before this one so history matches the real update flow.
+			config.DB.Model(&models.SalariesStructure{}).
+				Where("employees_id = ? AND id <> ? AND is_active = ?", u.emp.ID, salary.ID, true).
+				Update("is_active", false)
 		}
 	}
 
@@ -1866,8 +1889,7 @@ func main() {
 			tax := monthlyTax(totalEarning - p.provident)
 			netPay := roundMoney(totalEarning - totalDeduction - sso - tax)
 
-			var salaryRec models.SalariesStructure
-			config.DB.Where("employees_id = ? AND deleted_at = 0", p.emp.ID).First(&salaryRec)
+			salaryRec := pickSalaryRecordForCycle(p.emp.ID, cycle.StartDate)
 			posName, deptName, empTypeName, bankName, accName, accNo := payrollSnapshotFields(p.emp.ID)
 
 			tx := models.PayrollTransaction{
