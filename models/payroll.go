@@ -48,7 +48,10 @@ type PayrollTransaction struct {
 	TotalEarning       float64 `gorm:"type:decimal(15,2)" json:"total_earning"`
 	TotalDeduction     float64 `gorm:"type:decimal(15,2)" json:"total_deduction"`
 	SsoAmount          float64 `gorm:"type:decimal(15,2)" json:"sso_amount"`
-	TaxAmount          float64 `gorm:"type:decimal(15,2)" json:"tax_amount"`
+	// TaxableIncome is income left after all tax-deductible items (SSO, provident
+	// fund, etc.) are subtracted — the base actually fed into the tax calculation.
+	TaxableIncome float64 `gorm:"type:decimal(15,2)" json:"taxable_income"`
+	TaxAmount     float64 `gorm:"type:decimal(15,2)" json:"tax_amount"`
 	NetPay             float64 `gorm:"type:decimal(15,2)" json:"net_pay"`
 	// Relations (English Comment)
 	Details   []PayrollTransactionDetail `gorm:"foreignKey:TransactionID" json:"details"`
@@ -63,6 +66,10 @@ type PayrollTransactionDetail struct {
 	ItemName      string                `gorm:"size:255" json:"item_name"` // e.g., "Overtime", "SSO", "Tax"
 	Amount        float64               `gorm:"type:decimal(15,2)" json:"amount"`
 	Type          string                `gorm:"size:20" json:"type"` // "earning" or "deduction"
+	// IsTaxRelevant marks whether this line item actually fed into the tax
+	// calculation (earning counted toward taxable income, or deduction
+	// subtracted from it) — lets the UI grey out items that don't affect tax.
+	IsTaxRelevant bool `json:"is_tax_relevant"`
 	// Reference to master data if applicable (English Comment)
 	EarningTypeID   *uint `json:"earning_type_id"`
 	DeductionTypeID *uint `json:"deduction_type_id"`

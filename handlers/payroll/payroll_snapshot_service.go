@@ -19,8 +19,6 @@ func calculateTaxByMethod(taxMethod string, taxableBase float64, taxDeductible f
 	switch {
 	case method == "none" || method == "no tax":
 		return 0.0
-	case method == "fixed" || method == "fixed rate":
-		return math.Round(math.Max(0, taxableBase-taxDeductible)*0.05*100) / 100
 	default:
 		// Default to Progressive for "Progressive", "Progressive Rate", or any unknown method
 		annualTaxableBase := (taxableBase - taxDeductible) * 12
@@ -160,6 +158,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			name          string
 			amount        float64
 			earningTypeID *uint
+			taxable       bool
 		}
 		var earningItems []earningItem
 		for _, ee := range empEarnings {
@@ -171,7 +170,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 				ssoBase += ee.Amount
 			}
 			etID := ee.EarningTypeID
-			earningItems = append(earningItems, earningItem{name: ee.EarningType.Name, amount: ee.Amount, earningTypeID: &etID})
+			earningItems = append(earningItems, earningItem{name: ee.EarningType.Name, amount: ee.Amount, earningTypeID: &etID, taxable: ee.EarningType.IsTaxable})
 		}
 
 		var cycleEarnings []models.PayrollCycleEarning
@@ -188,7 +187,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 				ssoBase += ce.Amount
 			}
 			etID := ce.EarningTypeID
-			earningItems = append(earningItems, earningItem{name: ce.EarningType.Name, amount: ce.Amount, earningTypeID: &etID})
+			earningItems = append(earningItems, earningItem{name: ce.EarningType.Name, amount: ce.Amount, earningTypeID: &etID, taxable: ce.EarningType.IsTaxable})
 		}
 
 		// Use check_in for both bounds: a workday belongs to the date the employee clocked in.
@@ -278,6 +277,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			name            string
 			amount          float64
 			deductionTypeID *uint
+			taxDeductible   bool
 		}
 		var deductionItems []deductionItem
 		for _, ed := range empDeductions {
@@ -289,7 +289,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 				ssoDeductible += ed.Amount
 			}
 			dtID := ed.DeductionTypeID
-			deductionItems = append(deductionItems, deductionItem{name: ed.DeductionType.Name, amount: ed.Amount, deductionTypeID: &dtID})
+			deductionItems = append(deductionItems, deductionItem{name: ed.DeductionType.Name, amount: ed.Amount, deductionTypeID: &dtID, taxDeductible: ed.DeductionType.IsTaxDeductible})
 		}
 
 		var cycleDeductions []models.PayrollCycleDeduction
@@ -306,7 +306,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 				ssoDeductible += cd.Amount
 			}
 			dtID := cd.DeductionTypeID
-			deductionItems = append(deductionItems, deductionItem{name: cd.DeductionType.Name, amount: cd.Amount, deductionTypeID: &dtID})
+			deductionItems = append(deductionItems, deductionItem{name: cd.DeductionType.Name, amount: cd.Amount, deductionTypeID: &dtID, taxDeductible: cd.DeductionType.IsTaxDeductible})
 		}
 
 		// Load ALL approved leaves: build skip-day set + compute unpaid days
@@ -373,7 +373,10 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			ssoAmount = math.Round(computed*100) / 100
 		}
 
-		monthlyTax := calculateTaxByMethod(payrollConfig.TaxCalculation, taxableBase, taxDeductible)
+		// The employee's own SSO contribution is deductible from taxable income
+		// under Thai law, on top of whatever deduction items are tax-deductible.
+		netTaxableIncome := math.Round(math.Max(0, taxableBase-(taxDeductible+ssoAmount))*100) / 100
+		monthlyTax := calculateTaxByMethod(payrollConfig.TaxCalculation, taxableBase, taxDeductible+ssoAmount)
 
 		totalEarning := math.Round((baseSalary+additionalEarning+otAmount+extraAmount)*100) / 100
 		totalDeduction := math.Round((unpaidLeaveDeduction+additionalDeduction+lateDeduction+absentDeduction)*100) / 100
@@ -404,6 +407,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		transaction.TotalEarning = totalEarning
 		transaction.TotalDeduction = totalDeduction
 		transaction.SsoAmount = ssoAmount
+		transaction.TaxableIncome = netTaxableIncome
 		transaction.TaxAmount = monthlyTax
 		transaction.NetPay = netPay
 		transaction.PositionName = emp.Position.PosName
@@ -441,33 +445,33 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			baseSalaryLabel = fmt.Sprintf("Base Salary (Prorated %d/%d days)", proratedDays, proratedTotalDays)
 		}
 		var details []models.PayrollTransactionDetail
-		details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: baseSalaryLabel, Amount: baseSalary, Type: "earning"})
+		details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: baseSalaryLabel, Amount: baseSalary, Type: "earning", IsTaxRelevant: true})
 		for _, ei := range earningItems {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: ei.name, Amount: ei.amount, Type: "earning", EarningTypeID: ei.earningTypeID})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: ei.name, Amount: ei.amount, Type: "earning", EarningTypeID: ei.earningTypeID, IsTaxRelevant: ei.taxable})
 		}
 		if otAmount > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Overtime", Amount: otAmount, Type: "earning"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Overtime", Amount: otAmount, Type: "earning", IsTaxRelevant: true})
 		}
 		if extraAmount > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Extra Day", Amount: extraAmount, Type: "earning"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Extra Day", Amount: extraAmount, Type: "earning", IsTaxRelevant: true})
 		}
 		for _, di := range deductionItems {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: di.name, Amount: di.amount, Type: "deduction", DeductionTypeID: di.deductionTypeID})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: di.name, Amount: di.amount, Type: "deduction", DeductionTypeID: di.deductionTypeID, IsTaxRelevant: di.taxDeductible})
 		}
 		if unpaidLeaveDeduction > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Unpaid Leave", Amount: unpaidLeaveDeduction, Type: "deduction"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Unpaid Leave", Amount: unpaidLeaveDeduction, Type: "deduction", IsTaxRelevant: false})
 		}
 		if lateDeduction > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Late Amount", Amount: lateDeduction, Type: "deduction"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Late Amount", Amount: lateDeduction, Type: "deduction", IsTaxRelevant: true})
 		}
 		if absentDeduction > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Absent Amount", Amount: absentDeduction, Type: "deduction"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Absent Amount", Amount: absentDeduction, Type: "deduction", IsTaxRelevant: true})
 		}
 		if ssoAmount > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Social Security (SSO)", Amount: ssoAmount, Type: "deduction"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Social Security (SSO)", Amount: ssoAmount, Type: "deduction", IsTaxRelevant: true})
 		}
 		if monthlyTax > 0 {
-			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Income Tax", Amount: monthlyTax, Type: "deduction"})
+			details = append(details, models.PayrollTransactionDetail{TransactionID: transaction.ID, ItemName: "Income Tax", Amount: monthlyTax, Type: "deduction", IsTaxRelevant: true})
 		}
 
 		if err := dbTx.Create(&details).Error; err != nil {
