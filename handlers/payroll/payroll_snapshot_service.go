@@ -31,10 +31,19 @@ func calculateTaxByMethod(taxMethod string, taxableBase float64, taxDeductible f
 	}
 }
 
+// ProratedEmployee names an employee whose base salary this run pro-rated by
+// calendar days, because their first salary record only covers part of the
+// cycle (a new hire who started mid-cycle) — informational, not a warning.
+type ProratedEmployee struct {
+	Name  string `json:"name"`
+	Days  int    `json:"days"`
+	Total int    `json:"total_days"`
+}
+
 // runPayrollSnapshot recalculates and persists payroll transactions/details for one cycle.
 // CRITICAL: Fetches ONLY the LATEST ACTIVE config (non-deleted, newest created)
 // This ensures calculations always use current parameters, never stale/old versions
-func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, []string, error) {
+func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, []string, []ProratedEmployee, error) {
 	// LATEST ACTIVE VERSION: Fetch the newest NON-DELETED config
 	// Ensures stale/old configs are never used in calculation
 	var payrollConfig models.PayrollConfig
@@ -42,7 +51,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		Where("companies_id = ? AND deleted_at IS NULL", companiesID).
 		Order("created_at DESC").
 		First(&payrollConfig).Error; err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, nil, err
 	}
 
 	var employees []models.Employees
@@ -53,7 +62,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 		Preload("Bank").
 		Where("employees.companies_id = ? AND employees.is_active = ?", companiesID, true).
 		Find(&employees).Error; err != nil {
-		return 0, 0, nil, err
+		return 0, 0, nil, nil, err
 	}
 
 	var attendanceConfig models.AttendanceConfig
@@ -81,6 +90,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 	processedCount := 0
 	skippedCount := 0
 	var skippedNames []string
+	var proratedEmployees []ProratedEmployee
 	var lastErr error
 
 	for _, emp := range employees {
@@ -130,6 +140,11 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 			proratedDays = int(periodEnd.Sub(effStart).Hours()/24) + 1
 			ratio := float64(proratedDays) / float64(proratedTotalDays)
 			baseSalary = math.Round(baseSalary*ratio*100) / 100
+			proratedEmployees = append(proratedEmployees, ProratedEmployee{
+				Name:  emp.FirstName + " " + emp.LastName,
+				Days:  proratedDays,
+				Total: proratedTotalDays,
+			})
 		}
 
 		taxableBase := baseSalary
@@ -466,7 +481,7 @@ func runPayrollSnapshot(companiesID uint, cycle models.PayrollCycle) (int, int, 
 	}
 
 	if lastErr != nil {
-		return processedCount, skippedCount, skippedNames, lastErr
+		return processedCount, skippedCount, skippedNames, proratedEmployees, lastErr
 	}
-	return processedCount, skippedCount, skippedNames, nil
+	return processedCount, skippedCount, skippedNames, proratedEmployees, nil
 }

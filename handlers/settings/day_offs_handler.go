@@ -75,7 +75,7 @@ func GetDayOffCompanies(c *gin.Context) {
 	var companies []models.Companies
 	if err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
-	).Order("name ASC").Find(&companies).Error; err != nil {
+	).Order("id ASC").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
 		return
 	}

@@ -69,7 +69,7 @@ func CalculatePayroll(c *gin.Context) {
 		return
 	}
 
-	processedCount, skippedCount, skippedNames, snapshotErr := runPayrollSnapshot(cycle.CompaniesID, cycle)
+	processedCount, skippedCount, skippedNames, proratedEmployees, snapshotErr := runPayrollSnapshot(cycle.CompaniesID, cycle)
 
 	if snapshotErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": snapshotErr.Error()})
@@ -77,11 +77,12 @@ func CalculatePayroll(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":           "Payroll calculation completed",
-		"cycle_id":          cycle.ID,
-		"processed_count":   processedCount,
-		"skipped_count":     skippedCount,
-		"skipped_employees": skippedNames,
+		"message":            "Payroll calculation completed",
+		"cycle_id":           cycle.ID,
+		"processed_count":    processedCount,
+		"skipped_count":      skippedCount,
+		"skipped_employees":  skippedNames,
+		"prorated_employees": proratedEmployees,
 	})
 }
 

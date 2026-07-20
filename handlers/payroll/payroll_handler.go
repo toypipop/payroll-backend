@@ -25,7 +25,7 @@ func GetPayrollConfigs(c *gin.Context) {
 	// Start from Companies Table to show all companies in the scope (English Comment)
 	err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
-	).Preload("PayrollConfig").Find(&companies).Error
+	).Order("companies.id ASC").Preload("PayrollConfig").Find(&companies).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch payroll configuration"})

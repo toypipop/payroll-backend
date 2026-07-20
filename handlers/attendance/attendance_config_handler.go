@@ -23,7 +23,7 @@ func GetAttendanceConfigs(c *gin.Context) {
 	var companies []models.Companies
 	err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
-	).Preload("AttendanceConfig").Find(&companies).Error
+	).Order("companies.id ASC").Preload("AttendanceConfig").Find(&companies).Error
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -49,7 +49,7 @@ func GetTimelogScheduleConfig(c *gin.Context) {
 	var companies []models.Companies
 	err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
-	).Preload("AttendanceConfig").Find(&companies).Error
+	).Order("companies.id ASC").Preload("AttendanceConfig").Find(&companies).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -99,7 +99,7 @@ func ClosePayrollCycle(c *gin.Context) {
 		return
 	}
 
-	processedCount, skippedCount, skippedNames, snapshotErr := runPayrollSnapshot(cycle.CompaniesID, cycle)
+	processedCount, skippedCount, skippedNames, proratedEmployees, snapshotErr := runPayrollSnapshot(cycle.CompaniesID, cycle)
 	if snapshotErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to snapshot transactions before closing cycle: " + snapshotErr.Error()})
 		return
@@ -112,10 +112,11 @@ func ClosePayrollCycle(c *gin.Context) {
 
 	cycle.IsClosed = true
 	c.JSON(http.StatusOK, gin.H{
-		"message":           "Cycle closed successfully and transactions snapshotted",
-		"data":              cycle,
-		"processed_count":   processedCount,
-		"skipped_count":     skippedCount,
-		"skipped_employees": skippedNames,
+		"message":            "Cycle closed successfully and transactions snapshotted",
+		"data":               cycle,
+		"processed_count":    processedCount,
+		"skipped_count":      skippedCount,
+		"skipped_employees":  skippedNames,
+		"prorated_employees": proratedEmployees,
 	})
 }

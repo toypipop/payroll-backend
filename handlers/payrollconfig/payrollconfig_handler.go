@@ -25,7 +25,7 @@ func GetPayrollConfigs(c *gin.Context) {
 	// Fetch latest active config per company
 	err := config.DB.Scopes(
 		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
-	).Preload("PayrollConfig", func(db *gorm.DB) *gorm.DB {
+	).Order("companies.id ASC").Preload("PayrollConfig", func(db *gorm.DB) *gorm.DB {
 		return db.Where("deleted_at IS NULL").Order("created_at DESC").Limit(1)
 	}).Find(&companies).Error
 
