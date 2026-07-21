@@ -63,6 +63,7 @@ func SetupRouter() *gin.Engine {
 		authGroup.GET("/me", middleware.AuthMiddleware(), authhandler.Me)
 	}
 	r.GET("/api/v1/modules", authhandler.GetAppModules)
+	r.GET("/api/v1/modules/mine", middleware.AuthMiddleware(), authhandler.GetMyAppModules)
 
 	// Protected Routes
 	api := r.Group("/api/v1")

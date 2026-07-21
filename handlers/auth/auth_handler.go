@@ -214,3 +214,76 @@ func GetAppModules(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, modules)
 }
+
+// GetMyAppModules returns the same active module list as GetAppModules, but
+// filtered to what the requesting user can actually VIEW: a leaf module is
+// kept only if one of the user's roles (across every company they can
+// reach) grants CanView on it, and a category is kept only if at least one
+// of its children survived that filter. Unlike GetAppModules (which stays
+// unfiltered for the Permission Settings admin UI, which must list every
+// module regardless of the admin's own access), this is what the Sidebar,
+// route table, and "Set it up" links should use.
+func GetMyAppModules(c *gin.Context) {
+	userIDVal, ok := c.Get("user_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
+		return
+	}
+	userID, ok := userIDVal.(uint)
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
+		return
+	}
+
+	var modules []models.AppModule
+	if err := config.DB.
+		Where("is_active = ?", true).
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "order"}}).
+		Find(&modules).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch app modules"})
+		return
+	}
+
+	companyRoles := repository.AccessibleCompanyRoles(userID)
+	roleIDs := make([]uint, 0, len(companyRoles))
+	for _, cr := range companyRoles {
+		roleIDs = append(roleIDs, cr.RoleID)
+	}
+
+	viewableModuleIDs := map[uint]bool{}
+	if len(roleIDs) > 0 {
+		var accesses []models.RolesModuleAccess
+		if err := config.DB.
+			Where("roles_id IN ?", roleIDs).
+			Where("can_view = ?", true).
+			Find(&accesses).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch module access"})
+			return
+		}
+		for _, access := range accesses {
+			viewableModuleIDs[access.ModuleID] = true
+		}
+	}
+
+	viewableParents := map[uint]bool{}
+	for _, m := range modules {
+		if !m.IsCategory && viewableModuleIDs[m.ID] && m.ParentID != nil {
+			viewableParents[*m.ParentID] = true
+		}
+	}
+
+	filtered := make([]models.AppModule, 0, len(modules))
+	for _, m := range modules {
+		if m.IsCategory {
+			if viewableParents[m.ID] {
+				filtered = append(filtered, m)
+			}
+			continue
+		}
+		if viewableModuleIDs[m.ID] {
+			filtered = append(filtered, m)
+		}
+	}
+
+	c.JSON(http.StatusOK, filtered)
+}
