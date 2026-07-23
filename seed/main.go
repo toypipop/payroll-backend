@@ -485,10 +485,25 @@ func main() {
 	VCE := func(s models.DataScope) modAcc { return modAcc{true, true, true, false, s} }
 	F := func(s models.DataScope) modAcc { return modAcc{true, true, true, true, s} }
 
+	// Report pages have GET-only APIs (no create/edit/delete), so they are
+	// granted view-only everywhere — their scope stays adjustable in Permission
+	// Settings, unlike the all-or-nothing Companies/Bank pages.
+	reportKeys := map[models.ModuleKey]bool{
+		"PayslipsReportPage":     true,
+		"BankTransferReportPage": true,
+		"TaxFormsReportPage":     true,
+		"SSOReportPage":          true,
+		"PayrollAnalysisPage":    true,
+	}
+
 	// SYSTEM_ADMIN: everything, every company, incl. cross-company Companies.
 	sysAdminGrants := map[models.ModuleKey]modAcc{}
 	for _, m := range modules {
 		if m.IsCategory {
+			continue
+		}
+		if reportKeys[m.ModuleKey] {
+			sysAdminGrants[m.ModuleKey] = V(coScope)
 			continue
 		}
 		sysAdminGrants[m.ModuleKey] = F(coScope)
@@ -499,6 +514,10 @@ func main() {
 	adminGrants := map[models.ModuleKey]modAcc{}
 	for _, m := range modules {
 		if m.IsCategory || m.ModuleKey == "CompaniesPage" {
+			continue
+		}
+		if reportKeys[m.ModuleKey] {
+			adminGrants[m.ModuleKey] = V(coScope)
 			continue
 		}
 		adminGrants[m.ModuleKey] = F(coScope)
@@ -531,10 +550,10 @@ func main() {
 		"DayOffPage":             F(coScope),
 		"WorkLocationPage":       F(coScope),
 		"MasterLeaveTypePage":    F(coScope),
-		"PayslipsReportPage":     F(coScope),
-		"TaxFormsReportPage":     F(coScope),
-		"SSOReportPage":          F(coScope),
-		"HelpPage":               V(coScope),
+		"PayslipsReportPage":     V(coScope),
+		"TaxFormsReportPage":     V(coScope),
+		"SSOReportPage":          V(coScope),
+		"HelpPage":               F(coScope),
 	}
 
 	// FINANCE: payroll processing + payroll config + all financial reports +
@@ -557,12 +576,12 @@ func main() {
 		"EarningTypesPage":          F(coScope),
 		"DeductionTypesPage":        F(coScope),
 		"MasterBankPage":            F(coScope),
-		"PayslipsReportPage":        F(coScope),
-		"BankTransferReportPage":    F(coScope),
-		"TaxFormsReportPage":        F(coScope),
-		"SSOReportPage":             F(coScope),
-		"PayrollAnalysisPage":       F(coScope),
-		"HelpPage":                  V(coScope),
+		"PayslipsReportPage":        V(coScope),
+		"BankTransferReportPage":    V(coScope),
+		"TaxFormsReportPage":        V(coScope),
+		"SSOReportPage":             V(coScope),
+		"PayrollAnalysisPage":       V(coScope),
+		"HelpPage":                  F(coScope),
 	}
 
 	// MANAGER: own team only (Department scope). Approve team time logs and
@@ -574,7 +593,7 @@ func main() {
 		"TimelogsListPage":  VE(mgrScope),
 		"LeaveRequestsPage": VE(mgrScope),
 		"LeaveApprovedPage": VE(mgrScope),
-		"HelpPage":          V(mgrScope),
+		"HelpPage":          F(coScope),
 	}
 
 	// STAFF: self only (Own scope). Own profile/pay data (read), own time logs
@@ -590,7 +609,7 @@ func main() {
 		"TimelogsListPage":       VCE(ownScope),
 		"LeaveRequestsPage":      F(ownScope),
 		"LeaveApprovedPage":      V(ownScope),
-		"HelpPage":               V(ownScope),
+		"HelpPage":               F(coScope),
 	}
 
 	// Wipe and rebuild all seeded role permissions so re-running seed is fully authoritative.
