@@ -327,18 +327,28 @@ func main() {
 	sysStaffRole := models.Roles{RolesName: "STAFF", Description: "System Staff", CompaniesID: sysComp.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: sysComp.ID}).Assign(sysStaffRole).FirstOrCreate(&sysStaffRole)
 
-	adminRoleA := models.Roles{RolesName: "ADMIN", Description: "Company Admin - full access to all modules", CompaniesID: compA.ID}
+	// Five business roles per operating company, least-privilege. Exact
+	// module/action grants are defined by the permission matrix further down.
+	adminRoleA := models.Roles{RolesName: "ADMIN", Description: "Company admin - full access to every module in the company (except cross-company Companies management)", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "ADMIN", CompaniesID: compA.ID}).Assign(adminRoleA).FirstOrCreate(&adminRoleA)
-	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Full operational access, no structural admin", CompaniesID: compA.ID}
+	hrRoleA := models.Roles{RolesName: "HR", Description: "Employees, attendance, leave and HR master-data; payroll view-only, no pay approval", CompaniesID: compA.ID}
+	config.DB.Where(models.Roles{RolesName: "HR", CompaniesID: compA.ID}).Assign(hrRoleA).FirstOrCreate(&hrRoleA)
+	financeRoleA := models.Roles{RolesName: "FINANCE", Description: "Payroll processing, payroll config and financial reports; employee/salary read-only", CompaniesID: compA.ID}
+	config.DB.Where(models.Roles{RolesName: "FINANCE", CompaniesID: compA.ID}).Assign(financeRoleA).FirstOrCreate(&financeRoleA)
+	managerRoleA := models.Roles{RolesName: "MANAGER", Description: "Team lead - approve own team's time logs and leave; employee list read-only, no payroll/settings", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compA.ID}).Assign(managerRoleA).FirstOrCreate(&managerRoleA)
-	staffRoleA := models.Roles{RolesName: "STAFF", Description: "View only, department scope", CompaniesID: compA.ID}
+	staffRoleA := models.Roles{RolesName: "STAFF", Description: "Self-service only - own profile, payslip data, time logs and leave requests", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compA.ID}).Assign(staffRoleA).FirstOrCreate(&staffRoleA)
 
-	adminRoleB := models.Roles{RolesName: "ADMIN", Description: "Company Admin - full access to all modules", CompaniesID: compB.ID}
+	adminRoleB := models.Roles{RolesName: "ADMIN", Description: "Company admin - full access to every module in the company (except cross-company Companies management)", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "ADMIN", CompaniesID: compB.ID}).Assign(adminRoleB).FirstOrCreate(&adminRoleB)
-	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Full operational access, no structural admin", CompaniesID: compB.ID}
+	hrRoleB := models.Roles{RolesName: "HR", Description: "Employees, attendance, leave and HR master-data; payroll view-only, no pay approval", CompaniesID: compB.ID}
+	config.DB.Where(models.Roles{RolesName: "HR", CompaniesID: compB.ID}).Assign(hrRoleB).FirstOrCreate(&hrRoleB)
+	financeRoleB := models.Roles{RolesName: "FINANCE", Description: "Payroll processing, payroll config and financial reports; employee/salary read-only", CompaniesID: compB.ID}
+	config.DB.Where(models.Roles{RolesName: "FINANCE", CompaniesID: compB.ID}).Assign(financeRoleB).FirstOrCreate(&financeRoleB)
+	managerRoleB := models.Roles{RolesName: "MANAGER", Description: "Team lead - approve own team's time logs and leave; employee list read-only, no payroll/settings", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "MANAGER", CompaniesID: compB.ID}).Assign(managerRoleB).FirstOrCreate(&managerRoleB)
-	staffRoleB := models.Roles{RolesName: "STAFF", Description: "View only, department scope", CompaniesID: compB.ID}
+	staffRoleB := models.Roles{RolesName: "STAFF", Description: "Self-service only - own profile, payslip data, time logs and leave requests", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
 
 	// --- Department Categories, Departments & Positions ---
@@ -434,25 +444,9 @@ func main() {
 		{ModuleName: "Payroll Analysis", ModuleKey: "PayrollAnalysisPage", RoutePath: "/reports/payroll-analysis", Icon: "Analytics", Order: 5, ParentID: ptr(7)},
 	}
 
-	// Modules that only ADMIN (and above) can access — MANAGER is blocked from these.
-	// All other permission boundaries must be set here in seed, not in code.
-	adminOnlyModules := map[models.ModuleKey]bool{
-		"CompaniesPage":             true,
-		"RolesPage":                 true,
-		"PermissionSettings":        true,
-		"EmployeeCompanyAccessPage": true,
-	}
-
-	// CompaniesPage is now unscoped (any holder sees/edits every company) —
-	// only SYSTEM_ADMIN may hold it, not per-company ADMIN/MANAGER/STAFF.
-	systemAdminOnlyModules := map[models.ModuleKey]bool{
-		"CompaniesPage": true,
-	}
-
-	// Wipe and rebuild all seeded role permissions so re-running seed is fully authoritative.
-	seedRoleIDs := []uint{sysRole.ID, sysStaffRole.ID, adminRoleA.ID, managerRoleA.ID, staffRoleA.ID, adminRoleB.ID, managerRoleB.ID, staffRoleB.ID}
-	config.DB.Where("roles_id IN ?", seedRoleIDs).Delete(&models.RolesModuleAccess{})
-
+	// Upsert every module and record its ID by key so the permission matrix
+	// below can fail loudly if it ever references a module that no longer exists.
+	moduleIDByKey := map[models.ModuleKey]uint{}
 	for _, m := range modules {
 		m.IsActive = true
 		var existingModule models.AppModule
@@ -464,42 +458,175 @@ func main() {
 		} else {
 			config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
 		}
+		moduleIDByKey[existingModule.ModuleKey] = existingModule.ID
+	}
 
-		mID := existingModule.ID
+	// ─── Permission Matrix (least-privilege) ──────────────────────────────────
+	// One row per (role, module) the role may VIEW. A module NOT listed for a
+	// role is invisible to it — /modules/mine hides it from the sidebar and
+	// routes entirely, not just 403 on click. "Approve" actions (leave, time
+	// logs) map to CanEdit; there is no separate approve flag.
+	//
+	// Report modules (Payslips/BankTransfer/Tax/SSO/Analysis) are view-only in
+	// the API (GET-only routes), company-scoped, and rendered as a single
+	// on/off toggle in Permission Settings (ALL_OR_NOTHING_MODULES) — grant
+	// them full CRUD=true so that toggle reads as "on". They cannot be Own-
+	// scoped, so STAFF gets no reports; staff see their own pay via the
+	// Own-scoped Salaries / Employee Earnings / Employee Deductions pages.
+	type modAcc struct {
+		view, create, edit, del bool
+		scope                   models.DataScope
+	}
+	coScope := models.ScopeCompanies
+	// V = view-only, VE = view+approve/edit, VCE = view+create+edit (no delete),
+	// F = full CRUD. Scope is baked in per builder call.
+	V := func(s models.DataScope) modAcc { return modAcc{true, false, false, false, s} }
+	VE := func(s models.DataScope) modAcc { return modAcc{true, false, true, false, s} }
+	VCE := func(s models.DataScope) modAcc { return modAcc{true, true, true, false, s} }
+	F := func(s models.DataScope) modAcc { return modAcc{true, true, true, true, s} }
 
-		upsert := func(roleID, compID uint, scope models.DataScope, full bool) {
-			acc := models.RolesModuleAccess{
-				RolesID: roleID, ModuleID: mID, CompaniesID: compID,
-				CanView: true, CanCreate: full, CanEdit: full, CanDelete: full,
-				DataScope: scope,
+	// SYSTEM_ADMIN: everything, every company, incl. cross-company Companies.
+	sysAdminGrants := map[models.ModuleKey]modAcc{}
+	for _, m := range modules {
+		if m.IsCategory {
+			continue
+		}
+		sysAdminGrants[m.ModuleKey] = F(coScope)
+	}
+
+	// ADMIN: full access to every module in its own company EXCEPT the
+	// cross-company Companies page (SYSTEM_ADMIN only).
+	adminGrants := map[models.ModuleKey]modAcc{}
+	for _, m := range modules {
+		if m.IsCategory || m.ModuleKey == "CompaniesPage" {
+			continue
+		}
+		adminGrants[m.ModuleKey] = F(coScope)
+	}
+
+	// HR: employees + attendance + leave + HR master-data (full); payroll
+	// processing view-only (no pay approval); no payroll config; HR-relevant
+	// reports view-only; no roles/permission/company-access/bank/finance reports.
+	hrGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":          V(coScope),
+		"EmployeesListPage":      F(coScope),
+		"SalariesStructurePage":  F(coScope),
+		"EmployeeEarningsPage":   F(coScope),
+		"EmployeeDeductionsPage": F(coScope),
+		"TimelogsListPage":       F(coScope),
+		"LeaveRequestsPage":      F(coScope),
+		"LeaveApprovedPage":      F(coScope),
+		"EarningSummaryPage":     V(coScope),
+		"DeductionSummaryPage":   V(coScope),
+		"PayrollCyclesPage":      V(coScope),
+		"RunPayrollPage":         V(coScope),
+		"CycleEarningsPage":      V(coScope),
+		"CycleDeductionsPage":    V(coScope),
+		"TransactionsPage":       V(coScope),
+		"DepartmentSettings":     F(coScope),
+		"PositionSettings":       F(coScope),
+		"EmploymentTypePage":     F(coScope),
+		"AttendanceSettingsPage": F(coScope),
+		"HolidayCalendarPage":    F(coScope),
+		"DayOffPage":             F(coScope),
+		"WorkLocationPage":       F(coScope),
+		"MasterLeaveTypePage":    F(coScope),
+		"PayslipsReportPage":     F(coScope),
+		"TaxFormsReportPage":     F(coScope),
+		"SSOReportPage":          F(coScope),
+		"HelpPage":               V(coScope),
+	}
+
+	// FINANCE: payroll processing + payroll config + all financial reports +
+	// bank master (full); employee/salary/summary read-only for payroll; no
+	// attendance/leave, no HR master-data, no roles/permission/company-access.
+	financeGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":             V(coScope),
+		"EmployeesListPage":         V(coScope),
+		"SalariesStructurePage":     V(coScope),
+		"EmployeeEarningsPage":      V(coScope),
+		"EmployeeDeductionsPage":    V(coScope),
+		"EarningSummaryPage":        V(coScope),
+		"DeductionSummaryPage":      V(coScope),
+		"PayrollCyclesPage":         F(coScope),
+		"RunPayrollPage":            F(coScope),
+		"CycleEarningsPage":         F(coScope),
+		"CycleDeductionsPage":       F(coScope),
+		"TransactionsPage":          F(coScope),
+		"PayrollGlobalSettingsPage": F(coScope),
+		"EarningTypesPage":          F(coScope),
+		"DeductionTypesPage":        F(coScope),
+		"MasterBankPage":            F(coScope),
+		"PayslipsReportPage":        F(coScope),
+		"BankTransferReportPage":    F(coScope),
+		"TaxFormsReportPage":        F(coScope),
+		"SSOReportPage":             F(coScope),
+		"PayrollAnalysisPage":       F(coScope),
+		"HelpPage":                  V(coScope),
+	}
+
+	// MANAGER: own team only (Department scope). Approve team time logs and
+	// leave; employee list read-only. No payroll amounts, no settings.
+	mgrScope := models.ScopeDepartment
+	managerGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":     V(mgrScope),
+		"EmployeesListPage": V(mgrScope),
+		"TimelogsListPage":  VE(mgrScope),
+		"LeaveRequestsPage": VE(mgrScope),
+		"LeaveApprovedPage": VE(mgrScope),
+		"HelpPage":          V(mgrScope),
+	}
+
+	// STAFF: self only (Own scope). Own profile/pay data (read), own time logs
+	// (log/edit), own leave requests (full — only Pending is editable per
+	// business rules). No visibility of anyone else, payroll, or settings.
+	ownScope := models.ScopeOwn
+	staffGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":          V(ownScope),
+		"EmployeesListPage":      V(ownScope),
+		"SalariesStructurePage":  V(ownScope),
+		"EmployeeEarningsPage":   V(ownScope),
+		"EmployeeDeductionsPage": V(ownScope),
+		"TimelogsListPage":       VCE(ownScope),
+		"LeaveRequestsPage":      F(ownScope),
+		"LeaveApprovedPage":      V(ownScope),
+		"HelpPage":               V(ownScope),
+	}
+
+	// Wipe and rebuild all seeded role permissions so re-running seed is fully authoritative.
+	seedRoleIDs := []uint{
+		sysRole.ID, sysStaffRole.ID,
+		adminRoleA.ID, hrRoleA.ID, financeRoleA.ID, managerRoleA.ID, staffRoleA.ID,
+		adminRoleB.ID, hrRoleB.ID, financeRoleB.ID, managerRoleB.ID, staffRoleB.ID,
+	}
+	config.DB.Where("roles_id IN ?", seedRoleIDs).Delete(&models.RolesModuleAccess{})
+
+	grantAccess := func(roleID, compID uint, grants map[models.ModuleKey]modAcc) {
+		for key, a := range grants {
+			mID, ok := moduleIDByKey[key]
+			if !ok {
+				log.Fatalf("seed: permission matrix references unknown module key %q", key)
 			}
-			config.DB.Create(&acc)
-		}
-
-		// sysComp roles
-		upsert(sysRole.ID, sysComp.ID, models.ScopeCompanies, true) // SYSTEM_ADMIN: cross-company (grant Employee Company Access per company to reach more)
-		if !systemAdminOnlyModules[m.ModuleKey] {
-			upsert(sysStaffRole.ID, sysComp.ID, models.ScopeCompanies, true) // sysStaff: full within company
-		}
-
-		// compA roles
-		if !systemAdminOnlyModules[m.ModuleKey] {
-			upsert(adminRoleA.ID, compA.ID, models.ScopeCompanies, true)   // ADMIN: all modules, full CRUD
-			upsert(staffRoleA.ID, compA.ID, models.ScopeDepartment, false) // STAFF: view only, dept scope
-		}
-		if !adminOnlyModules[m.ModuleKey] && !systemAdminOnlyModules[m.ModuleKey] {
-			upsert(managerRoleA.ID, compA.ID, models.ScopeCompanies, true) // MANAGER: operational only
-		}
-
-		// compB roles
-		if !systemAdminOnlyModules[m.ModuleKey] {
-			upsert(adminRoleB.ID, compB.ID, models.ScopeCompanies, true)
-			upsert(staffRoleB.ID, compB.ID, models.ScopeDepartment, false)
-		}
-		if !adminOnlyModules[m.ModuleKey] && !systemAdminOnlyModules[m.ModuleKey] {
-			upsert(managerRoleB.ID, compB.ID, models.ScopeCompanies, true)
+			config.DB.Create(&models.RolesModuleAccess{
+				RolesID: roleID, ModuleID: mID, CompaniesID: compID,
+				CanView: a.view, CanCreate: a.create, CanEdit: a.edit, CanDelete: a.del,
+				DataScope: a.scope,
+			})
 		}
 	}
+
+	grantAccess(sysRole.ID, sysComp.ID, sysAdminGrants)
+	grantAccess(sysStaffRole.ID, sysComp.ID, staffGrants)
+	grantAccess(adminRoleA.ID, compA.ID, adminGrants)
+	grantAccess(hrRoleA.ID, compA.ID, hrGrants)
+	grantAccess(financeRoleA.ID, compA.ID, financeGrants)
+	grantAccess(managerRoleA.ID, compA.ID, managerGrants)
+	grantAccess(staffRoleA.ID, compA.ID, staffGrants)
+	grantAccess(adminRoleB.ID, compB.ID, adminGrants)
+	grantAccess(hrRoleB.ID, compB.ID, hrGrants)
+	grantAccess(financeRoleB.ID, compB.ID, financeGrants)
+	grantAccess(managerRoleB.ID, compB.ID, managerGrants)
+	grantAccess(staffRoleB.ID, compB.ID, staffGrants)
 
 	// --- Employees Seeding (Using your existing logic) ---
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("admin@admin.com"), 10)
@@ -532,6 +659,8 @@ func main() {
 		{models.Employees{CompaniesID: compA.ID, RolesID: adminRoleA.ID, DeptID: deptEngA.ID, PosID: posManagerA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-01", FirstName: "Alice", LastName: "Johnson", Email: "alice@techa.com", Password: hashStr, IsActive: true}, 45250.50, &bankKBANK.ID, "Alice Johnson", "1234567890"},
 		{models.Employees{CompaniesID: compA.ID, RolesID: managerRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-02", FirstName: "Bob", LastName: "Smith", Email: "bob@techa.com", Password: hashStr, IsActive: true}, 30750.00, &bankSCB.ID, "Bob Smith", "2345678901"},
 		{models.Employees{CompaniesID: compA.ID, RolesID: staffRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-03", FirstName: "Carol", LastName: "Davis", Email: "carol@techa.com", Password: hashStr, IsActive: true}, 28500.75, &bankBBL.ID, "Carol Davis", "3456789012"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: hrRoleA.ID, DeptID: deptHrA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-04", FirstName: "Grace", LastName: "Hall", Email: "hr@techa.com", Password: hashStr, IsActive: true}, 38000.00, &bankKBANK.ID, "Grace Hall", "7890123456"},
+		{models.Employees{CompaniesID: compA.ID, RolesID: financeRoleA.ID, DeptID: deptEngA.ID, PosID: posStaffA.ID, EmploymentTypeID: &fullTimeEmpTypeA.ID, EmployeesCode: "EMP-A-05", FirstName: "Henry", LastName: "Ford", Email: "finance@techa.com", Password: hashStr, IsActive: true}, 42000.00, &bankSCB.ID, "Henry Ford", "8901234567"},
 		{models.Employees{CompaniesID: compB.ID, RolesID: adminRoleB.ID, DeptID: deptEngB.ID, PosID: posManagerB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-01", FirstName: "David", LastName: "Wilson", Email: "david@bizgroup.com", Password: hashStr, IsActive: true}, 50125.00, &bankKTB.ID, "David Wilson", "4567890123"},
 		{models.Employees{CompaniesID: compB.ID, RolesID: managerRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-02", FirstName: "Eve", LastName: "Brown", Email: "eve@bizgroup.com", Password: hashStr, IsActive: true}, 32300.25, &bankBAY.ID, "Eve Brown", "5678901234"},
 		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, "Frank Garcia", "6789012345"},

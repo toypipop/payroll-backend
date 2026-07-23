@@ -65,6 +65,13 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 - Companies list: `GET /api/v1/companies/all` (not `/companies`).
 - Payroll categories: `/api/v1/master/earning-categories`, `/api/v1/master/deduction-categories`.
 
+### Seeded roles & permission matrix
+
+- Six roles: `SYSTEM_ADMIN` (sysComp, cross-company, only holder of `CompaniesPage`) + five business roles seeded per operating company — `ADMIN`, `HR`, `FINANCE`, `MANAGER`, `STAFF`.
+- Grants live in one explicit matrix in `seed/main.go` (`sysAdminGrants`/`adminGrants`/`hrGrants`/`financeGrants`/`managerGrants`/`staffGrants`), least-privilege: a module **not listed** for a role is invisible to it (`/modules/mine` hides it from sidebar+routes, not just 403). Approve actions (leave/time logs) = `CanEdit`; there is no approve flag. `grantAccess` `log.Fatalf`s on any key missing from the module list, so a typo fails the seed loudly.
+- Data scope per role: ADMIN/HR/FINANCE = `Companies`, MANAGER = `Department` (own team), STAFF = `Own` (self). STAFF-visible modules are all `Own`-scoped.
+- Report modules are GET-only/company-scoped → view-only, so they carry full CRUD=true in seed and are single on/off toggles in the frontend `ALL_OR_NOTHING_MODULES` set (`PermissionSettings.tsx`). Reports **cannot** be `Own`-scoped (`GetPayslipReport` etc. scope by `companies_id` with accessCol `"unused"`), so STAFF gets no reports — staff see own pay via Own-scoped Salaries / Employee Earnings / Employee Deductions.
+
 ### Master-data `/options` convention
 
 Any master-data type consumed by a page other than its own "owning" settings page (a cross-page dropdown) needs a dedicated, **ungated** `GET .../options` sibling endpoint — do not loosen `CheckPermission` on the main CRUD endpoint instead. Pattern (mirrors `GetCompanies`/`GetCompaniesOptions`):
