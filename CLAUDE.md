@@ -38,6 +38,14 @@ docker compose -f docker-compose.local.yml up -d    # local Docker
 docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 ```
 
+## Deploy
+
+- `.github/workflows/deploy.yml` (backend repo only) deploys **both** repos — it SSHes in and pulls `~/payroll-backend` and `~/payroll-frontend` at the same branch, then builds from the backend dir.
+- Manual `workflow_dispatch` only; no auto-deploy on push. No CI gate before deploy.
+- Every stage (uat/sit/prod) ships from `main`. The `branch` input exists for ad-hoc branch deploys but defaults to `main`.
+- The GitHub Environment is named `server` because it holds only SSH creds (`SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`) — it identifies the target machine, not an app stage. Real env config lives in `.env` on the server.
+- Compose file is hardcoded to `docker-compose.uat.yml`; do not derive it from the environment name.
+
 ## Workflow
 
 - Small domain-scoped changes; keep route order consistent in `routes/routes.go`.

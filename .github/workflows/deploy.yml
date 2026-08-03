@@ -8,12 +8,11 @@ on:
         required: true
         type: choice
         options:
-          - uat
-          - prod
+          - server
       branch:
         description: "Branch to deploy"
         required: true
-        default: "uat"
+        default: "main"
 
 jobs:
   deploy:
@@ -39,5 +38,5 @@ jobs:
             git pull origin ${{ inputs.branch }}
 
             cd ~/payroll-backend
-            docker compose -f docker-compose.${{ inputs.environment }}.yml up -d --build
+            docker compose -f docker-compose.uat.yml up -d --build
             docker ps
