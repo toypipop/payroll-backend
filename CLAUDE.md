@@ -70,7 +70,7 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 - `ScopeLevel` is a fact about the handler, not a policy: it must match which `Apply*Scopes` the module's queries call. `AllowedActions` must match the action strings its routes pass to `CheckPermission` — several delete routes are gated by `"EDIT"`, so those modules do not list `DELETE`.
 - `migrations.SyncModuleCapabilities` projects the registry onto `app_module` columns on **every boot** (and at the end of seed), so the DB can never drift from the code and a deploy never depends on reseeding. An active, non-category module missing from the registry is a `log.Fatal`.
 - `migrations.PruneStaleRoleScopes` rewrites saved permission rows whose `DataScope` a company-level module cannot honour. It only makes stored values agree with behaviour already in effect; no role gains or loses access.
-- `UpdateRolesPermissions` coerces disallowed actions to `false` and disallowed scopes to `Companies` before writing, so the database never stores a claim the permission check ignores.
+- `service.PermissionService.Replace` coerces disallowed actions to `false` and disallowed scopes to `Companies` before writing, so the database never stores a claim the permission check ignores. It validates the whole payload *before* opening the transaction, so a rejected payload cannot clear a role's existing rows even transiently.
 - The frontend permission matrix is driven entirely by `allowed_actions` / `allowed_scopes` / `actions_atomic` on `/modules`. Never reintroduce a hardcoded module list there.
 
 - Tables are singular; qualify scoped columns e.g. `time_log.companies_id`.

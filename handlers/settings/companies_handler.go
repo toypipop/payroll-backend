@@ -2,38 +2,39 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-// --- COMPANIES ---
-// Companies has no owning company of its own. /companies/options is limited to
-// the caller's accessible companies (home + employee_company_access), while
-// /companies/all keeps the full list for the management page.
+// companyService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func companyService() *service.CompanyService {
+	return service.NewCompanyService(repository.NewCompanyRepository())
+}
 
+// GetCompanies backs /companies/options and is limited to the caller's
+// accessible companies (home plus employee_company_access), not to the companies
+// whose role can view CompaniesPage — company-level ADMIN intentionally lacks
+// that yet still needs the dropdown.
 func GetCompanies(c *gin.Context) {
 	userID, _ := repository.GetContextAuth(c)
-	// AccessibleCompanyIDs (home + employee_company_access), not
-	// GetAuthorizedCompanyIDs: the latter is scoped to companies whose role can
-	// view CompaniesPage, which company-level ADMIN intentionally lacks.
-	companyIDs := repository.AccessibleCompanyIDs(userID)
 
-	var companies []models.Companies
-	if err := config.DB.Where("id IN ?", companyIDs).Order("id ASC").Find(&companies).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	companies, err := companyService().Options(userID)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, companies)
 }
 
 func GetAllCompanies(c *gin.Context) {
-	var companies []models.Companies
-	if err := config.DB.Order("id desc").Find(&companies).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
+	companies, err := companyService().ListAll()
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, companies)
@@ -44,108 +45,59 @@ func GetAllCompanies(c *gin.Context) {
 // (except CompaniesPage, which stays SYSTEM_ADMIN-only per seed convention),
 // and company access for the creator so the new company is immediately usable.
 func CreateCompanies(c *gin.Context) {
-	var companies models.Companies
-	if err := c.ShouldBindJSON(&companies); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
 	userID, _ := repository.GetContextAuth(c)
 
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&companies).Error; err != nil {
-			return err
-		}
-
-		adminRole := models.Roles{
-			CompaniesID: companies.ID,
-			RolesName:   "ADMIN",
-			Description: "Company Admin - full access to all modules",
-		}
-		if err := tx.Create(&adminRole).Error; err != nil {
-			return err
-		}
-
-		var modules []models.AppModule
-		if err := tx.Where("is_active = ?", true).Find(&modules).Error; err != nil {
-			return err
-		}
-
-		accesses := make([]models.RolesModuleAccess, 0, len(modules))
-		for _, m := range modules {
-			if m.ModuleKey == "CompaniesPage" {
-				continue
-			}
-			accesses = append(accesses, models.RolesModuleAccess{
-				CompaniesID: companies.ID,
-				RolesID:     adminRole.ID,
-				ModuleID:    m.ID,
-				CanView:     true,
-				CanCreate:   true,
-				CanEdit:     true,
-				CanDelete:   true,
-				DataScope:   models.ScopeCompanies,
-			})
-		}
-		if len(accesses) > 0 {
-			if err := tx.Create(&accesses).Error; err != nil {
-				return err
-			}
-		}
-
-		if userID != 0 {
-			creatorAccess := models.EmployeeCompanyAccess{
-				EmployeeID: userID,
-				CompanyID:  companies.ID,
-				RoleID:     adminRole.ID,
-				IsActive:   true,
-			}
-			if err := tx.Create(&creatorAccess).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create companies"})
+	var input models.Companies
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	c.JSON(http.StatusCreated, companies)
+
+	company, err := companyService().Create(userID, input)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, company)
 }
 
 func UpdateCompanies(c *gin.Context) {
-	id := c.Param("id")
-
-	var companies models.Companies
-	if err := config.DB.First(&companies, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Companies not found"})
+	id, ok := httpx.ParseID(c, "id", "company")
+	if !ok {
 		return
 	}
 
-	var updateData struct {
+	var input struct {
 		Name    string `json:"name"`
 		TaxID   string `json:"tax_id"`
 		Address string `json:"address"`
 		Phone   string `json:"phone"`
 	}
-
-	if err := c.ShouldBindJSON(&updateData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	config.DB.Model(&companies).Updates(updateData)
-	c.JSON(http.StatusOK, companies)
+	company, err := companyService().Update(id, service.CompanyUpdate{
+		Name:    input.Name,
+		TaxID:   input.TaxID,
+		Address: input.Address,
+		Phone:   input.Phone,
+	})
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, company)
 }
 
 func DeleteCompanies(c *gin.Context) {
-	id := c.Param("id")
-
-	result := config.DB.Delete(&models.Companies{}, id)
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Companies not found"})
+	id, ok := httpx.ParseID(c, "id", "company")
+	if !ok {
 		return
 	}
 
+	if err := companyService().Delete(id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }

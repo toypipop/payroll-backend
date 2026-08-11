@@ -1,174 +1,109 @@
 package settings
 
 import (
-	"errors"
 	"net/http"
-	"payroll-backend/config"
-	"payroll-backend/models"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
+// employeeCompanyAccessService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func employeeCompanyAccessService() *service.EmployeeCompanyAccessService {
+	return service.NewEmployeeCompanyAccessService(
+		repository.NewEmployeeCompanyAccessRepository(),
+		repository.NewRoleRepository(),
+	)
+}
+
 type employeeCompanyAccessInput struct {
-	EmployeeID uint `json:"employee_id" binding:"required"`
-	CompanyID  uint `json:"company_id" binding:"required"`
-	RoleID     uint `json:"role_id" binding:"required"`
+	EmployeeID uint `json:"employee_id"`
+	CompanyID  uint `json:"company_id"`
+	RoleID     uint `json:"role_id"`
 	IsActive   bool `json:"is_active"`
 }
 
+// toServiceInput converts the wire shape into the service's input type.
+func (i employeeCompanyAccessInput) toServiceInput() service.EmployeeCompanyAccessInput {
+	return service.EmployeeCompanyAccessInput{
+		EmployeeID: i.EmployeeID,
+		CompanyID:  i.CompanyID,
+		RoleID:     i.RoleID,
+		IsActive:   i.IsActive,
+	}
+}
+
 func GetEmployeeCompanyAccess(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var mappings []models.EmployeeCompanyAccess
-	if err := config.DB.Scopes(
-		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
-	).
-		Preload("Employee").
-		Preload("Company").
-		Preload("Role").
-		Order("employee_company_access.employee_id ASC, employee_company_access.company_id ASC").
-		Find(&mappings).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employee company access"})
+	mappings, err := employeeCompanyAccessService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, mappings)
 }
 
 func CreateEmployeeCompanyAccess(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
 	var input employeeCompanyAccessInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	mapping, err := buildEmployeeCompanyAccess(c, currentUser, dataScope, input)
+	mapping, err := employeeCompanyAccessService().Create(scope, input.toServiceInput())
 	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		httpx.RespondError(c, err)
 		return
 	}
-	mapping.ID = 0
-
-	err = config.DB.Transaction(func(tx *gorm.DB) error {
-		return tx.Create(&mapping).Error
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create employee company access"})
-		return
-	}
-
-	config.DB.Preload("Employee").Preload("Company").Preload("Role").First(&mapping, mapping.ID)
 	c.JSON(http.StatusCreated, mapping)
 }
 
 func UpdateEmployeeCompanyAccess(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
-
-	var existing models.EmployeeCompanyAccess
-	if err := config.DB.Scopes(
-		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
-	).First(&existing, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Access mapping not found"})
+	id, ok := httpx.ParseID(c, "id", "access mapping")
+	if !ok {
 		return
 	}
 
 	var input employeeCompanyAccessInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	mapping, err := buildEmployeeCompanyAccess(c, currentUser, dataScope, input)
+	mapping, err := employeeCompanyAccessService().Update(scope, id, input.toServiceInput())
 	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		httpx.RespondError(c, err)
 		return
 	}
-
-	err = config.DB.Transaction(func(tx *gorm.DB) error {
-		return tx.Model(&existing).Updates(map[string]interface{}{
-			"employee_id": mapping.EmployeeID,
-			"company_id":  mapping.CompanyID,
-			"role_id":     mapping.RoleID,
-			"is_active":   mapping.IsActive,
-		}).Error
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update employee company access"})
-		return
-	}
-
-	config.DB.Preload("Employee").Preload("Company").Preload("Role").First(&existing, existing.ID)
-	c.JSON(http.StatusOK, existing)
+	c.JSON(http.StatusOK, mapping)
 }
 
 func DeleteEmployeeCompanyAccess(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "access mapping")
+	if !ok {
 		return
 	}
 
-	result := config.DB.Scopes(
-		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
-	).Where("id = ?", id).Delete(&models.EmployeeCompanyAccess{})
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Access mapping not found or unauthorized"})
+	if err := employeeCompanyAccessService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
-}
-
-func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, dataScope models.DataScope, input employeeCompanyAccessInput) (models.EmployeeCompanyAccess, error) {
-	if _, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompanyID); !ok {
-		return models.EmployeeCompanyAccess{}, errors.New("access denied for this company")
-	}
-
-	var employee models.Employees
-	if err := config.DB.Select("id, companies_id").First(&employee, input.EmployeeID).Error; err != nil {
-		return models.EmployeeCompanyAccess{}, errors.New("employee not found")
-	}
-
-	var role models.Roles
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "roles.companies_id"),
-	).First(&role, input.RoleID).Error; err != nil {
-		return models.EmployeeCompanyAccess{}, errors.New("access denied to this role")
-	}
-	if role.CompaniesID != input.CompanyID {
-		return models.EmployeeCompanyAccess{}, errors.New("role does not belong to selected company")
-	}
-
-	return models.EmployeeCompanyAccess{
-		EmployeeID: input.EmployeeID,
-		CompanyID:  input.CompanyID,
-		RoleID:     input.RoleID,
-		IsActive:   input.IsActive,
-	}, nil
 }

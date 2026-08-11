@@ -24,10 +24,10 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
 ## Rounds
 
 - [x] **1 — plumbing + pilot** · `apperr/`, `handlers/httpx/`, `department_categories` (1 file)
-- [ ] **2 — settings master-data** (11)
+- [x] **2 — settings master-data** (11) · `handlers/settings` is now entirely free of `config.DB`
   - [x] 2a · departments, positions, roles
   - [x] 2b · banks, holidays, work_locations, leave_type_settings, day_offs
-  - [ ] 2c · companies, employee_company_access, permission — `CompanyRepository` already exists with `ListScoped`; add the CRUD to it rather than starting a new file
+  - [x] 2c · companies, employee_company_access, permission
 - [ ] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig
 - [ ] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries
 - [ ] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary
