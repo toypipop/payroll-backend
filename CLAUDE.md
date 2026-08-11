@@ -61,7 +61,7 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
   - `AccessScope` equivalents: `scope.ApplyCompany(...)` / `scope.ApplyEmployee(...)`.
 - There is no `ApplyContextScopes` and no `"unused"` sentinel any more. The old single function decided at runtime by string-comparing the access column, so a typo compiled fine and a non-employee column (`department.id` vs an employee id) silently filtered on nonsense.
 - There is no `ApplyScopes` either — it scoped by *reachable* companies and skipped company filtering entirely at `ScopeAll`, instead of the companies the role authorizes for the action.
-- Both entry points skip the company filter when `authorized_company_ids` is empty (no `CheckPermission` ran); such routes must do their own filtering.
+- Both entry points **deny everything** when the authorized company list is empty (`applyCompanyFilter` adds `1 = 0`), matching `ScopeCompanyIDs` and the `ScopeDepartment` branch of `scopeDataAccess`. Three guards mean nothing reaches it empty today — `AuthMiddleware` 403s on empty `AccessibleCompanyIDs`, `CheckPermission` 403s unless it resolved a company, and an FK to `companies(id)` makes `companies_id = 0` unstorable — so this is fail-closed defence, not a hole being patched. Do not "simplify" it back to returning the query unfiltered.
 - `ScopeDepartment` matches on `department.category_id`, never `employees.dept_id`: two companies' "HR" departments share one `DepartmentCategory` so a Department-scoped role reaches its counterparts across authorized companies.
 
 ### Module capabilities (what the permission UI is allowed to offer)

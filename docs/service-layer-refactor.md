@@ -38,7 +38,7 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
 
 ## Found while migrating — decide separately, do not fold into a refactor commit
 
-- `applyCompanyFilter` adds no filter at all when the authorized company list is empty, and `GetAuthorizedCompanyIDs` falls back to `AccessibleCompanyIDs`, which is empty for a user whose `companies_id` is 0 with no active `employee_company_access` row. Such a user reads every company's rows on any company-scoped endpoint. Narrow, but it is a leak by default rather than a denial by default. Changing it flips behaviour for real users, so it needs its own decision.
+- ~~`applyCompanyFilter` returns the query unfiltered on an empty authorized company list~~ — **resolved**, now denies. Investigated first: this was never reachable. `AuthMiddleware` 403s when `AccessibleCompanyIDs` is empty, `CheckPermission` 403s unless it resolved at least one company, and `fk_employees_companies` makes `companies_id = 0` unstorable (verified by attempting the update: FK violation). Changed anyway so the branch fails closed if any of those guards ever moves. No user's access changed — confirmed by re-measuring all four seeded logins.
 - `GetRoles` had no scoping whatsoever; fixed in round 2a because RolesPage is declared company-level and the doc comment already claimed the scoping existed.
 
 ## Database reconciliation (checked 2026-08-11)

@@ -225,12 +225,21 @@ func GetContextAuth(c *gin.Context) (uint, models.DataScope) {
 // Picking the wrong one is a compile-time decision, not a runtime string
 // comparison — that is the point of the split.
 
-// applyCompanyFilter narrows to the authorized companies. An empty list means
-// CheckPermission never ran (public or hand-rolled route), so the caller is
-// responsible for its own filtering and nothing is added here.
+// applyCompanyFilter narrows to the authorized companies, denying everything
+// when there are none.
+//
+// No request can currently arrive here with an empty list: AuthMiddleware 403s
+// when AccessibleCompanyIDs is empty, CheckPermission 403s unless it resolved at
+// least one company, and an FK to companies(id) makes companies_id = 0
+// unstorable. So this branch is unreachable rather than a live hole. It is
+// written to deny anyway, because the alternative — returning db unfiltered —
+// means the day one of those three guards moves, the failure mode is disclosing
+// every company's rows instead of none. Absence of an authorized company should
+// read as no access, which is how ScopeCompanyIDs and the Department branch of
+// scopeDataAccess already treat it.
 func applyCompanyFilter(db *gorm.DB, companyIDs []uint, companiesCol string) *gorm.DB {
 	if len(companyIDs) == 0 {
-		return db
+		return db.Where("1 = 0")
 	}
 	return db.Scopes(ScopeCompanyIDs(companyIDs, companiesCol))
 }
