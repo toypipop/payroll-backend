@@ -54,13 +54,19 @@ func SyncModuleCapabilities(db *gorm.DB) error {
 			continue
 		}
 
+		// Must be a struct update, not a map: GORM applies the serializer:json tag
+		// on AllowedActions/AllowedScopes only when it knows which model field it
+		// is writing. A map hands the raw []string to the driver, which cannot type
+		// a text parameter from it (SQLSTATE 42P18). Select names the columns so the
+		// false value of ActionsAtomic is still written instead of skipped as a zero.
 		if err := db.Model(&models.AppModule{}).
 			Where("id = ?", module.ID).
-			Updates(map[string]any{
-				"scope_level":     capability.ScopeLevel,
-				"allowed_actions": capability.AllowedActions,
-				"allowed_scopes":  scopes,
-				"actions_atomic":  capability.ActionsAtomic,
+			Select("scope_level", "allowed_actions", "allowed_scopes", "actions_atomic").
+			Updates(models.AppModule{
+				ScopeLevel:     capability.ScopeLevel,
+				AllowedActions: capability.AllowedActions,
+				AllowedScopes:  scopes,
+				ActionsAtomic:  capability.ActionsAtomic,
 			}).Error; err != nil {
 			return fmt.Errorf("sync capabilities for %s: %w", module.ModuleKey, err)
 		}
