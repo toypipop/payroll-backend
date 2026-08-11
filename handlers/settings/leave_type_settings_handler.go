@@ -2,27 +2,29 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-func GetLeaveTypeSettings(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+// leaveTypeService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func leaveTypeService() *service.LeaveTypeSettingService {
+	return service.NewLeaveTypeSettingService(repository.NewLeaveTypeSettingRepository())
+}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+func GetLeaveTypeSettings(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var leaveTypes []models.LeaveTypeSetting
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
-	).Preload("Companies").Order("name").Find(&leaveTypes).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave types"})
+	leaveTypes, err := leaveTypeService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, leaveTypes)
@@ -32,11 +34,14 @@ func GetLeaveTypeSettings(c *gin.Context) {
 // by page permission (mirrors GetCompanies) so any role submitting a leave
 // request can see whether leave types exist for a company.
 func GetLeaveTypeOptions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	leaveTypes, err := leaveTypeService().Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -45,15 +50,6 @@ func GetLeaveTypeOptions(c *gin.Context) {
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var leaveTypes []models.LeaveTypeSetting
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
-	).Order("name").Find(&leaveTypes).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave types"})
-		return
-	}
-
 	options := make([]option, 0, len(leaveTypes))
 	for _, lt := range leaveTypes {
 		options = append(options, option{ID: lt.ID, Name: lt.Name, CompaniesID: lt.CompaniesID})
@@ -62,76 +58,61 @@ func GetLeaveTypeOptions(c *gin.Context) {
 }
 
 func CreateLeaveTypeSetting(c *gin.Context) {
-	var lt models.LeaveTypeSetting
-	if err := c.ShouldBindJSON(&lt); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, lt.CompaniesID)
+	scope, ok := httpx.RequestScope(c)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
-	lt.CompaniesID = companyID
 
-	if err := config.DB.Create(&lt).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create leave type"})
+	var input models.LeaveTypeSetting
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	c.JSON(http.StatusCreated, lt)
+
+	leaveType, err := leaveTypeService().Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, leaveType)
 }
 
 func UpdateLeaveTypeSetting(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "leave type")
+	if !ok {
 		return
 	}
 
-	var lt models.LeaveTypeSetting
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
-	).Where("id = ?", id).First(&lt).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Leave type not found or unauthorized"})
+	// companies_id is not accepted here: the company is immutable after creation.
+	var input models.LeaveTypeSetting
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	var input struct {
-		Name           string  `json:"name" binding:"required"`
-		IsPaid         bool    `json:"is_paid"`
-		MaxDaysPerYear float64 `json:"max_days_per_year"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	leaveType, err := leaveTypeService().Update(scope, id, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-	lt.Name = input.Name
-	lt.IsPaid = input.IsPaid
-	lt.MaxDaysPerYear = input.MaxDaysPerYear
-	config.DB.Save(&lt)
-	c.JSON(http.StatusOK, lt)
+	c.JSON(http.StatusOK, leaveType)
 }
 
 func DeleteLeaveTypeSetting(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var lt models.LeaveTypeSetting
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
-	).Where("id = ?", id).First(&lt).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Leave type not found or unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
-	config.DB.Delete(&lt)
+	id, ok := httpx.ParseID(c, "id", "leave type")
+	if !ok {
+		return
+	}
+
+	if err := leaveTypeService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Leave type deleted"})
 }

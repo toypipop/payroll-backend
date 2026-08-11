@@ -2,27 +2,29 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-func GetWorkLocations(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+// workLocationService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func workLocationService() *service.WorkLocationService {
+	return service.NewWorkLocationService(repository.NewWorkLocationRepository())
+}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+func GetWorkLocations(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var locations []models.WorkLocation
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
-	).Preload("Companies").Order("name").Find(&locations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work locations"})
+	locations, err := workLocationService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, locations)
@@ -32,11 +34,14 @@ func GetWorkLocations(c *gin.Context) {
 // Ungated by page permission (mirrors GetCompanies) so any role filling
 // out a time log needs this dropdown, not just WorkLocationPage users.
 func GetWorkLocationOptions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	locations, err := workLocationService().Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -45,15 +50,6 @@ func GetWorkLocationOptions(c *gin.Context) {
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var locations []models.WorkLocation
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
-	).Order("name").Find(&locations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work locations"})
-		return
-	}
-
 	options := make([]option, 0, len(locations))
 	for _, l := range locations {
 		options = append(options, option{ID: l.ID, Name: l.Name, CompaniesID: l.CompaniesID})
@@ -62,72 +58,62 @@ func GetWorkLocationOptions(c *gin.Context) {
 }
 
 func CreateWorkLocation(c *gin.Context) {
-	var loc models.WorkLocation
-	if err := c.ShouldBindJSON(&loc); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, loc.CompaniesID)
+	scope, ok := httpx.RequestScope(c)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
-	loc.CompaniesID = companyID
 
-	if err := config.DB.Create(&loc).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work location"})
+	var input models.WorkLocation
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	c.JSON(http.StatusCreated, loc)
+
+	location, err := workLocationService().Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, location)
 }
 
 func UpdateWorkLocation(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
-
-	var loc models.WorkLocation
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
-	).Where("id = ?", id).First(&loc).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Work location not found or unauthorized"})
+	id, ok := httpx.ParseID(c, "id", "work location")
+	if !ok {
 		return
 	}
 
 	var input struct {
-		Name string `json:"name" binding:"required"`
+		Name string `json:"name"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	loc.Name = input.Name
-	config.DB.Save(&loc)
-	c.JSON(http.StatusOK, loc)
+
+	location, err := workLocationService().Update(scope, id, input.Name)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, location)
 }
 
 func DeleteWorkLocation(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var loc models.WorkLocation
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
-	).Where("id = ?", id).First(&loc).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Work location not found or unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
-	config.DB.Delete(&loc)
+	id, ok := httpx.ParseID(c, "id", "work location")
+	if !ok {
+		return
+	}
+
+	if err := workLocationService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Work location deleted"})
 }

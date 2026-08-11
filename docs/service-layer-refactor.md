@@ -7,7 +7,7 @@ Goal: every handler goes handler → service → repository, like the `employees
 1. **Per domain, three files:** `repository/<domain>_repository.go` (interface + `gorm*` impl + `New*`), `service/<domain>_service.go` (rules + sentinel errors, no gin, no `config.DB`), `handlers/<pkg>/<domain>_handler.go` (bind → service → map error).
 2. **Errors:** domain sentinels are built from `apperr.Validation/NotFound/Forbidden/Conflict/Unauthorized`. The *kind* picks the status. `handlers/httpx.RespondError` is the only status mapper in the codebase — never write a per-domain `switch`. Anything not authored via `apperr` is `KindInternal` → 500 with a generic message, so driver/SQL text cannot leak.
 3. **Shared handler plumbing:** `httpx.RequestScope`, `httpx.ParseID`, `httpx.BindJSON`, `httpx.RespondError`. Call them directly; do not re-wrap them per package.
-4. **Scope-filter oracle:** `models/module_capability.go` decides which filter is correct. `ScopeLevel == "employee"` ⟺ repository uses `scope.ApplyEmployee`; `"company"` ⟺ `scope.ApplyCompany`. Check this pair for every domain before committing — this is where a silent cross-company data leak would come from.
+4. **Scope-filter oracle:** `models/module_capability.go` decides which filter is correct. `ScopeLevel == "employee"` ⟺ repository uses `scope.ApplyEmployee`; `"company"` ⟺ `scope.ApplyCompany`. Check this pair for every domain before committing — this is where a silent cross-company data leak would come from. One nuance: `companyLevel` states that `Own`/`Department` are meaningless for the module, **not** that its table must have a `companies_id`. `MasterBankPage` and `DepartmentSettings`' category list are declared company-level over globally shared tables (`bank`, `department_category`) that have no company column, so their repositories correctly apply no filter at all.
 5. **Comments:** English, exactly one line per comment, no wrapping. Excess rationale gets cut, not moved. New code follows this already; the sweep over pre-existing comments is round 9.
 
 ## Verification per round
@@ -26,8 +26,8 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
 - [x] **1 — plumbing + pilot** · `apperr/`, `handlers/httpx/`, `department_categories` (1 file)
 - [ ] **2 — settings master-data** (11)
   - [x] 2a · departments, positions, roles
-  - [ ] 2b · banks, holidays, work_locations, leave_type_settings, day_offs
-  - [ ] 2c · companies, employee_company_access, permission
+  - [x] 2b · banks, holidays, work_locations, leave_type_settings, day_offs
+  - [ ] 2c · companies, employee_company_access, permission — `CompanyRepository` already exists with `ListScoped`; add the CRUD to it rather than starting a new file
 - [ ] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig
 - [ ] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries
 - [ ] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary

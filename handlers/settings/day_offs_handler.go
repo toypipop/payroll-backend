@@ -2,30 +2,38 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
-	"payroll-backend/models"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
+// dayOffService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func dayOffService() *service.DayOffService {
+	return service.NewDayOffService(repository.NewDayOffRepository(), repository.NewCompanyRepository())
+}
+
+// dayOffRequest is the wire shape for both create and update.
+type dayOffRequest struct {
+	CompaniesID uint   `json:"companies_id"`
+	Weekday     int    `json:"weekday"`
+	Name        string `json:"name"`
+	IsPaid      bool   `json:"is_paid"`
+}
+
 func GetDayOffs(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var dayOffs []models.DayOff
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
-	).Preload("Companies").Order("weekday ASC, name ASC").Find(&dayOffs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch day offs"})
+	dayOffs, err := dayOffService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, dayOffs)
 }
 
@@ -34,11 +42,14 @@ func GetDayOffs(c *gin.Context) {
 // Time Log bulk-add form) can default weekday selection to a company's
 // configured day-offs without needing DayOffPage permission.
 func GetDayOffOptions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	dayOffs, err := dayOffService().Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -47,15 +58,6 @@ func GetDayOffOptions(c *gin.Context) {
 		Weekday     int  `json:"weekday"`
 		CompaniesID uint `json:"companies_id"`
 	}
-
-	var dayOffs []models.DayOff
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
-	).Find(&dayOffs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch day offs"})
-		return
-	}
-
 	options := make([]option, 0, len(dayOffs))
 	for _, d := range dayOffs {
 		options = append(options, option{ID: d.ID, Weekday: d.Weekday, CompaniesID: d.CompaniesID})
@@ -64,120 +66,84 @@ func GetDayOffOptions(c *gin.Context) {
 }
 
 func GetDayOffCompanies(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var companies []models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
-	).Order("id ASC").Find(&companies).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
+	companies, err := dayOffService().Companies(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, companies)
 }
 
 func CreateDayOff(c *gin.Context) {
-	var input struct {
-		CompaniesID uint   `json:"companies_id"`
-		Weekday     int    `json:"weekday" binding:"min=0,max=6"`
-		Name        string `json:"name" binding:"required"`
-		IsPaid      bool   `json:"is_paid"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	targetCompanyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
+	scope, ok := httpx.RequestScope(c)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
 
-	var company models.Companies
-	if err := config.DB.Select("id").First(&company, targetCompanyID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid company"})
+	var input dayOffRequest
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	dayOff := models.DayOff{
-		CompaniesID: targetCompanyID,
+	dayOff, err := dayOffService().Create(scope, service.DayOffInput{
+		CompaniesID: input.CompaniesID,
 		Weekday:     input.Weekday,
 		Name:        input.Name,
 		IsPaid:      input.IsPaid,
-	}
-
-	if err := config.DB.Create(&dayOff).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create day off"})
+	})
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusCreated, dayOff)
 }
 
 func UpdateDayOff(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "day off")
+	if !ok {
 		return
 	}
 
-	var dayOff models.DayOff
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
-	).Where("id = ?", id).First(&dayOff).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Day off not found or unauthorized"})
+	// companies_id is accepted and ignored: the company is immutable after creation.
+	var input dayOffRequest
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	var input struct {
-		CompaniesID uint   `json:"companies_id"`
-		Weekday     int    `json:"weekday" binding:"min=0,max=6"`
-		Name        string `json:"name" binding:"required"`
-		IsPaid      bool   `json:"is_paid"`
-	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	dayOff, err := dayOffService().Update(scope, id, service.DayOffInput{
+		Weekday: input.Weekday,
+		Name:    input.Name,
+		IsPaid:  input.IsPaid,
+	})
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
-	// Company is immutable after creation — ignore companies_id from the request.
-	dayOff.Weekday = input.Weekday
-	dayOff.Name = input.Name
-	dayOff.IsPaid = input.IsPaid
-	config.DB.Save(&dayOff)
 	c.JSON(http.StatusOK, dayOff)
 }
 
 func DeleteDayOff(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var dayOff models.DayOff
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
-	).Where("id = ?", id).First(&dayOff).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Day off not found or unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "day off")
+	if !ok {
 		return
 	}
 
-	config.DB.Delete(&dayOff)
+	if err := dayOffService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Day off deleted"})
 }

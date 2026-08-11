@@ -2,125 +2,107 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
-	"payroll-backend/models"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/repository"
-	"time"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-func GetHolidays(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+// holidayService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func holidayService() *service.HolidayService {
+	return service.NewHolidayService(repository.NewHolidayRepository())
+}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+func GetHolidays(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var holidays []models.Holiday
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "holiday.companies_id"),
-	).Preload("Companies").Order("date").Find(&holidays).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch holidays"})
+	holidays, err := holidayService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, holidays)
 }
 
 func CreateHoliday(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
 	var input struct {
 		CompaniesID uint   `json:"companies_id"`
-		Date        string `json:"date" binding:"required"`
-		Name        string `json:"name" binding:"required"`
+		Date        string `json:"date"`
+		Name        string `json:"name"`
 		IsPaid      bool   `json:"is_paid"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	parsedDate, err := time.Parse("2006-01-02", input.Date)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format, expected YYYY-MM-DD"})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-
-	holiday := models.Holiday{
-		CompaniesID: companyID,
-		Date:        parsedDate,
+	holiday, err := holidayService().Create(scope, service.HolidayInput{
+		CompaniesID: input.CompaniesID,
+		Date:        input.Date,
 		Name:        input.Name,
 		IsPaid:      input.IsPaid,
-	}
-	if err := config.DB.Create(&holiday).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create holiday"})
+	})
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, holiday)
 }
 
 func UpdateHoliday(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "holiday")
+	if !ok {
 		return
 	}
 
-	var holiday models.Holiday
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "holiday.companies_id"),
-	).Where("id = ?", id).First(&holiday).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Holiday not found or unauthorized"})
-		return
-	}
-
+	// companies_id is not accepted here: the company is immutable after creation.
 	var input struct {
-		Date   string `json:"date" binding:"required"`
-		Name   string `json:"name" binding:"required"`
+		Date   string `json:"date"`
+		Name   string `json:"name"`
 		IsPaid bool   `json:"is_paid"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	parsedDate, err := time.Parse("2006-01-02", input.Date)
+
+	holiday, err := holidayService().Update(scope, id, service.HolidayInput{
+		Date:   input.Date,
+		Name:   input.Name,
+		IsPaid: input.IsPaid,
+	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format, expected YYYY-MM-DD"})
+		httpx.RespondError(c, err)
 		return
 	}
-	holiday.Date = parsedDate
-	holiday.Name = input.Name
-	holiday.IsPaid = input.IsPaid
-	config.DB.Save(&holiday)
 	c.JSON(http.StatusOK, holiday)
 }
 
 func DeleteHoliday(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var holiday models.Holiday
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "holiday.companies_id"),
-	).Where("id = ?", id).First(&holiday).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Holiday not found or unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
-	config.DB.Delete(&holiday)
+	id, ok := httpx.ParseID(c, "id", "holiday")
+	if !ok {
+		return
+	}
+
+	if err := holidayService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Holiday deleted"})
 }
