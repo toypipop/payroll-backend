@@ -2,54 +2,54 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// --- POSITIONS ---
+// positionService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func positionService() *service.PositionService {
+	return service.NewPositionService(repository.NewPositionRepository())
+}
 
 func GetPositions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var positions []models.Position
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
-	).Preload("Companies").Find(&positions).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
+	positions, err := positionService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, positions)
 }
 
-// GetPositionOptions returns a minimal id/name list for dropdowns. Ungated
-// by page permission (mirrors GetCompanies) so any role filling out an
+// GetPositionOptions returns a minimal id/name list for dropdowns. Ungated by
+// page permission (mirrors GetCompanies) so any role filling out an
 // employee-linked form can see whether positions exist for a company.
 func GetPositionOptions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+	positions, err := positionService().Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 
 	type option struct {
 		ID          uint   `json:"id"`
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var positions []models.Position
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
-	).Find(&positions).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
-		return
-	}
-
 	options := make([]option, 0, len(positions))
 	for _, p := range positions {
 		options = append(options, option{ID: p.ID, Name: p.PosName, CompaniesID: p.CompaniesID})
@@ -58,84 +58,63 @@ func GetPositionOptions(c *gin.Context) {
 }
 
 func CreatePosition(c *gin.Context) {
-	var pos models.Position
-	if err := c.ShouldBindJSON(&pos); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, pos.CompaniesID)
+	scope, ok := httpx.RequestScope(c)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
 	}
-	pos.CompaniesID = companyID
 
-	if err := config.DB.Create(&pos).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create position"})
+	var input models.Position
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	c.JSON(http.StatusCreated, pos)
+
+	position, err := positionService().Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, position)
 }
 
 func UpdatePosition(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var pos models.Position
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
-	).Where("id = ?", id).First(&pos).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "position")
+	if !ok {
 		return
 	}
 
+	// companies_id is accepted and ignored: the company is immutable after creation.
 	var input struct {
-		PosName     string `json:"pos_name" binding:"required"`
-		CompaniesID uint   `json:"companies_id"`
+		PosName string `json:"pos_name"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	// Position name is non-calculation metadata and can be updated even if used.
-	// Company is immutable after creation — ignore companies_id from the request.
-	pos.PosName = input.PosName
-	config.DB.Save(&pos)
-	c.JSON(http.StatusOK, pos)
+	position, err := positionService().Update(scope, id, input.PosName)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, position)
 }
 
 func DeletePosition(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var pos models.Position
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
-	).Where("id = ?", id).First(&pos).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "position")
+	if !ok {
 		return
 	}
 
-	result := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
-	).Where("id = ?", id).Delete(&models.Position{})
-
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
+	if err := positionService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "Position deleted successfully"})
 }
