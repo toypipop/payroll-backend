@@ -24,7 +24,10 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
 ## Rounds
 
 - [x] **1 — plumbing + pilot** · `apperr/`, `handlers/httpx/`, `department_categories` (1 file)
-- [ ] **2 — settings master-data** (11) · banks, holidays, work_locations, leave_type_settings, day_offs, departments, positions, roles, companies, employee_company_access, permission
+- [ ] **2 — settings master-data** (11)
+  - [x] 2a · departments, positions, roles
+  - [ ] 2b · banks, holidays, work_locations, leave_type_settings, day_offs
+  - [ ] 2c · companies, employee_company_access, permission
 - [ ] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig
 - [ ] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries
 - [ ] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary
@@ -32,6 +35,24 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
 - [ ] **7 — reports** (1) · reports
 - [ ] **8 — auth** (1) · auth — repository + service for lookup/claims; JWT signing and cookie writing stay in the handler because those are HTTP
 - [ ] **9 — comment sweep** · both repos, rule 5 above
+
+## Found while migrating — decide separately, do not fold into a refactor commit
+
+- `applyCompanyFilter` adds no filter at all when the authorized company list is empty, and `GetAuthorizedCompanyIDs` falls back to `AccessibleCompanyIDs`, which is empty for a user whose `companies_id` is 0 with no active `employee_company_access` row. Such a user reads every company's rows on any company-scoped endpoint. Narrow, but it is a leak by default rather than a denial by default. Changing it flips behaviour for real users, so it needs its own decision.
+- `GetRoles` had no scoping whatsoever; fixed in round 2a because RolesPage is declared company-level and the doc comment already claimed the scoping existed.
+
+## Database reconciliation (checked 2026-08-11)
+
+An existing database does not need wiping to match a fresh seed. The boot chain
+`RemoveDashboardModule` → `SyncModuleCapabilities` → `PruneStaleRoleScopes`
+already reconciles the module and capability projection on every start. Measured
+on the local database after fixing the sync: no seeded module missing, no stale
+module row, no capability column disagreeing with the registry, no company-level
+module holding a non-Companies scope.
+
+Reconciliation belongs in `migrations/` (runs every boot), never in seed — seed
+only creates and updates, so it can never remove a row the code stopped
+declaring. That asymmetry is why `RemoveDashboardModule` had to exist.
 
 ## Endgame
 
