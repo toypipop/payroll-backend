@@ -12,7 +12,7 @@ import (
 )
 
 func GetPayrollConfigs(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -24,7 +24,7 @@ func GetPayrollConfigs(c *gin.Context) {
 
 	// Fetch latest active config per company
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Order("companies.id ASC").Preload("PayrollConfig", func(db *gorm.DB) *gorm.DB {
 		return db.Where("deleted_at IS NULL").Order("created_at DESC").Limit(1)
 	}).Find(&companies).Error
@@ -39,7 +39,7 @@ func GetPayrollConfigs(c *gin.Context) {
 
 // UpdatePayrollConfig saves new config with soft delete versioning
 func UpdatePayrollConfig(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var input models.PayrollConfig
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -56,7 +56,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 	// Validate user company access
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this Companie"})
 		return
@@ -83,7 +83,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 
 // GetConfigByPayrollCycle fetches config by cycle
 func GetConfigByPayrollCycle(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	cycleID := c.Param("cycle_id")
 
@@ -96,7 +96,7 @@ func GetConfigByPayrollCycle(c *gin.Context) {
 	// Fetch cycle for company ID
 	var cycle models.PayrollCycle
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "payroll_cycle.companies_id"),
 	).Preload("Companies").First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found or access denied"})
 		return

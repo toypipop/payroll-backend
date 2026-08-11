@@ -70,7 +70,7 @@ func GetAttendanceSummary(c *gin.Context) {
 	// Fetch employees within scope
 	var employees []models.Employees
 	config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).Preload("Companies").Find(&employees)
 
 	if len(employees) == 0 {

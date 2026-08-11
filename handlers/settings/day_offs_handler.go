@@ -10,7 +10,7 @@ import (
 )
 
 func GetDayOffs(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -20,7 +20,7 @@ func GetDayOffs(c *gin.Context) {
 
 	var dayOffs []models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
 	).Preload("Companies").Order("weekday ASC, name ASC").Find(&dayOffs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch day offs"})
 		return
@@ -34,7 +34,7 @@ func GetDayOffs(c *gin.Context) {
 // Time Log bulk-add form) can default weekday selection to a company's
 // configured day-offs without needing DayOffPage permission.
 func GetDayOffOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -50,7 +50,7 @@ func GetDayOffOptions(c *gin.Context) {
 
 	var dayOffs []models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
 	).Find(&dayOffs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch day offs"})
 		return
@@ -64,7 +64,7 @@ func GetDayOffOptions(c *gin.Context) {
 }
 
 func GetDayOffCompanies(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -74,7 +74,7 @@ func GetDayOffCompanies(c *gin.Context) {
 
 	var companies []models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Order("id ASC").Find(&companies).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch companies"})
 		return
@@ -128,7 +128,7 @@ func CreateDayOff(c *gin.Context) {
 
 func UpdateDayOff(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -138,7 +138,7 @@ func UpdateDayOff(c *gin.Context) {
 
 	var dayOff models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
 	).Where("id = ?", id).First(&dayOff).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Day off not found or unauthorized"})
 		return
@@ -165,14 +165,14 @@ func UpdateDayOff(c *gin.Context) {
 
 func DeleteDayOff(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var dayOff models.DayOff
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "day_off.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "day_off.companies_id"),
 	).Where("id = ?", id).First(&dayOff).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Day off not found or unauthorized"})
 		return

@@ -19,7 +19,7 @@ func GetEmployeeDeductions(c *gin.Context) {
 
 	var items []models.EmployeeDeduction
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_deduction.companies_id", "employee_deduction.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_deduction.companies_id", "employee_deduction.employees_id"),
 	).
 		Preload("DeductionType").
 		Preload("Employees").
@@ -49,7 +49,7 @@ func CreateEmployeeDeduction(c *gin.Context) {
 	}
 	input.CompaniesID = targetEmployee.CompaniesID
 	var deductionType models.DeductionType
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id")).
 		First(&deductionType, input.DeductionTypeID).Error; err != nil || deductionType.CompaniesID != input.CompaniesID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Deduction type does not belong to selected company"})
 		return
@@ -70,7 +70,7 @@ func UpdateEmployeeDeduction(c *gin.Context) {
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var item models.EmployeeDeduction
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employee_deduction.companies_id", "employee_deduction.employees_id")).
+	if err := config.DB.Scopes(repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_deduction.companies_id", "employee_deduction.employees_id")).
 		Where("id = ?", id).First(&item).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
@@ -87,7 +87,7 @@ func UpdateEmployeeDeduction(c *gin.Context) {
 		return
 	}
 	var deductionType models.DeductionType
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id")).
 		First(&deductionType, input.DeductionTypeID).Error; err != nil || deductionType.CompaniesID != targetEmployee.CompaniesID {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Deduction type does not belong to selected company"})
 		return
@@ -112,7 +112,7 @@ func DeleteEmployeeDeduction(c *gin.Context) {
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
-	result := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employee_deduction.companies_id", "employee_deduction.employees_id")).
+	result := config.DB.Scopes(repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_deduction.companies_id", "employee_deduction.employees_id")).
 		Where("id = ?", id).
 		Delete(&models.EmployeeDeduction{})
 	if result.RowsAffected == 0 {

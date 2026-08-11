@@ -22,7 +22,7 @@ func GetSalaries(c *gin.Context) {
 
 	var employees []models.Employees
 	if err := config.DB.
-		Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
+		Scopes(repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
 		Preload("Companies").
 		Preload("Department").
 		Preload("Position").
@@ -50,7 +50,7 @@ func GetSalaryHistory(c *gin.Context) {
 
 	var employee models.Employees
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
 	).Select("id, companies_id").First(&employee, employeesID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found or access denied"})
 		return

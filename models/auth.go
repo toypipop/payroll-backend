@@ -68,6 +68,16 @@ type AppModule struct {
 	ParentID   *uint                 `json:"parent_id"`
 	IsCategory bool                  `gorm:"default:false" json:"is_category"`
 	IsActive   bool                  `gorm:"default:true" json:"is_active"`
+
+	// Capability columns. These are a projection of the moduleCapabilities map
+	// in module_capability.go, rewritten on every boot — never edit them by
+	// hand or in seed, the next start will overwrite them. They exist as
+	// columns so the permission UI can be driven entirely by /modules instead
+	// of keeping its own hardcoded lists.
+	ScopeLevel     ModuleScopeLevel `gorm:"size:20;not null;default:'company'" json:"scope_level"`
+	AllowedActions []string         `gorm:"serializer:json" json:"allowed_actions"`
+	AllowedScopes  []string         `gorm:"serializer:json" json:"allowed_scopes"`
+	ActionsAtomic  bool             `gorm:"default:false" json:"actions_atomic"`
 }
 
 // RolesModuleAccess with composite index

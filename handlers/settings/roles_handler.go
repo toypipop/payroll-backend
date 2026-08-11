@@ -25,7 +25,7 @@ func GetRoles(c *gin.Context) {
 // GetCompanies) so any role filling out an employee-linked form or granting
 // company access can see whether roles exist for a company.
 func GetRoleOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -41,7 +41,7 @@ func GetRoleOptions(c *gin.Context) {
 
 	var roles []models.Roles
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "roles.companies_id"),
 	).Find(&roles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
 		return
@@ -56,7 +56,7 @@ func GetRoleOptions(c *gin.Context) {
 
 // POST: Create a new role (English Comment)
 func CreateRole(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var input models.Roles
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -69,7 +69,7 @@ func CreateRole(c *gin.Context) {
 	// Validate if the user has permission to create role for this company (English Comment)
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "id"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -88,7 +88,7 @@ func CreateRole(c *gin.Context) {
 // PUT: Update an existing role (English Comment)
 func UpdateRole(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
@@ -96,7 +96,7 @@ func UpdateRole(c *gin.Context) {
 	var role models.Roles
 	// Ensure the role belongs to an authorized company.
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "roles.companies_id"),
 	).First(&role, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -124,14 +124,14 @@ func UpdateRole(c *gin.Context) {
 // DELETE: Delete a role with scope protection (English Comment)
 func DeleteRole(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	// Protect against deleting roles outside scope.
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "roles.companies_id"),
 	).Where("id = ?", id).Delete(&models.Roles{})
 
 	if result.RowsAffected == 0 {

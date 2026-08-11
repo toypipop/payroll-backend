@@ -10,7 +10,7 @@ import (
 )
 
 func GetEmploymentTypes(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -19,7 +19,7 @@ func GetEmploymentTypes(c *gin.Context) {
 
 	var types []models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
 	).Preload("Companies").Order("name").Find(&types).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employment types"})
 		return
@@ -31,7 +31,7 @@ func GetEmploymentTypes(c *gin.Context) {
 // Ungated by page permission (mirrors GetCompanies) so any role filling out
 // an employee-linked form can see whether employment types exist for a company.
 func GetEmploymentTypeOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -46,7 +46,7 @@ func GetEmploymentTypeOptions(c *gin.Context) {
 
 	var types []models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
 	).Order("name").Find(&types).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employment types"})
 		return
@@ -60,7 +60,7 @@ func GetEmploymentTypeOptions(c *gin.Context) {
 }
 
 func CreateEmploymentType(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
@@ -72,7 +72,7 @@ func CreateEmploymentType(c *gin.Context) {
 
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "id"),
 	).Where("id = ?", et.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -88,13 +88,13 @@ func CreateEmploymentType(c *gin.Context) {
 
 func UpdateEmploymentType(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	var et models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
 	).First(&et, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employment type not found"})
 		return
@@ -117,13 +117,13 @@ func UpdateEmploymentType(c *gin.Context) {
 
 func DeleteEmploymentType(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
 	var et models.EmploymentType
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employment_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
 	).Where("id = ?", id).First(&et).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Employment type not found"})
 		return

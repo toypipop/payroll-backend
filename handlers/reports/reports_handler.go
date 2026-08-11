@@ -25,7 +25,7 @@ func fetchClosedCycle(c *gin.Context, user models.Employees, scope models.DataSc
 	cycleID := c.Param("cycle_id")
 	var cycle models.PayrollCycle
 	if err := config.DB.
-		Scopes(repository.ApplyScopes(user, scope, "payroll_cycle.companies_id", "unused")).
+		Scopes(repository.ApplyCompanyScopes(c, user, "payroll_cycle.companies_id")).
 		Preload("Companies").
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found"})
@@ -43,7 +43,7 @@ func fetchClosedCycle(c *gin.Context, user models.Employees, scope models.DataSc
 // GetPayslipReport returns a single payslip for a closed cycle transaction.
 // This is the canonical handler for GET /payslips/:transaction_id.
 func GetPayslipReport(c *gin.Context) {
-	user, scope, ok := resolveCurrentUser(c)
+	user, _, ok := resolveCurrentUser(c)
 	if !ok {
 		return
 	}
@@ -63,7 +63,7 @@ func GetPayslipReport(c *gin.Context) {
 
 	var cycle models.PayrollCycle
 	if err := config.DB.
-		Scopes(repository.ApplyScopes(user, scope, "payroll_cycle.companies_id", "unused")).
+		Scopes(repository.ApplyCompanyScopes(c, user, "payroll_cycle.companies_id")).
 		First(&cycle, tx.CycleID).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
@@ -204,7 +204,7 @@ func GetTaxFormsPND1(c *gin.Context) {
 
 // GetTax50Tawi returns data for a single employee's 50 Tawi withholding tax certificate.
 func GetTax50Tawi(c *gin.Context) {
-	user, scope, ok := resolveCurrentUser(c)
+	user, _, ok := resolveCurrentUser(c)
 	if !ok {
 		return
 	}
@@ -223,7 +223,7 @@ func GetTax50Tawi(c *gin.Context) {
 
 	var cycle models.PayrollCycle
 	if err := config.DB.
-		Scopes(repository.ApplyScopes(user, scope, "payroll_cycle.companies_id", "unused")).
+		Scopes(repository.ApplyCompanyScopes(c, user, "payroll_cycle.companies_id")).
 		Preload("Companies").
 		First(&cycle, tx.CycleID).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})

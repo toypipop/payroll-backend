@@ -10,7 +10,7 @@ import (
 )
 
 func GetLeaveTypeSettings(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -20,7 +20,7 @@ func GetLeaveTypeSettings(c *gin.Context) {
 
 	var leaveTypes []models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
 	).Preload("Companies").Order("name").Find(&leaveTypes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave types"})
 		return
@@ -32,7 +32,7 @@ func GetLeaveTypeSettings(c *gin.Context) {
 // by page permission (mirrors GetCompanies) so any role submitting a leave
 // request can see whether leave types exist for a company.
 func GetLeaveTypeOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -48,7 +48,7 @@ func GetLeaveTypeOptions(c *gin.Context) {
 
 	var leaveTypes []models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
 	).Order("name").Find(&leaveTypes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch leave types"})
 		return
@@ -86,7 +86,7 @@ func CreateLeaveTypeSetting(c *gin.Context) {
 
 func UpdateLeaveTypeSetting(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -96,7 +96,7 @@ func UpdateLeaveTypeSetting(c *gin.Context) {
 
 	var lt models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
 	).Where("id = ?", id).First(&lt).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Leave type not found or unauthorized"})
 		return
@@ -120,14 +120,14 @@ func UpdateLeaveTypeSetting(c *gin.Context) {
 
 func DeleteLeaveTypeSetting(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var lt models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
 	).Where("id = ?", id).First(&lt).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Leave type not found or unauthorized"})
 		return

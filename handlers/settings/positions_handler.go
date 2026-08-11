@@ -12,14 +12,14 @@ import (
 // --- POSITIONS ---
 
 func GetPositions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var positions []models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
 	).Preload("Companies").Find(&positions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
 		return
@@ -31,7 +31,7 @@ func GetPositions(c *gin.Context) {
 // by page permission (mirrors GetCompanies) so any role filling out an
 // employee-linked form can see whether positions exist for a company.
 func GetPositionOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
@@ -44,7 +44,7 @@ func GetPositionOptions(c *gin.Context) {
 
 	var positions []models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
 	).Find(&positions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch positions"})
 		return
@@ -84,14 +84,14 @@ func CreatePosition(c *gin.Context) {
 
 func UpdatePosition(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var pos models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
 	).Where("id = ?", id).First(&pos).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
 		return
@@ -115,21 +115,21 @@ func UpdatePosition(c *gin.Context) {
 
 func DeletePosition(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var pos models.Position
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
 	).Where("id = ?", id).First(&pos).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Position not found or unauthorized"})
 		return
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "position.companies_id", "position.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "position.companies_id"),
 	).Where("id = ?", id).Delete(&models.Position{})
 
 	if result.RowsAffected == 0 {

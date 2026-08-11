@@ -8,16 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-func ScopeCompanies(companiesID uint, columnName ...string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		col := "companies_id"
-		if len(columnName) > 0 {
-			col = columnName[0]
-		}
-		return db.Where(col+" = ?", companiesID)
-	}
-}
-
 func ScopeCompanyIDs(companyIDs []uint, columnName ...string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		col := "companies_id"
@@ -181,7 +171,7 @@ func ResolveEmployeeForCompany(c *gin.Context, user models.Employees, scope mode
 
 	var employee models.Employees
 	if err := config.DB.Scopes(
-		ApplyContextScopes(c, user, scope, "employees.companies_id", "employees.id"),
+		ApplyEmployeeScopes(c, user, scope, "employees.companies_id", "employees.id"),
 	).Select("id, companies_id").First(&employee, employeeID).Error; err != nil {
 		return models.Employees{}, false
 	}
@@ -199,47 +189,6 @@ func GetAuthorizedCompanyIDs(c *gin.Context, userID uint) []uint {
 		}
 	}
 	return AccessibleCompanyIDs(userID)
-}
-
-func ScopeDataAccess(user models.Employees, scope models.DataScope, tableCol ...string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		col := "employees_id"
-		if len(tableCol) > 0 {
-			col = tableCol[0]
-		}
-
-		// Skip employee filtering for company data
-		if col == "unused" {
-			return db
-		}
-
-		switch scope {
-		case models.ScopeOwn:
-			return db.Where(col+" = ?", user.ID)
-
-		case models.ScopeDepartment:
-			companyIDs := AccessibleCompanyIDs(user.ID)
-			if len(companyIDs) == 0 {
-				return db.Where("1 = 0")
-			}
-
-			subQuery := db.Session(&gorm.Session{NewDB: true}).
-				Table("employees").
-				Select("id").
-				Where("dept_id = ? AND companies_id IN ?", user.DeptID, companyIDs)
-
-			return db.Where(col+" IN (?)", subQuery)
-
-		case models.ScopeCompanies:
-			return db
-
-		case models.ScopeAll:
-			return db
-
-		default:
-			return db.Where(col+" = ?", user.ID)
-		}
-	}
 }
 
 func GetContextAuth(c *gin.Context) (uint, models.DataScope) {
@@ -260,40 +209,63 @@ func GetContextAuth(c *gin.Context) (uint, models.DataScope) {
 	return userID, scope
 }
 
-func ApplyScopes(user models.Employees, scope models.DataScope, companiesCol string, accessCol string) func(db *gorm.DB) *gorm.DB {
+// Row-level scoping has exactly two entry points, and which one a call site
+// uses is the whole statement about that table:
+//
+//   - ApplyCompanyScopes  — the table has no employee column. Rows belong to a
+//     company, not a person (payroll cycles, holidays, master data). DataScope
+//     cannot narrow these, so the function does not accept one.
+//   - ApplyEmployeeScopes — the table has an employee column, so Own and
+//     Department are meaningful and DataScope is honoured.
+//
+// Both restrict the query to `authorized_company_ids` (set by CheckPermission):
+// the companies whose role actually grants the action, not merely the companies
+// the user can reach. Reachability is app access, not permission to act.
+//
+// Picking the wrong one is a compile-time decision, not a runtime string
+// comparison — that is the point of the split.
+
+// applyCompanyFilter narrows to the authorized companies. An empty list means
+// CheckPermission never ran (public or hand-rolled route), so the caller is
+// responsible for its own filtering and nothing is added here.
+func applyCompanyFilter(db *gorm.DB, companyIDs []uint, companiesCol string) *gorm.DB {
+	if len(companyIDs) == 0 {
+		return db
+	}
+	return db.Scopes(ScopeCompanyIDs(companyIDs, companiesCol))
+}
+
+// ApplyCompanyScopes scopes a company-owned table. There is no DataScope
+// parameter because none of Own/Department/Companies would change the result.
+func ApplyCompanyScopes(c *gin.Context, user models.Employees, companiesCol string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		query := db.Scopes(ScopeDataAccess(user, scope, accessCol))
-		if scope != models.ScopeAll {
-			query = query.Scopes(ScopeCompanyIDs(AccessibleCompanyIDs(user.ID), companiesCol))
-		}
-		return query
+		return applyCompanyFilter(db, GetAuthorizedCompanyIDs(c, user.ID), companiesCol)
 	}
 }
 
-func ApplyContextScopes(c *gin.Context, user models.Employees, scope models.DataScope, companiesCol string, accessCol string) func(db *gorm.DB) *gorm.DB {
+// ApplyEmployeeScopes scopes an employee-owned table: authorized companies
+// first, then the role's DataScope against employeeCol.
+func ApplyEmployeeScopes(c *gin.Context, user models.Employees, scope models.DataScope, companiesCol string, employeeCol string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		companyIDs := GetAuthorizedCompanyIDs(c, user.ID)
-		query := db.Scopes(scopeDataAccessWithCompanyIDs(user, scope, companyIDs, accessCol))
-		if len(companyIDs) > 0 {
-			query = query.Scopes(ScopeCompanyIDs(companyIDs, companiesCol))
-		}
-		return query
+		query := db.Scopes(scopeDataAccess(user, scope, companyIDs, employeeCol))
+		return applyCompanyFilter(query, companyIDs, companiesCol)
 	}
 }
 
-func scopeDataAccessWithCompanyIDs(user models.Employees, scope models.DataScope, companyIDs []uint, tableCol ...string) func(db *gorm.DB) *gorm.DB {
+// scopeDataAccess turns a DataScope into a predicate on employeeCol. Only
+// ApplyEmployeeScopes calls it, so employeeCol always names a real column.
+//
+// ScopeDepartment matches on the department's *category*, not the literal
+// department row: two companies' "HR" departments share one
+// DepartmentCategory, so a Department-scoped role reaches its counterparts in
+// every company it is authorized for. Matching on employees.dept_id instead
+// would confine the user to their own single department row.
+func scopeDataAccess(user models.Employees, scope models.DataScope, companyIDs []uint, employeeCol string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		col := "employees_id"
-		if len(tableCol) > 0 {
-			col = tableCol[0]
-		}
-		if col == "unused" {
-			return db
-		}
-
 		switch scope {
 		case models.ScopeOwn:
-			return db.Where(col+" = ?", user.ID)
+			return db.Where(employeeCol+" = ?", user.ID)
 		case models.ScopeDepartment:
 			if len(companyIDs) == 0 {
 				return db.Where("1 = 0")
@@ -312,13 +284,11 @@ func scopeDataAccessWithCompanyIDs(user models.Employees, scope models.DataScope
 				Select("employees.id").
 				Joins("JOIN department ON department.id = employees.dept_id AND department.deleted_at = 0").
 				Where("department.category_id = ? AND employees.companies_id IN ?", userCategoryID, companyIDs)
-			return db.Where(col+" IN (?)", subQuery)
-		case models.ScopeCompanies:
-			return db
-		case models.ScopeAll:
+			return db.Where(employeeCol+" IN (?)", subQuery)
+		case models.ScopeCompanies, models.ScopeAll:
 			return db
 		default:
-			return db.Where(col+" = ?", user.ID)
+			return db.Where(employeeCol+" = ?", user.ID)
 		}
 	}
 }

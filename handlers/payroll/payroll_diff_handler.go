@@ -47,7 +47,7 @@ func aggregateCycle(cycleID uint) cycleSummary {
 }
 
 func GetPayrollDiff(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -58,7 +58,7 @@ func GetPayrollDiff(c *gin.Context) {
 	cycleID := c.Param("cycle_id")
 
 	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "payroll_cycle.companies_id")).
 		First(&cycle, cycleID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found"})
 		return

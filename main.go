@@ -33,7 +33,20 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
+	if err := migrations.RunOnce(config.DB, "20260811_remove_dashboard_module", migrations.RemoveDashboardModule); err != nil {
+		log.Fatalf("Dashboard module removal failed: %v", err)
+	}
 	fmt.Println("Database Repair Migrations Successful!")
+
+	// Not RunOnce: the capability columns are a projection of the registry in
+	// models/module_capability.go and are refreshed every boot, so code and
+	// database can never drift apart.
+	if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
+		log.Fatalf("Module capability sync failed (run `go run ./migrate` if the capability columns are missing): %v", err)
+	}
+	if err := migrations.PruneStaleRoleScopes(config.DB); err != nil {
+		log.Fatalf("Permission scope normalisation failed: %v", err)
+	}
 
 	// 3. Initialize Router (Gin)
 	// SetupRouter contains all your API endpoints
@@ -50,8 +63,9 @@ func main() {
 	}
 }
 
-// All Modules seeded by seed/main.go:
-// - Dashboard
+// All Modules seeded by seed/main.go.
+// Not listed because they are not permission-controlled: Dashboard and
+// My Payslips are universal pages with hardcoded routes and sidebar links.
 // - Employees
 //   - Employee List
 //   - Salaries

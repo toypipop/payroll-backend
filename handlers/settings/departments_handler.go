@@ -11,7 +11,7 @@ import (
 
 // --- DEPARTMENTS ---
 func GetDepartments(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -21,7 +21,7 @@ func GetDepartments(c *gin.Context) {
 
 	var departments []models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "department.companies_id"),
 	).Preload("Companies").Preload("Category").Find(&departments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
 		return
@@ -34,7 +34,7 @@ func GetDepartments(c *gin.Context) {
 // employee-linked form needs to know whether departments exist for a
 // company, not just users who can manage DepartmentSettings.
 func GetDepartmentOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -50,7 +50,7 @@ func GetDepartmentOptions(c *gin.Context) {
 
 	var departments []models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "department.companies_id"),
 	).Find(&departments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch departments"})
 		return
@@ -95,7 +95,7 @@ func CreateDepartment(c *gin.Context) {
 
 func UpdateDepartment(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -105,7 +105,7 @@ func UpdateDepartment(c *gin.Context) {
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "department.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "department.companies_id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
@@ -131,21 +131,21 @@ func UpdateDepartment(c *gin.Context) {
 
 func DeleteDepartment(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var dept models.Department
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "department.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "department.companies_id"),
 	).Where("id = ?", id).First(&dept).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Department not found or unauthorized"})
 		return
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "department.companies_id", "department.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "department.companies_id"),
 	).Where("id = ?", id).Delete(&models.Department{})
 
 	if result.RowsAffected == 0 {

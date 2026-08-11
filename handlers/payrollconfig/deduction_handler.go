@@ -11,7 +11,7 @@ import (
 
 // GET: Fetch all deduction types based on data scope (English Comment)
 func GetDeductionTypes(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 
 	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -21,7 +21,7 @@ func GetDeductionTypes(c *gin.Context) {
 
 	var deductions []models.DeductionType
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id"),
 	).Preload("Companies").Find(&deductions).Error
 
 	if err != nil {
@@ -35,7 +35,7 @@ func GetDeductionTypes(c *gin.Context) {
 // Ungated by page permission (mirrors GetCompanies) so any role assigning
 // employee/cycle deductions can see whether deduction types exist for a company.
 func GetDeductionTypeOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 
 	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -51,7 +51,7 @@ func GetDeductionTypeOptions(c *gin.Context) {
 
 	var deductions []models.DeductionType
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id"),
 	).Find(&deductions).Error
 
 	if err != nil {
@@ -68,7 +68,7 @@ func GetDeductionTypeOptions(c *gin.Context) {
 
 // POST: Create a new deduction type (English Comment)
 func CreateDeductionType(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
@@ -81,7 +81,7 @@ func CreateDeductionType(c *gin.Context) {
 	// Validate if the user has permission to create for the target company (English Comment)
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "id"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -98,7 +98,7 @@ func CreateDeductionType(c *gin.Context) {
 // PUT: Update deduction type using map to handle boolean false (English Comment)
 func UpdateDeductionType(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
@@ -106,7 +106,7 @@ func UpdateDeductionType(c *gin.Context) {
 	var deduction models.DeductionType
 	// Apply scope to verify record ownership before update (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id"),
 	).First(&deduction, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -135,7 +135,7 @@ func UpdateDeductionType(c *gin.Context) {
 // DELETE: Soft delete with Scope protection (English Comment)
 func DeleteDeductionType(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
@@ -143,14 +143,14 @@ func DeleteDeductionType(c *gin.Context) {
 	// Use Scopes and Where to ensure only authorized records are deleted (English Comment)
 	var deduction models.DeductionType
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id"),
 	).Where("id = ?", id).First(&deduction).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
 		return
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "deduction_type.companies_id"),
 	).Where("id = ?", id).Delete(&models.DeductionType{})
 
 	if result.RowsAffected == 0 {

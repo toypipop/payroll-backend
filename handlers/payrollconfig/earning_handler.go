@@ -11,7 +11,7 @@ import (
 
 // GET: Fetch all earning types with data scope (English Comment)
 func GetEarningTypes(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 
 	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -21,7 +21,7 @@ func GetEarningTypes(c *gin.Context) {
 
 	var earnings []models.EarningType
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id"),
 	).Preload("Companies").Find(&earnings).Error
 
 	if err != nil {
@@ -35,7 +35,7 @@ func GetEarningTypes(c *gin.Context) {
 // Ungated by page permission (mirrors GetCompanies) so any role assigning
 // employee/cycle earnings can see whether earning types exist for a company.
 func GetEarningTypeOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 
 	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -51,7 +51,7 @@ func GetEarningTypeOptions(c *gin.Context) {
 
 	var earnings []models.EarningType
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id"),
 	).Find(&earnings).Error
 
 	if err != nil {
@@ -68,7 +68,7 @@ func GetEarningTypeOptions(c *gin.Context) {
 
 // POST: Create a new earning type (English Comment)
 func CreateEarningType(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
 
@@ -81,7 +81,7 @@ func CreateEarningType(c *gin.Context) {
 	// Validate if the user has permission to create for the target company (English Comment)
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "id"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return
@@ -98,7 +98,7 @@ func CreateEarningType(c *gin.Context) {
 // PUT: Update an existing earning type by ID with Scope (English Comment)
 func UpdateEarningType(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
@@ -106,7 +106,7 @@ func UpdateEarningType(c *gin.Context) {
 	var earning models.EarningType
 	// Apply scope to ensure user can only find records they are authorized to edit (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id"),
 	).First(&earning, id).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
 		return
@@ -137,7 +137,7 @@ func UpdateEarningType(c *gin.Context) {
 // DELETE: Soft delete an earning type with Scope (English Comment)
 func DeleteEarningType(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, companies_id").First(&currentUser, userID)
@@ -145,14 +145,14 @@ func DeleteEarningType(c *gin.Context) {
 	// Ensure the delete operation only affects authorized records (English Comment)
 	var earning models.EarningType
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id"),
 	).Where("id = ?", id).First(&earning).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
 		return
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id"),
 	).Where("id = ?", id).Delete(&models.EarningType{})
 
 	if result.RowsAffected == 0 {

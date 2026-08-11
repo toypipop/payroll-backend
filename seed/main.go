@@ -386,7 +386,10 @@ func main() {
 	// --- Modules ---
 	modules := []models.AppModule{
 		// --- Level 1: Main Categories ---
-		{ID: 1, ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, IsCategory: false},
+		// Dashboard is intentionally not a module: it is a universal landing
+		// page (App.tsx hardcodes /dashboard and redirects "/" to it), exactly
+		// like My Payslips. Giving it a permission row only hid the sidebar
+		// link while leaving the page reachable.
 		{ID: 8, ModuleName: "Help Center", ModuleKey: "HelpPage", RoutePath: "/help", Icon: "HelpOutline", Order: 2, IsCategory: false},
 		{ID: 2, ModuleName: "Employees", ModuleKey: "ModuleEmployees", RoutePath: "", Icon: "People", Order: 3, IsCategory: true},
 		{ID: 3, ModuleName: "Attendance", ModuleKey: "ModuleAttendance", RoutePath: "", Icon: "Event", Order: 4, IsCategory: true},
@@ -527,7 +530,6 @@ func main() {
 	// processing view-only (no pay approval); no payroll config; HR-relevant
 	// reports view-only; no roles/permission/company-access/bank/finance reports.
 	hrGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":          V(coScope),
 		"EmployeesListPage":      F(coScope),
 		"SalariesStructurePage":  F(coScope),
 		"EmployeeEarningsPage":   F(coScope),
@@ -560,7 +562,6 @@ func main() {
 	// bank master (full); employee/salary/summary read-only for payroll; no
 	// attendance/leave, no HR master-data, no roles/permission/company-access.
 	financeGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":             V(coScope),
 		"EmployeesListPage":         V(coScope),
 		"SalariesStructurePage":     V(coScope),
 		"EmployeeEarningsPage":      V(coScope),
@@ -588,7 +589,6 @@ func main() {
 	// leave; employee list read-only. No payroll amounts, no settings.
 	mgrScope := models.ScopeDepartment
 	managerGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":     V(mgrScope),
 		"EmployeesListPage": V(mgrScope),
 		"TimelogsListPage":  VE(mgrScope),
 		"LeaveRequestsPage": VE(mgrScope),
@@ -601,7 +601,6 @@ func main() {
 	// business rules). No visibility of anyone else, payroll, or settings.
 	ownScope := models.ScopeOwn
 	staffGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":          V(ownScope),
 		"EmployeesListPage":      V(ownScope),
 		"SalariesStructurePage":  V(ownScope),
 		"EmployeeEarningsPage":   V(ownScope),
@@ -2092,6 +2091,20 @@ func main() {
 			}
 			config.DB.Create(&details)
 		}
+	}
+
+	// Seed only creates and updates module rows, so a database seeded before
+	// Dashboard stopped being permission-controlled still carries that row.
+	// Clear it before the sync, which refuses to run over a module with no
+	// capability declaration.
+	if err := migrations.RemoveDashboardModule(config.DB); err != nil {
+		log.Fatalf("Dashboard module removal failed: %v", err)
+	}
+
+	// Project the capability registry onto the freshly seeded module rows, so
+	// the permission UI works immediately without waiting for a server restart.
+	if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
+		log.Fatalf("Module capability sync failed: %v", err)
 	}
 
 	log.Println("Migration & Setup completed with realistic Jan-Jun 2027 mock data!")

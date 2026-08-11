@@ -1,37 +1,67 @@
 package employees
 
 import (
+	"errors"
 	"net/http"
-	"payroll-backend/config"
+	"strconv"
+
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
-func GetEmployees(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+// employeesService is the domain entry point for this handler. It is resolved
+// lazily so the package does not capture config.DB before ConnectDatabase runs.
+func employeesService() *service.EmployeesService {
+	return service.NewEmployeesService(repository.NewEmployeesRepository())
+}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
+// requestScope resolves the caller's authorization context, replacing the
+// "load currentUser then read data_scope" preamble each handler used to repeat.
+func requestScope(c *gin.Context) (repository.AccessScope, bool) {
+	scope, err := repository.NewAccessScope(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+		return repository.AccessScope{}, false
+	}
+	return scope, true
+}
+
+// respondServiceError maps domain errors onto HTTP without letting driver or
+// SQL detail reach the client.
+func respondServiceError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrEmployeeNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee not found or access denied"})
+	case errors.Is(err, service.ErrCompanyAccessDenied):
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+	case errors.Is(err, service.ErrRoleCompanyMismatch):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Request could not be completed"})
+	}
+}
+
+func parseIDParam(c *gin.Context) (uint, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee id"})
+		return 0, false
+	}
+	return uint(id), true
+}
+
+func GetEmployees(c *gin.Context) {
+	scope, ok := requestScope(c)
+	if !ok {
 		return
 	}
 
-	var employees []models.Employees
-	if err := config.DB.
-		Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
-		Preload("Department").
-		Preload("Position").
-		Preload("Companies").
-		Preload("Roles").
-		Preload("SalariesStructure", "is_active = ?", true).
-		Preload("Bank").
-		Preload("EmploymentType").
-		Find(&employees).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	employees, err := employeesService().List(scope)
+	if err != nil {
+		respondServiceError(c, err)
 		return
 	}
 
@@ -39,142 +69,63 @@ func GetEmployees(c *gin.Context) {
 }
 
 func CreateEmployees(c *gin.Context) {
+	scope, ok := requestScope(c)
+	if !ok {
+		return
+	}
+
 	var input models.Employees
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
 		return
 	}
 
-	if input.Password != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
-		input.Password = string(hashedPassword)
-	}
-
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Companies context not found"})
+	created, err := employeesService().Create(scope, input)
+	if err != nil {
+		respondServiceError(c, err)
 		return
 	}
 
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-	input.CompaniesID = companyID
-
-	var roles models.Roles
-	if err := config.DB.First(&roles, input.RolesID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Role not found"})
-		return
-	}
-	if roles.CompaniesID != input.CompaniesID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
-		return
-	}
-
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, input)
+	c.JSON(http.StatusCreated, created)
 }
 
 func UpdateEmployees(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
-		return
-	}
-
-	var emp models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).First(&emp, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
-		return
-	}
-
-	var data map[string]interface{}
-	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Company is immutable after creation — ignore any companies_id sent in the request
-	delete(data, "companies_id")
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, emp.CompaniesID)
+	scope, ok := requestScope(c)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	id, ok := parseIDParam(c)
+	if !ok {
 		return
 	}
 
-	nextRoleID := emp.RolesID
-	if rolesID, ok := data["roles_id"].(float64); ok {
-		nextRoleID = uint(rolesID)
-	}
-	var role models.Roles
-	if err := config.DB.First(&role, nextRoleID).Error; err != nil || role.CompaniesID != companyID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
+	var patch map[string]any
+	if err := c.ShouldBindJSON(&patch); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
 		return
 	}
 
-	if pwd, ok := data["password"].(string); ok && pwd != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(pwd), 12)
-		data["password"] = string(hashedPassword)
-	} else {
-		delete(data, "password")
-	}
-
-	// Handle bank_id: convert float64 (from JSON) to *uint, or explicit null → nil
-	switch v := data["bank_id"].(type) {
-	case float64:
-		bankIDUint := uint(v)
-		if bankIDUint == 0 {
-			data["bank_id"] = gorm.Expr("NULL")
-		} else {
-			data["bank_id"] = bankIDUint
-		}
-	case nil:
-		if _, exists := data["bank_id"]; exists {
-			data["bank_id"] = gorm.Expr("NULL")
-		}
-	}
-
-	if err := config.DB.Model(&emp).Updates(data).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+	updated, err := employeesService().Update(scope, id, patch)
+	if err != nil {
+		respondServiceError(c, err)
 		return
 	}
 
-	config.DB.Preload("Department").Preload("Position").Preload("SalariesStructure", "is_active = ?", true).Preload("Bank").First(&emp, id)
-	c.JSON(http.StatusOK, emp)
+	c.JSON(http.StatusOK, updated)
 }
 
 func DeleteEmployees(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := requestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := parseIDParam(c)
+	if !ok {
 		return
 	}
 
-	var employees models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).First(&employees, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
-		return
-	}
-
-	if err := config.DB.Delete(&employees).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
+	if err := employeesService().Delete(scope, id); err != nil {
+		respondServiceError(c, err)
 		return
 	}
 

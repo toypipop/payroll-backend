@@ -12,7 +12,7 @@ import (
 )
 
 func GetAttendanceConfigs(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -22,7 +22,7 @@ func GetAttendanceConfigs(c *gin.Context) {
 
 	var companies []models.Companies
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Order("companies.id ASC").Preload("AttendanceConfig").Find(&companies).Error
 
 	if err != nil {
@@ -38,7 +38,7 @@ func GetAttendanceConfigs(c *gin.Context) {
 // AttendanceSettingsPage) and intentionally omits deduction/earning rates so a
 // timelog-only user can auto-fill check in/out without seeing payroll rate data.
 func GetTimelogScheduleConfig(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -48,7 +48,7 @@ func GetTimelogScheduleConfig(c *gin.Context) {
 
 	var companies []models.Companies
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Order("companies.id ASC").Preload("AttendanceConfig").Find(&companies).Error
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -98,7 +98,7 @@ func parseTimeString(timeStr string) *time.Time {
 }
 
 func UpdateAttendanceConfig(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var input struct {
 		CompaniesID               uint    `json:"companies_id"`
@@ -127,7 +127,7 @@ func UpdateAttendanceConfig(c *gin.Context) {
 
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
 		return

@@ -23,7 +23,7 @@ func GetLeaveRequests(c *gin.Context) {
 	var leaves []models.LeaveRequest
 	// Apply data scope to ensure users see only what they are allowed to (English Comment)
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
 	).Preload("Employees").Preload("Employees.Companies").Preload("Approver").Find(&leaves).Error
 
 	if err != nil {
@@ -70,7 +70,7 @@ func CreateLeaveRequest(c *gin.Context) {
 
 	var leaveType models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
 	).Where("id = ?", *input.LeaveTypeID).First(&leaveType).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid leave type for your company"})
 		return
@@ -118,7 +118,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 	var leave models.LeaveRequest
 	// Check access rights before updating (English Comment)
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
 	).First(&leave, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
@@ -173,7 +173,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 
 	var leaveType models.LeaveTypeSetting
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_type_setting.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "leave_type_setting.companies_id"),
 	).Where("id = ?", input.LeaveTypeID).First(&leaveType).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid leave type for your company"})
 		return
@@ -220,7 +220,7 @@ func DeleteLeaveRequest(c *gin.Context) {
 
 	// Ensure user has permission to delete this specific record (English Comment)
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
 	).Where("id = ?", id).Delete(&models.LeaveRequest{})
 
 	if result.RowsAffected == 0 {
@@ -249,7 +249,7 @@ func GetPendingLeaveRequests(c *gin.Context) {
 	var leaves []models.LeaveRequest
 	// filter only 'Pending' status for approval page (English Comment)
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
 	).Preload("Employees").Preload("Employees.Companies").Preload("LeaveTypeMaster").Where("status = ?", models.LeaveStatusPending).Find(&leaves).Error
 
 	if err != nil {
@@ -300,7 +300,7 @@ func ApproveLeaveRequest(c *gin.Context) {
 
 	var leave models.LeaveRequest
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, approver, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
+		repository.ApplyEmployeeScopes(c, approver, dataScope, "leave_request.companies_id", "leave_request.employees_id"),
 	).First(&leave, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Leave request not found or access denied"})
 		return

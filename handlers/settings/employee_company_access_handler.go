@@ -29,7 +29,7 @@ func GetEmployeeCompanyAccess(c *gin.Context) {
 
 	var mappings []models.EmployeeCompanyAccess
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
 	).
 		Preload("Employee").
 		Preload("Company").
@@ -89,7 +89,7 @@ func UpdateEmployeeCompanyAccess(c *gin.Context) {
 
 	var existing models.EmployeeCompanyAccess
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
 	).First(&existing, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Access mapping not found"})
 		return
@@ -135,7 +135,7 @@ func DeleteEmployeeCompanyAccess(c *gin.Context) {
 	}
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_company_access.company_id", "employee_company_access.employee_id"),
 	).Where("id = ?", id).Delete(&models.EmployeeCompanyAccess{})
 	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Access mapping not found or unauthorized"})
@@ -157,7 +157,7 @@ func buildEmployeeCompanyAccess(c *gin.Context, currentUser models.Employees, da
 
 	var role models.Roles
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
+		repository.ApplyCompanyScopes(c, currentUser, "roles.companies_id"),
 	).First(&role, input.RoleID).Error; err != nil {
 		return models.EmployeeCompanyAccess{}, errors.New("access denied to this role")
 	}

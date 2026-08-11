@@ -12,7 +12,7 @@ import (
 )
 
 func GetPayrollConfigs(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -24,7 +24,7 @@ func GetPayrollConfigs(c *gin.Context) {
 
 	// Start from Companies Table to show all companies in the scope (English Comment)
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Order("companies.id ASC").Preload("PayrollConfig").Find(&companies).Error
 
 	if err != nil {
@@ -36,7 +36,7 @@ func GetPayrollConfigs(c *gin.Context) {
 }
 
 func UpdatePayrollConfig(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var input models.PayrollConfig
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -54,7 +54,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 	// We check if the input.CompaniesID is within the allowed scope
 	var targetCompany models.Companies
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "companies.id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
 	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this Companie"})
 		return

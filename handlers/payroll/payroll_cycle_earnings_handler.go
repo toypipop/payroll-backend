@@ -25,7 +25,7 @@ func GetCycleEarnings(c *gin.Context) {
 
 	var items []models.PayrollCycleEarning
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
 	).
 		Preload("EarningType").
 		Preload("Employees").
@@ -58,7 +58,7 @@ func CreateCycleEarning(c *gin.Context) {
 		return
 	}
 
-	cycle, err := repository.EnsurePayrollCycleOpen(input.CycleID, currentUser, dataScope)
+	cycle, err := repository.EnsurePayrollCycleOpen(c, input.CycleID, currentUser)
 	if err != nil {
 		if err == repository.ErrPayrollCycleNotFound {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cycle not found or access denied"})
@@ -106,13 +106,13 @@ func UpdateCycleEarning(c *gin.Context) {
 
 	var item models.PayrollCycleEarning
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
 	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
 	}
 
-	cycle, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope)
+	cycle, err := repository.EnsurePayrollCycleOpen(c, item.CycleID, currentUser)
 	if err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot update earnings in a closed cycle"})
@@ -169,13 +169,13 @@ func DeleteCycleEarning(c *gin.Context) {
 
 	var item models.PayrollCycleEarning
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"),
 	).First(&item, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
 		return
 	}
 
-	if _, err := repository.EnsurePayrollCycleOpen(item.CycleID, currentUser, dataScope); err != nil {
+	if _, err := repository.EnsurePayrollCycleOpen(c, item.CycleID, currentUser); err != nil {
 		if err == repository.ErrPayrollCycleClosed {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot delete earnings in a closed cycle"})
 			return

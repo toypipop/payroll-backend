@@ -22,7 +22,7 @@ func GetTimeLogs(c *gin.Context) {
 
 	var logs []models.TimeLog
 	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "time_log.companies_id", "time_log.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "time_log.companies_id", "time_log.employees_id"),
 	).Preload("Employees").Preload("Employees.Companies").Find(&logs).Error
 
 	if err != nil {
@@ -220,7 +220,7 @@ func UpdateTimeLog(c *gin.Context) {
 
 	var log models.TimeLog
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "time_log.companies_id", "time_log.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "time_log.companies_id", "time_log.employees_id"),
 	).First(&log, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
 		return
@@ -272,7 +272,7 @@ func DeleteTimeLog(c *gin.Context) {
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "time_log.companies_id", "time_log.employees_id"),
+		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "time_log.companies_id", "time_log.employees_id"),
 	).Where("id = ?", id).Delete(&models.TimeLog{})
 
 	if result.RowsAffected == 0 {

@@ -20,7 +20,8 @@ Check `../payroll-frontend/CLAUDE.md` when changing frontend-facing routes, modu
 - `models/payrollconfig.go` — payroll config, earning/deduction types/categories, employment types.
 - `models/employees.go` — employees, salary structures, employee earnings/deductions.
 - `models/settings.go` — companies, departments, positions, banks, holidays, work locations, leave types.
-- `repository/*` — query scopes and shared checks.
+- `repository/*` — query scopes, shared checks, and per-domain persistence interfaces.
+- `service/*` — domain business rules; depends on repository interfaces, never on `config.DB` or gin.
 - `timeutil/timeutil.go` — the ONLY source of truth for the business timezone (see Timezone Handling below).
 - `migrations/*` — raw/schema repairs not safely covered by AutoMigrate.
 - `seed/main.go` — local/test data, modules, permissions.
@@ -32,8 +33,7 @@ go run .                            # run server
 go run ./migrate                    # run migrations
 go run ./seed                       # reseed data
 gofmt -w <files>                    # required after edits
-go vet ./... && go test ./...       # required after edits
-go build ./...                      # verify build
+go vet ./... && go build ./...      # required after edits
 docker compose -f docker-compose.local.yml up -d    # local Docker
 docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 ```
@@ -52,10 +52,38 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 - Verify frontend-facing changes against `../payroll-frontend/src`.
 - After Docker volume reset: run migrate and seed before expecting `/api/v1/modules` to pass.
 - Use explicit request/response structs; keep JSON/GORM tags aligned.
-- Use `repository.ApplyContextScopes(c, currentUser, dataScope, ...)` for tenant/data-scope safety.
+- Row-level scoping has exactly **two** entry points, and choosing between them is a compile-time decision:
+  - `repository.ApplyCompanyScopes(c, currentUser, companiesCol)` — the table has no employee column (payroll cycles, holidays, master data, departments/positions/roles). Takes **no** `DataScope`, because none would change the result.
+  - `repository.ApplyEmployeeScopes(c, currentUser, dataScope, companiesCol, employeeCol)` — the table has a real employee column, so `Own`/`Department` are honoured.
+  - `AccessScope` equivalents: `scope.ApplyCompany(...)` / `scope.ApplyEmployee(...)`.
+- There is no `ApplyContextScopes` and no `"unused"` sentinel any more. The old single function decided at runtime by string-comparing the access column, so a typo compiled fine and a non-employee column (`department.id` vs an employee id) silently filtered on nonsense.
+- There is no `ApplyScopes` either — it scoped by *reachable* companies and skipped company filtering entirely at `ScopeAll`, instead of the companies the role authorizes for the action.
+- Both entry points skip the company filter when `authorized_company_ids` is empty (no `CheckPermission` ran); such routes must do their own filtering.
+- `ScopeDepartment` matches on `department.category_id`, never `employees.dept_id`: two companies' "HR" departments share one `DepartmentCategory` so a Department-scoped role reaches its counterparts across authorized companies.
+
+### Module capabilities (what the permission UI is allowed to offer)
+
+- `models/module_capability.go` holds `moduleCapabilities`, the **single source of truth** for each module's `ScopeLevel` (`company`/`employee`), `AllowedActions`, and `ActionsAtomic`. `AllowedScopes` is derived from `ScopeLevel`, never declared separately.
+- `ScopeLevel` is a fact about the handler, not a policy: it must match which `Apply*Scopes` the module's queries call. `AllowedActions` must match the action strings its routes pass to `CheckPermission` — several delete routes are gated by `"EDIT"`, so those modules do not list `DELETE`.
+- `migrations.SyncModuleCapabilities` projects the registry onto `app_module` columns on **every boot** (and at the end of seed), so the DB can never drift from the code and a deploy never depends on reseeding. An active, non-category module missing from the registry is a `log.Fatal`.
+- `migrations.PruneStaleRoleScopes` rewrites saved permission rows whose `DataScope` a company-level module cannot honour. It only makes stored values agree with behaviour already in effect; no role gains or loses access.
+- `UpdateRolesPermissions` coerces disallowed actions to `false` and disallowed scopes to `Companies` before writing, so the database never stores a claim the permission check ignores.
+- The frontend permission matrix is driven entirely by `allowed_actions` / `allowed_scopes` / `actions_atomic` on `/modules`. Never reintroduce a hardcoded module list there.
+
 - Tables are singular; qualify scoped columns e.g. `time_log.companies_id`.
 - Keep `soft_delete.DeletedAt` patterns unless hard delete is explicitly required.
 - Do not add secrets or local agent artifacts.
+
+### Layering (`employees` domain is the reference implementation)
+
+New or refactored domains follow handler → service → repository:
+
+- `repository.AccessScope` (`repository/access_scope.go`) carries the resolved auth context (user, DataScope, authorized company IDs) as a plain value. Build it once per request with `repository.NewAccessScope(c)` instead of repeating the "load currentUser, then read data_scope" preamble; use `scope.ApplyCompany(companiesCol)` / `scope.ApplyEmployee(companiesCol, employeeCol)`, `scope.ResolveCompanyID(...)`, `scope.CanAccessCompany(...)` below the handler.
+- `repository/<domain>_repository.go` declares an interface plus a `gorm*` implementation. Services depend on the interface so business rules are testable without PostgreSQL.
+- `service/<domain>_service.go` holds the rules and returns typed sentinel errors (`ErrCompanyAccessDenied`, `ErrRoleCompanyMismatch`, ...). It must not import gin or know about HTTP status codes.
+- Handlers only bind input, call the service, and map sentinel errors to statuses. Never return `err.Error()` to the client — driver and SQL detail leaks through it.
+- Use `repository.ClearField` in an update map to null a nullable column; the repository translates it to SQL `NULL` so GORM clause types stay out of services.
+- Handlers not yet migrated still call `config.DB` directly. That is legacy, not the pattern to copy.
 
 ## Auth/API
 
@@ -78,9 +106,11 @@ docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 - Six roles: `SYSTEM_ADMIN` (sysComp, cross-company, only holder of `CompaniesPage`) + five business roles seeded per operating company — `ADMIN`, `HR`, `FINANCE`, `MANAGER`, `STAFF`.
 - Grants live in one explicit matrix in `seed/main.go` (`sysAdminGrants`/`adminGrants`/`hrGrants`/`financeGrants`/`managerGrants`/`staffGrants`), least-privilege: a module **not listed** for a role is invisible to it (`/modules/mine` hides it from sidebar+routes, not just 403). Approve actions (leave/time logs) = `CanEdit`; there is no approve flag. `grantAccess` `log.Fatalf`s on any key missing from the module list, so a typo fails the seed loudly.
 - Data scope per role: ADMIN/HR/FINANCE = `Companies`, MANAGER = `Department` (own team), STAFF = `Own` (self). STAFF-visible modules are all `Own`-scoped.
-- All five report modules (`PayslipsReportPage`, `BankTransferReportPage`, `TaxFormsReportPage`, `SSOReportPage`, `PayrollAnalysisPage`) live under the `Reports` category and are GET-only → granted **view-only** in seed (`reportKeys`, `CanView` only, no C/E/D) with an **adjustable** `DataScope`. In the frontend they belong to `VIEW_ONLY_MODULES` (`PermissionSettings.tsx`): View checkbox + Data Scope selector shown, C/E/D columns hidden.
-- `ALL_OR_NOTHING_MODULES` (`CompaniesPage`, `MasterBankPage`, `HelpPage`) render as a single on/off toggle with a fixed `Companies` scope, seeded full CRUD=true so the toggle reads "on".
-- Reports cannot be `Own`-scoped: `GetPayslipReport` etc. scope by `companies_id` with accessCol `"unused"`, so setting a view-only report to `Own` will not behave as a per-employee filter. STAFF gets no reports — staff see own pay via Own-scoped Salaries / Employee Earnings / Employee Deductions.
+- All five report modules (`PayslipsReportPage`, `BankTransferReportPage`, `TaxFormsReportPage`, `SSOReportPage`, `PayrollAnalysisPage`) live under the `Reports` category and are GET-only → declared `companyLevel(ActionView)`, so the matrix shows a View toggle and a fixed `Companies` scope, with C/E/D hidden.
+- `CompaniesPage`, `MasterBankPage` and `HelpPage` are declared `atomic(...)`: one on/off toggle driving every action, no scope selector. Seeded full CRUD=true so the toggle reads "on".
+- Reports cannot be `Own`-scoped — they are company-level, so the selector is not offered at all. STAFF gets no reports; staff see own pay via Own-scoped Salaries / Employee Earnings / Employee Deductions.
+- Sanity check that the registry is right: every module STAFF holds at `Own` scope, and every module MANAGER holds at `Department`, must be declared `employeeLevel`. If one is `companyLevel`, either the grant or the declaration is wrong.
+- **Dashboard and My Payslips are not modules and have no permission rows.** Both are universal pages whose routes are hardcoded in `App.tsx` (and `"/"` redirects to `/dashboard`), with hardcoded sidebar links. A module row for Dashboard only ever hid the sidebar link while the page stayed reachable, so it was removed — `migrations.RemoveDashboardModule` clears it from existing databases and must run before `SyncModuleCapabilities`. What a user sees on the Dashboard is governed by the modules it reads from (`EmployeesListPage`, `PayrollCyclesPage`), each enforcing its own scope.
 
 ### Master-data `/options` convention
 

@@ -10,7 +10,7 @@ import (
 )
 
 func GetWorkLocations(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -20,7 +20,7 @@ func GetWorkLocations(c *gin.Context) {
 
 	var locations []models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
 	).Preload("Companies").Order("name").Find(&locations).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work locations"})
 		return
@@ -32,7 +32,7 @@ func GetWorkLocations(c *gin.Context) {
 // Ungated by page permission (mirrors GetCompanies) so any role filling
 // out a time log needs this dropdown, not just WorkLocationPage users.
 func GetWorkLocationOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -48,7 +48,7 @@ func GetWorkLocationOptions(c *gin.Context) {
 
 	var locations []models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
 	).Order("name").Find(&locations).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work locations"})
 		return
@@ -86,7 +86,7 @@ func CreateWorkLocation(c *gin.Context) {
 
 func UpdateWorkLocation(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -96,7 +96,7 @@ func UpdateWorkLocation(c *gin.Context) {
 
 	var loc models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
 	).Where("id = ?", id).First(&loc).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work location not found or unauthorized"})
 		return
@@ -116,14 +116,14 @@ func UpdateWorkLocation(c *gin.Context) {
 
 func DeleteWorkLocation(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var loc models.WorkLocation
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "work_location.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "work_location.companies_id"),
 	).Where("id = ?", id).First(&loc).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work location not found or unauthorized"})
 		return

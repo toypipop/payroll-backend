@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"net/http"
 	"payroll-backend/config"
 	"payroll-backend/models"
@@ -21,7 +22,7 @@ func GetRolesPermissions(c *gin.Context) {
 	rolesID := c.Param("id")
 
 	// Use GetContextAuth to retrieve userID and dataScope
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -35,7 +36,7 @@ func GetRolesPermissions(c *gin.Context) {
 
 	var access []models.RolesModuleAccess
 	// Apply composite scopes for tenant and data access
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles_module_access.companies_id", "unused")).
+	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "roles_module_access.companies_id")).
 		Where("roles_id = ?", rolesID).
 		Find(&access).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch access"})
@@ -57,11 +58,46 @@ type UpdatePermissionRequest struct {
 	DataScope models.DataScope `json:"data_scope" binding:"required,oneof=Own Department Companies All"`
 }
 
+// errUnknownModule marks a payload referencing a module row that does not
+// exist, or one with no capability declaration. Both are client/config errors
+// rather than server faults, so the caller maps them to 400.
+var errUnknownModule = errors.New("permission payload references an unknown module")
+
+// capabilitiesForRequest resolves every module in the payload to its declared
+// capability in one query, so the write loop stays free of per-item lookups.
+func capabilitiesForRequest(tx *gorm.DB, input []UpdatePermissionRequest) (map[uint]models.ModuleCapability, error) {
+	moduleIDs := make([]uint, 0, len(input))
+	for _, item := range input {
+		moduleIDs = append(moduleIDs, item.ModuleID)
+	}
+
+	var modules []models.AppModule
+	if err := tx.Select("id, module_key").Where("id IN ?", moduleIDs).Find(&modules).Error; err != nil {
+		return nil, err
+	}
+
+	capabilities := make(map[uint]models.ModuleCapability, len(modules))
+	for _, module := range modules {
+		capability, ok := models.CapabilityFor(module.ModuleKey)
+		if !ok {
+			return nil, errUnknownModule
+		}
+		capabilities[module.ID] = capability
+	}
+
+	for _, item := range input {
+		if _, ok := capabilities[item.ModuleID]; !ok {
+			return nil, errUnknownModule
+		}
+	}
+	return capabilities, nil
+}
+
 func UpdateRolesPermissions(c *gin.Context) {
 	rolesID := c.Param("id")
 
 	// Use GetContextAuth to retrieve core info
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -76,7 +112,7 @@ func UpdateRolesPermissions(c *gin.Context) {
 	}
 	rID := parseUint(rolesID)
 	var role models.Roles
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id")).
+	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "roles.companies_id")).
 		First(&role, rID).Error; err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this role"})
 		return
@@ -84,25 +120,43 @@ func UpdateRolesPermissions(c *gin.Context) {
 
 	err := config.DB.Transaction(func(tx *gorm.DB) error {
 		// Apply Scopes to ensure the user only deletes permissions within their authorized companies/access
-		if err := tx.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles_module_access.companies_id", "unused")).
+		if err := tx.Scopes(repository.ApplyCompanyScopes(c, currentUser, "roles_module_access.companies_id")).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err
 		}
 
 		if len(input) > 0 {
+			capabilities, capErr := capabilitiesForRequest(tx, input)
+			if capErr != nil {
+				return capErr
+			}
+
 			var newPermissions []models.RolesModuleAccess
 
 			for _, item := range input {
+				capability := capabilities[item.ModuleID]
+
+				// Store only what the backend will actually honour. A module
+				// whose rows have no employee column cannot answer Own or
+				// Department, and an action no route gates on can never fire —
+				// persisting either would put a claim in the database that the
+				// permission check silently ignores, which is the exact defect
+				// this capability model exists to remove.
+				scope := item.DataScope
+				if !capability.AllowsScope(scope) {
+					scope = models.ScopeCompanies
+				}
+
 				newPermissions = append(newPermissions, models.RolesModuleAccess{
 					RolesID:     rID,
 					CompaniesID: role.CompaniesID,
 					ModuleID:    item.ModuleID,
-					CanView:     item.CanView,
-					CanCreate:   item.CanCreate,
-					CanEdit:     item.CanEdit,
-					CanDelete:   item.CanDelete,
-					DataScope:   item.DataScope,
+					CanView:     item.CanView && capability.AllowsAction(models.ActionView),
+					CanCreate:   item.CanCreate && capability.AllowsAction(models.ActionCreate),
+					CanEdit:     item.CanEdit && capability.AllowsAction(models.ActionEdit),
+					CanDelete:   item.CanDelete && capability.AllowsAction(models.ActionDelete),
+					DataScope:   scope,
 				})
 			}
 
@@ -114,6 +168,10 @@ func UpdateRolesPermissions(c *gin.Context) {
 	})
 
 	if err != nil {
+		if errors.Is(err, errUnknownModule) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Permission payload references an unknown module"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
 		return
 	}

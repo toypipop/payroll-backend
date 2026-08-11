@@ -11,7 +11,7 @@ import (
 )
 
 func GetHolidays(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -21,7 +21,7 @@ func GetHolidays(c *gin.Context) {
 
 	var holidays []models.Holiday
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "holiday.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "holiday.companies_id"),
 	).Preload("Companies").Order("date").Find(&holidays).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch holidays"})
 		return
@@ -70,7 +70,7 @@ func CreateHoliday(c *gin.Context) {
 
 func UpdateHoliday(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
@@ -80,7 +80,7 @@ func UpdateHoliday(c *gin.Context) {
 
 	var holiday models.Holiday
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "holiday.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "holiday.companies_id"),
 	).Where("id = ?", id).First(&holiday).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Holiday not found or unauthorized"})
 		return
@@ -109,14 +109,14 @@ func UpdateHoliday(c *gin.Context) {
 
 func DeleteHoliday(c *gin.Context) {
 	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
+	userID, _ := repository.GetContextAuth(c)
 
 	var currentUser models.Employees
 	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
 
 	var holiday models.Holiday
 	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "holiday.companies_id", "unused"),
+		repository.ApplyCompanyScopes(c, currentUser, "holiday.companies_id"),
 	).Where("id = ?", id).First(&holiday).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Holiday not found or unauthorized"})
 		return
