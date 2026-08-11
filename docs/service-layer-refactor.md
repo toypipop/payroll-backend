@@ -28,13 +28,25 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
   - [x] 2a · departments, positions, roles
   - [x] 2b · banks, holidays, work_locations, leave_type_settings, day_offs
   - [x] 2c · companies, employee_company_access, permission
-- [ ] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig
+- [x] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig — plus `handlers/payroll/payroll_handler.go`, which held the *routed* copies of the payroll-config endpoints
 - [ ] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries
 - [ ] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary
-- [ ] **6 — payroll** (9) · cycles, cycle_earnings, cycle_deductions, calculate, precheck, diff, myslips, payroll, snapshot_service
+- [ ] **6 — payroll** (8) · cycles, cycle_earnings, cycle_deductions, calculate, precheck, diff, myslips, snapshot_service — `payroll_handler.go` was already done in round 3
 - [ ] **7 — reports** (1) · reports
 - [ ] **8 — auth** (1) · auth — repository + service for lookup/claims; JWT signing and cookie writing stay in the handler because those are HTTP
 - [ ] **9 — comment sweep** · both repos, rule 5 above
+
+## Check the route table before refactoring a handler
+
+`GetPayrollConfigs` and `UpdatePayrollConfig` existed in **both**
+`handlers/payroll` and `handlers/payrollconfig`, with different behaviour, and only
+the `handlers/payroll` pair was routed (`/global`). The unrouted copy used
+archive-then-insert versioning that would have collided with the plain unique
+index on `payroll_config.companies_id` — a soft-deleted row keeps occupying that
+value — which is presumably why it was abandoned. Refactoring it and wiring it up
+would have broken a working endpoint. Grep `routes/routes.go` for the handler name
+before assuming a function is live, and note the import aliases: `payhandler` is
+`handlers/payroll`, `cfghandler` is `handlers/payrollconfig`.
 
 ## Found while migrating — decide separately, do not fold into a refactor commit
 

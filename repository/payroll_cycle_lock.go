@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"payroll-backend/apperr"
 	"payroll-backend/config"
 	"payroll-backend/models"
 
@@ -9,9 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Carry apperr kinds so a migrated handler gets the right status from httpx.
+// Handlers not yet migrated compare these by identity and write their own
+// messages, so giving them a kind changes nothing for those call sites.
 var (
-	ErrPayrollCycleNotFound = errors.New("payroll cycle not found or access denied")
-	ErrPayrollCycleClosed   = errors.New("payroll cycle is closed")
+	ErrPayrollCycleNotFound = apperr.NotFound("Payroll cycle not found or access denied")
+	ErrPayrollCycleClosed   = apperr.Conflict("Payroll cycle is closed")
 )
 
 // EnsurePayrollCycleOpen validates the cycle is accessible and open.

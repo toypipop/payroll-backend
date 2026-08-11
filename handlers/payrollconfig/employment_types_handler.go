@@ -2,26 +2,29 @@ package payrollconfig
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
+// employmentTypeService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func employmentTypeService() *service.EmploymentTypeService {
+	return service.NewEmploymentTypeService(repository.NewEmploymentTypeRepository())
+}
+
 func GetEmploymentTypes(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var types []models.EmploymentType
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
-	).Preload("Companies").Order("name").Find(&types).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employment types"})
+	types, err := employmentTypeService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, types)
@@ -31,10 +34,14 @@ func GetEmploymentTypes(c *gin.Context) {
 // Ungated by page permission (mirrors GetCompanies) so any role filling out
 // an employee-linked form can see whether employment types exist for a company.
 func GetEmploymentTypeOptions(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
+	types, err := employmentTypeService().Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -43,15 +50,6 @@ func GetEmploymentTypeOptions(c *gin.Context) {
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var types []models.EmploymentType
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
-	).Order("name").Find(&types).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch employment types"})
-		return
-	}
-
 	options := make([]option, 0, len(types))
 	for _, t := range types {
 		options = append(options, option{ID: t.ID, Name: t.Name, CompaniesID: t.CompaniesID})
@@ -60,75 +58,64 @@ func GetEmploymentTypeOptions(c *gin.Context) {
 }
 
 func CreateEmploymentType(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var et models.EmploymentType
-	if err := c.ShouldBindJSON(&et); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var targetCompany models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "id"),
-	).Where("id = ?", et.CompaniesID).First(&targetCompany).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+	var input models.EmploymentType
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	et.ID = 0
-	if err := config.DB.Create(&et).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create employment type"})
+	employmentType, err := employmentTypeService().Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, et)
+	c.JSON(http.StatusCreated, employmentType)
 }
 
 func UpdateEmploymentType(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var et models.EmploymentType
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
-	).First(&et, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employment type not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "employment type")
+	if !ok {
 		return
 	}
 
+	// companies_id is not accepted here: the company is immutable after creation.
 	var input struct {
-		Name        string `json:"name" binding:"required"`
+		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	et.Name = input.Name
-	et.Description = input.Description
-	config.DB.Save(&et)
-	c.JSON(http.StatusOK, et)
+	employmentType, err := employmentTypeService().Update(scope, id, input.Name, input.Description)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, employmentType)
 }
 
 func DeleteEmploymentType(c *gin.Context) {
-	id := c.Param("id")
-	userID, _ := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var et models.EmploymentType
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "employment_type.companies_id"),
-	).Where("id = ?", id).First(&et).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employment type not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "employment type")
+	if !ok {
 		return
 	}
 
-	config.DB.Delete(&et)
+	if err := employmentTypeService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Employment type deleted"})
 }
