@@ -10,14 +10,14 @@ import (
 )
 
 type cycleSummary struct {
-	CycleID       uint    `json:"cycle_id"`
-	CycleName     string  `json:"cycle_name"`
-	EmployeeCount int     `json:"employee_count"`
-	TotalEarning  float64 `json:"total_earning"`
+	CycleID        uint    `json:"cycle_id"`
+	CycleName      string  `json:"cycle_name"`
+	EmployeeCount  int     `json:"employee_count"`
+	TotalEarning   float64 `json:"total_earning"`
 	TotalDeduction float64 `json:"total_deduction"`
-	SsoAmount     float64 `json:"sso_amount"`
-	TaxAmount     float64 `json:"tax_amount"`
-	NetPay        float64 `json:"net_pay"`
+	SsoAmount      float64 `json:"sso_amount"`
+	TaxAmount      float64 `json:"tax_amount"`
+	NetPay         float64 `json:"net_pay"`
 }
 
 type aggregateRow struct {

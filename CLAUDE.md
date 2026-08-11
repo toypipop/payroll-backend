@@ -22,6 +22,9 @@ Check `../payroll-frontend/CLAUDE.md` when changing frontend-facing routes, modu
 - `models/settings.go` — companies, departments, positions, banks, holidays, work locations, leave types.
 - `repository/*` — query scopes, shared checks, and per-domain persistence interfaces.
 - `service/*` — domain business rules; depends on repository interfaces, never on `config.DB` or gin.
+- `apperr/apperr.go` — the error-kind vocabulary shared by every layer; the kind decides the HTTP status.
+- `handlers/httpx/httpx.go` — shared handler plumbing (`RequestScope`, `ParseID`, `BindJSON`, `RespondError`).
+- `docs/service-layer-refactor.md` — progress checklist for migrating the remaining handlers off `config.DB`.
 - `timeutil/timeutil.go` — the ONLY source of truth for the business timezone (see Timezone Handling below).
 - `migrations/*` — raw/schema repairs not safely covered by AutoMigrate.
 - `seed/main.go` — local/test data, modules, permissions.
@@ -81,7 +84,10 @@ New or refactored domains follow handler → service → repository:
 - `repository.AccessScope` (`repository/access_scope.go`) carries the resolved auth context (user, DataScope, authorized company IDs) as a plain value. Build it once per request with `repository.NewAccessScope(c)` instead of repeating the "load currentUser, then read data_scope" preamble; use `scope.ApplyCompany(companiesCol)` / `scope.ApplyEmployee(companiesCol, employeeCol)`, `scope.ResolveCompanyID(...)`, `scope.CanAccessCompany(...)` below the handler.
 - `repository/<domain>_repository.go` declares an interface plus a `gorm*` implementation. Services depend on the interface so business rules are testable without PostgreSQL.
 - `service/<domain>_service.go` holds the rules and returns typed sentinel errors (`ErrCompanyAccessDenied`, `ErrRoleCompanyMismatch`, ...). It must not import gin or know about HTTP status codes.
-- Handlers only bind input, call the service, and map sentinel errors to statuses. Never return `err.Error()` to the client — driver and SQL detail leaks through it.
+- Domain sentinel errors are built from `apperr.Validation/NotFound/Forbidden/Conflict/Unauthorized`, so the error's *kind* selects the status. `handlers/httpx.RespondError` is the **only** place in the codebase that maps an error to a status code — never write a per-domain `switch`. Anything not authored through `apperr` is `KindInternal` → 500 with a generic message, which is what keeps driver and SQL text from reaching the client.
+- Handlers only bind input, call the service, and respond. Use `httpx.RequestScope` / `httpx.ParseID` / `httpx.BindJSON` / `httpx.RespondError` directly rather than re-wrapping them per package. Never return `err.Error()` to the client.
+- A domain's repository must use the filter its `models/module_capability.go` entry declares: `ScopeLevel == "employee"` ⟺ `scope.ApplyEmployee`, `"company"` ⟺ `scope.ApplyCompany`. That pair is the check that catches a cross-company data leak, which `go build` cannot.
+- `gofmt -w` rewrites line endings on every file it reads (the tree is checked out CRLF), so scope it to the directories you edited instead of the whole repo.
 - Use `repository.ClearField` in an update map to null a nullable column; the repository translates it to SQL `NULL` so GORM clause types stay out of services.
 - Handlers not yet migrated still call `config.DB` directly. That is legacy, not the pattern to copy.
 
@@ -116,7 +122,7 @@ New or refactored domains follow handler → service → repository:
 
 Any master-data type consumed by a page other than its own "owning" settings page (a cross-page dropdown) needs a dedicated, **ungated** `GET .../options` sibling endpoint — do not loosen `CheckPermission` on the main CRUD endpoint instead. Pattern (mirrors `GetCompanies`/`GetCompaniesOptions`):
 - No `middleware.CheckPermission(...)` on the route.
-- Scoped only by `repository.ApplyContextScopes(...)` (company data-access), never by page permission.
+- Scoped only by company data-access (`scope.ApplyCompany(...)`, or the legacy `repository.ApplyCompanyScopes(...)` in a not-yet-migrated handler), never by page permission.
 - Returns minimal fields only (`id`, `name`, `companies_id` — never sensitive/rate fields).
 - Existing examples: `/departments/options`, `/positions/options`, `/roles/options`, `/master/employment-types/options`, `/earning-types/options`, `/deduction-types/options`, `/master/leave-types/options`, `/master/banks/options`, `/master/work-locations/options`, `/master/day-offs/options`.
 - Exception: if the underlying model has genuinely sensitive fields (e.g. `AttendanceConfig` payroll rates), build a separate purpose-built endpoint instead of a generic `/options` list (see `GetTimelogScheduleConfig`).

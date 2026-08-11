@@ -2,19 +2,18 @@ package repository
 
 import (
 	"errors"
+	"payroll-backend/apperr"
 	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
 )
 
-// ErrEmployeeNotFound covers both "no such row" and "row exists but is out of
-// the caller's scope" — the two are deliberately indistinguishable to callers
-// so scoping never leaks the existence of other tenants' records.
-var ErrEmployeeNotFound = errors.New("employee not found or access denied")
+// ErrEmployeeNotFound covers both "no such row" and "out of the caller's scope" so scoping never leaks other tenants' records.
+var ErrEmployeeNotFound = apperr.NotFound("Employee not found or access denied")
 
 // ErrRoleNotFound means the referenced role row does not exist.
-var ErrRoleNotFound = errors.New("role not found")
+var ErrRoleNotFound = apperr.NotFound("Role not found")
 
 // ClearField is the value to place in an update map to null a nullable column.
 // It keeps GORM's clause types out of the service layer.

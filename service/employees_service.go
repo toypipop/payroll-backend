@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 
@@ -11,11 +12,10 @@ import (
 // bcryptCost matches what the login path expects to verify against.
 const bcryptCost = 12
 
-// Business-rule failures. Handlers map these to status codes; nothing below
-// the handler layer knows what an HTTP status is.
+// Business-rule failures; the kind decides the status, so nothing here names an HTTP code.
 var (
-	ErrCompanyAccessDenied = errors.New("access denied for this company")
-	ErrRoleCompanyMismatch = errors.New("role does not belong to selected company")
+	ErrCompanyAccessDenied = apperr.Forbidden("Access denied for this company")
+	ErrRoleCompanyMismatch = apperr.Validation("Role does not belong to selected company")
 	ErrPasswordHash        = errors.New("could not secure the password")
 )
 

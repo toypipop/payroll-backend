@@ -52,7 +52,6 @@ func CheckDeleteBlocked(entity string, id uint, companiesID uint) (bool, string,
 		}
 		return false, "", nil
 
-
 	case "employment_type":
 		if ok, err := modelCountExists(&models.Employees{}, "employment_type_id = ?", id); err != nil {
 			return false, "", err
