@@ -17,6 +17,16 @@ gofmt -l -w <only the dirs you touched>   # NOT the whole repo, see note
 go vet ./... && go build ./...
 ```
 
+To check a package is really off `config.DB`, test for the **import**, not the string:
+
+```bash
+for f in handlers/<pkg>/*.go; do grep -q '"payroll-backend/config"' "$f" && echo "$f"; done
+```
+
+Grepping for `config.DB` gives false positives — the doc comment on every migrated
+service accessor mentions it by name. And `Select-String -SimpleMatch 'config\.DB'`
+in PowerShell searches for a literal backslash, so it reports 0 no matter what.
+
 Note: files in this repo are checked out CRLF, so `gofmt -w` rewrites line endings on every file it reads. Git normalizes them away, but scope `gofmt` to the directories you actually edited to keep the working tree quiet.
 
 No test suite exists. `go build` catches signature breakage only — it cannot catch a wrong scope filter or a dropped business rule. Smoke-test the touched endpoints against a running server each round.
@@ -29,7 +39,7 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
   - [x] 2b · banks, holidays, work_locations, leave_type_settings, day_offs
   - [x] 2c · companies, employee_company_access, permission
 - [x] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig — plus `handlers/payroll/payroll_handler.go`, which held the *routed* copies of the payroll-config endpoints
-- [ ] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries
+- [x] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries — `handlers/employees` is now free of `config.DB`
 - [ ] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary
 - [ ] **6 — payroll** (8) · cycles, cycle_earnings, cycle_deductions, calculate, precheck, diff, myslips, snapshot_service — `payroll_handler.go` was already done in round 3
 - [ ] **7 — reports** (1) · reports

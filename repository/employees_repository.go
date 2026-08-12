@@ -25,6 +25,7 @@ var ClearField = struct{}{}
 type EmployeesRepository interface {
 	ListScoped(scope AccessScope) ([]models.Employees, error)
 	FindScoped(scope AccessScope, id uint) (models.Employees, error)
+	FindBriefScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindRole(roleID uint) (models.Roles, error)
 	Create(employee *models.Employees) error
 	UpdateFields(employee *models.Employees, fields map[string]any) error
@@ -63,6 +64,19 @@ func (r *gormEmployeesRepository) ListScoped(scope AccessScope) ([]models.Employ
 func (r *gormEmployeesRepository) FindScoped(scope AccessScope, id uint) (models.Employees, error) {
 	var employee models.Employees
 	if err := r.scoped(scope).First(&employee, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.Employees{}, ErrEmployeeNotFound
+		}
+		return models.Employees{}, err
+	}
+	return employee, nil
+}
+
+// FindBriefScoped loads only what a cross-domain company check needs, so callers
+// linking a record to an employee never drag the password hash around.
+func (r *gormEmployeesRepository) FindBriefScoped(scope AccessScope, id uint) (models.Employees, error) {
+	var employee models.Employees
+	if err := r.scoped(scope).Select("id, companies_id").First(&employee, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Employees{}, ErrEmployeeNotFound
 		}

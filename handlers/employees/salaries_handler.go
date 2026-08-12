@@ -2,152 +2,51 @@ package employees
 
 import (
 	"net/http"
-	"time"
 
-	"payroll-backend/config"
-	"payroll-backend/models"
-	"payroll-backend/repository"
+	"payroll-backend/handlers/httpx"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
+// UpdateSalariesStructure either disables an employee's current salary or
+// supersedes it with a new record. The archive-or-erase decision for the outgoing
+// records lives in the service; see SalariesStructureService.
 func UpdateSalariesStructure(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
 	var input struct {
-		EmployeesID   uint    `json:"employees_id" binding:"required"`
-		CompaniesID   uint    `json:"companies_id" binding:"required"`
+		EmployeesID   uint    `json:"employees_id"`
+		CompaniesID   uint    `json:"companies_id"`
 		BaseSalaries  float64 `json:"base_salaries"`
-		EffectiveDate string  `json:"effective_date" binding:"required"`
+		EffectiveDate string  `json:"effective_date"`
 		DeletedAt     *bool   `json:"deleted_at"`
 	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	parsedDate, err := time.Parse("2006-01-02", input.EffectiveDate)
+	result, err := salariesStructureService().Save(scope, service.SalaryInput{
+		EmployeesID:   input.EmployeesID,
+		CompaniesID:   input.CompaniesID,
+		BaseSalaries:  input.BaseSalaries,
+		EffectiveDate: input.EffectiveDate,
+		Disable:       input.DeletedAt != nil && *input.DeletedAt,
+	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Expected YYYY-MM-DD"})
+		httpx.RespondError(c, err)
 		return
 	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
-		return
-	}
-
-	emp, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
-		return
-	}
-
-	var existing []models.SalariesStructure
-	config.DB.Unscoped().Where("employees_id = ? AND companies_id = ?", input.EmployeesID, emp.CompaniesID).Order("id ASC").Find(&existing)
-
-	shouldDelete := input.DeletedAt != nil && *input.DeletedAt
-
-	if shouldDelete {
-		for i := range existing {
-			if existing[i].IsActive {
-				if err := archiveSalaryRecord(config.DB, existing[i]); err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to disable salaries record"})
-					return
-				}
-			}
-		}
+	if result.Disabled {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Salaries structure disabled successfully",
 			"data":    nil,
 		})
 		return
 	}
-
-	// Block backdating into a period that's already been paid out and closed
-	var closedCycleCount int64
-	config.DB.Model(&models.PayrollCycle{}).
-		Where("companies_id = ? AND is_closed = ? AND start_date <= ? AND end_date >= ?", emp.CompaniesID, true, parsedDate, parsedDate).
-		Count(&closedCycleCount)
-	if closedCycleCount > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Effective date falls within an already-closed payroll cycle and cannot be used"})
-		return
-	}
-
-	// Effective date must not move backward from the most recent record
-	// (active or not), so history never goes out of chronological order.
-	if len(existing) > 0 {
-		lastRecord := existing[len(existing)-1]
-		if parsedDate.Before(lastRecord.EffectiveDate) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Effective date cannot be before the most recent salary record's effective date"})
-			return
-		}
-	}
-
-	var activeRecords []models.SalariesStructure
-	for _, rec := range existing {
-		if rec.IsActive {
-			activeRecords = append(activeRecords, rec)
-		}
-	}
-
-	tx := config.DB.Begin()
-
-	for i := range activeRecords {
-		if err := archiveSalaryRecord(tx, activeRecords[i]); err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to archive previous salaries record"})
-			return
-		}
-	}
-
-	salaries := models.SalariesStructure{
-		CompaniesID:   emp.CompaniesID,
-		EmployeesID:   input.EmployeesID,
-		BaseSalaries:  input.BaseSalaries,
-		EffectiveDate: parsedDate,
-		IsActive:      true,
-	}
-	if err := tx.Create(&salaries).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create salaries record"})
-		return
-	}
-
-	tx.Commit()
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Salaries structure saved successfully",
-	})
-}
-
-// archiveSalaryRecord retires a record that's no longer the current one. If it
-// was ever actually used in a closed payroll cycle's calculation, it's kept
-// forever (IsActive=false, DeletedAt untouched) so history stays intact.
-// Usage in a still-open cycle doesn't count — that transaction is a draft
-// that gets recalculated whenever payroll reruns, so it's still safe to erase.
-func archiveSalaryRecord(db *gorm.DB, record models.SalariesStructure) error {
-	usedCount, err := usedInClosedCycleCount(db, record.ID)
-	if err != nil {
-		return err
-	}
-	if usedCount > 0 {
-		return db.Model(&models.SalariesStructure{}).Where("id = ?", record.ID).Update("is_active", false).Error
-	}
-	return db.Model(&models.SalariesStructure{}).Where("id = ?", record.ID).Update("deleted_at", time.Now().UnixNano()).Error
-}
-
-// usedInClosedCycleCount counts payroll transactions produced by this salary
-// record that belong to a closed (finalized) cycle. Transactions in still-open
-// cycles are drafts and don't make a record undeletable.
-func usedInClosedCycleCount(db *gorm.DB, salariesStructureID uint) (int64, error) {
-	var count int64
-	err := db.Model(&models.PayrollTransaction{}).
-		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id").
-		Where("payroll_transaction.salaries_structure_id = ? AND payroll_cycle.is_closed = ?", salariesStructureID, true).
-		Count(&count).Error
-	return count, err
+	c.JSON(http.StatusOK, gin.H{"message": "Salaries structure saved successfully"})
 }

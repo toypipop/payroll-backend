@@ -2,121 +2,92 @@ package employees
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
+// employeeEarningService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func employeeEarningService() *service.EmployeeEarningService {
+	return service.NewEmployeeEarningService(
+		repository.NewEmployeeEarningRepository(),
+		repository.NewEmployeesRepository(),
+		repository.NewEarningTypeRepository(),
+	)
+}
+
 func GetEmployeeEarnings(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var items []models.EmployeeEarning
-	if err := config.DB.Scopes(
-		repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_earning.companies_id", "employee_earning.employees_id"),
-	).
-		Preload("EarningType").
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Find(&items).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	items, err := employeeEarningService().List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, items)
 }
 
 func CreateEmployeeEarning(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
 	var input models.EmployeeEarning
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	input.ID = 0
-	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
-		return
-	}
-	input.CompaniesID = targetEmployee.CompaniesID
-	var earningType models.EarningType
-	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id")).
-		First(&earningType, input.EarningTypeID).Error; err != nil || earningType.CompaniesID != input.CompaniesID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type does not belong to selected company"})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create employee earning"})
+	earning, err := employeeEarningService().Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-	config.DB.Preload("EarningType").First(&input, input.ID)
-	c.JSON(http.StatusCreated, input)
+	c.JSON(http.StatusCreated, earning)
 }
 
 func UpdateEmployeeEarning(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
-
-	var item models.EmployeeEarning
-	if err := config.DB.Scopes(repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_earning.companies_id", "employee_earning.employees_id")).
-		Where("id = ?", id).First(&item).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "employee earning")
+	if !ok {
 		return
 	}
 
 	var input models.EmployeeEarning
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	targetEmployee, ok := repository.ResolveEmployeeForCompany(c, currentUser, dataScope, input.EmployeesID, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Employee does not belong to selected company or access denied"})
-		return
-	}
-	var earningType models.EarningType
-	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "earning_type.companies_id")).
-		First(&earningType, input.EarningTypeID).Error; err != nil || earningType.CompaniesID != targetEmployee.CompaniesID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Earning type does not belong to selected company"})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	if err := config.DB.Model(&item).Updates(map[string]interface{}{
-		"amount":          input.Amount,
-		"companies_id":    targetEmployee.CompaniesID,
-		"earning_type_id": input.EarningTypeID,
-		"employees_id":    input.EmployeesID,
-	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+	earning, err := employeeEarningService().Update(scope, id, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-	config.DB.Preload("EarningType").First(&item, item.ID)
-	c.JSON(http.StatusOK, item)
+	c.JSON(http.StatusOK, earning)
 }
 
 func DeleteEmployeeEarning(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "employee earning")
+	if !ok {
+		return
+	}
 
-	result := config.DB.Scopes(repository.ApplyEmployeeScopes(c, currentUser, dataScope, "employee_earning.companies_id", "employee_earning.employees_id")).
-		Where("id = ?", id).
-		Delete(&models.EmployeeEarning{})
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or unauthorized"})
+	if err := employeeEarningService().Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
