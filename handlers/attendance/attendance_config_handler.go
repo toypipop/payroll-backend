@@ -2,34 +2,30 @@ package attendance
 
 import (
 	"net/http"
-	"payroll-backend/config"
-	"payroll-backend/models"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/repository"
-	"payroll-backend/timeutil"
-	"time"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
+// attendanceConfigService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
+func attendanceConfigService() *service.AttendanceConfigService {
+	return service.NewAttendanceConfigService(repository.NewAttendanceConfigRepository())
+}
+
 func GetAttendanceConfigs(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var companies []models.Companies
-	err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
-	).Order("companies.id ASC").Preload("AttendanceConfig").Find(&companies).Error
-
+	companies, err := attendanceConfigService().List(scope)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, companies)
 }
 
@@ -38,28 +34,15 @@ func GetAttendanceConfigs(c *gin.Context) {
 // AttendanceSettingsPage) and intentionally omits deduction/earning rates so a
 // timelog-only user can auto-fill check in/out without seeing payroll rate data.
 func GetTimelogScheduleConfig(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var companies []models.Companies
-	err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
-	).Order("companies.id ASC").Preload("AttendanceConfig").Find(&companies).Error
+	schedules, err := attendanceConfigService().Schedules(scope)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpx.RespondError(c, err)
 		return
-	}
-
-	formatTime := func(t *time.Time) string {
-		if t == nil {
-			return ""
-		}
-		return timeutil.ToBangkok(*t).Format("15:04")
 	}
 
 	type scheduleItem struct {
@@ -68,37 +51,23 @@ func GetTimelogScheduleConfig(c *gin.Context) {
 		WorkEndTime   string `json:"work_end_time"`
 		IsConfigured  bool   `json:"is_configured"`
 	}
-
-	result := make([]scheduleItem, 0, len(companies))
-	for _, comp := range companies {
-		cfg := comp.AttendanceConfig
-		item := scheduleItem{CompaniesID: comp.ID}
-		if cfg != nil && cfg.WorkStartTime != nil && cfg.WorkEndTime != nil {
-			item.WorkStartTime = formatTime(cfg.WorkStartTime)
-			item.WorkEndTime = formatTime(cfg.WorkEndTime)
-			item.IsConfigured = true
-		}
-		result = append(result, item)
+	result := make([]scheduleItem, 0, len(schedules))
+	for _, schedule := range schedules {
+		result = append(result, scheduleItem{
+			CompaniesID:   schedule.CompaniesID,
+			WorkStartTime: schedule.WorkStartTime,
+			WorkEndTime:   schedule.WorkEndTime,
+			IsConfigured:  schedule.IsConfigured,
+		})
 	}
-
 	c.JSON(http.StatusOK, result)
 }
 
-func parseTimeString(timeStr string) *time.Time {
-	if timeStr == "" {
-		return nil
-	}
-	parsed, err := time.Parse("15:04", timeStr)
-	if err != nil {
-		return nil
-	}
-	now := timeutil.ToBangkok(time.Now())
-	result := time.Date(now.Year(), now.Month(), now.Day(), parsed.Hour(), parsed.Minute(), 0, 0, timeutil.BangkokLocation)
-	return &result
-}
-
 func UpdateAttendanceConfig(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
 	var input struct {
 		CompaniesID               uint    `json:"companies_id"`
@@ -113,70 +82,25 @@ func UpdateAttendanceConfig(c *gin.Context) {
 		IsOvertimeEarningsEnabled bool    `json:"is_overtime_earnings_enabled"`
 		IsExtraEarningsEnabled    bool    `json:"is_extra_earnings_enabled"`
 	}
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	if _, err := attendanceConfigService().Save(scope, service.AttendanceConfigInput{
+		CompaniesID:               input.CompaniesID,
+		LateRatePerMinute:         input.LateRatePerMinute,
+		AbsentRatePerDay:          input.AbsentRatePerDay,
+		IsLateDeductionEnabled:    input.IsLateDeductionEnabled,
+		IsAbsentDeductionEnabled:  input.IsAbsentDeductionEnabled,
+		WorkStartTime:             input.WorkStartTime,
+		WorkEndTime:               input.WorkEndTime,
+		OvertimeRatePerMinute:     input.OvertimeRatePerMinute,
+		ExtraRatePerDay:           input.ExtraRatePerDay,
+		IsOvertimeEarningsEnabled: input.IsOvertimeEarningsEnabled,
+		IsExtraEarningsEnabled:    input.IsExtraEarningsEnabled,
+	}); err != nil {
+		httpx.RespondError(c, err)
 		return
-	}
-
-	var targetCompany models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyCompanyScopes(c, currentUser, "companies.id"),
-	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-
-	// Parse time strings to time.Time
-	workStartTime := parseTimeString(input.WorkStartTime)
-	workEndTime := parseTimeString(input.WorkEndTime)
-
-	updates := map[string]interface{}{
-		"late_rate_per_minute":         input.LateRatePerMinute,
-		"absent_rate_per_day":          input.AbsentRatePerDay,
-		"is_late_deduction_enabled":    input.IsLateDeductionEnabled,
-		"is_absent_deduction_enabled":  input.IsAbsentDeductionEnabled,
-		"work_start_time":              workStartTime,
-		"work_end_time":                workEndTime,
-		"overtime_rate_per_minute":     input.OvertimeRatePerMinute,
-		"extra_rate_per_day":           input.ExtraRatePerDay,
-		"is_overtime_earnings_enabled": input.IsOvertimeEarningsEnabled,
-		"is_extra_earnings_enabled":    input.IsExtraEarningsEnabled,
-		"updated_at":                   time.Now(),
-	}
-
-	var existing models.AttendanceConfig
-	if err := config.DB.Where("companies_id = ?", input.CompaniesID).First(&existing).Error; err == nil {
-		// Record exists — update it directly by ID
-		if err := config.DB.Model(&existing).Updates(updates).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
-			return
-		}
-	} else {
-		// No record yet — create one
-		newCfg := models.AttendanceConfig{
-			CompaniesID:               input.CompaniesID,
-			LateRatePerMinute:         input.LateRatePerMinute,
-			AbsentRatePerDay:          input.AbsentRatePerDay,
-			IsLateDeductionEnabled:    input.IsLateDeductionEnabled,
-			IsAbsentDeductionEnabled:  input.IsAbsentDeductionEnabled,
-			WorkStartTime:             workStartTime,
-			WorkEndTime:               workEndTime,
-			OvertimeRatePerMinute:     input.OvertimeRatePerMinute,
-			ExtraRatePerDay:           input.ExtraRatePerDay,
-			IsOvertimeEarningsEnabled: input.IsOvertimeEarningsEnabled,
-			IsExtraEarningsEnabled:    input.IsExtraEarningsEnabled,
-		}
-		if err := config.DB.Create(&newCfg).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save configuration"})
-			return
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Configuration saved", "data": input})
