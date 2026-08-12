@@ -54,7 +54,7 @@ ordering slip that no amount of reading will.
   - 6a snapshot engine + cycles + calculate, verified by A/B on real figures
   - 6b cycle earnings and deductions; deleted `EnsurePayrollCycleOpen`
   - 6c precheck + diff
-- [ ] **7 — reports** (1) · reports
+- [x] **7 — reports** (1) · reports — verified by A/B, only the id-0 responses differ
 - [ ] **8 — auth** (1) · auth — repository + service for lookup/claims; JWT signing and cookie writing stay in the handler because those are HTTP
 - [ ] **9 — comment sweep** · both repos, rule 5 above
 
