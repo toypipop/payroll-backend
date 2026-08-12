@@ -58,6 +58,15 @@ would have broken a working endpoint. Grep `routes/routes.go` for the handler na
 before assuming a function is live, and note the import aliases: `payhandler` is
 `handlers/payroll`, `cfghandler` is `handlers/payrollconfig`.
 
+## Fixed in round 5c — the approver was taken from the request body
+
+`ApproveLeaveRequest` wrote `approved_by` from the JSON body, and
+`LeaveApprovedPage.tsx` filled it from `localStorage`. Anyone able to approve could
+therefore record the approval under a different employee's name by editing the
+request. The approver is now `scope.User.ID`. The field is still accepted in the
+body and ignored, so no frontend change is required, though the frontend could stop
+sending it.
+
 ## Fixed in round 5b — three real bugs found in the time-log path
 
 - **Bulk generation was not atomic.** Logs were written one at a time and the first
