@@ -17,8 +17,13 @@ var (
 	ErrDeductionTypeDeleteDenied = apperr.Forbidden("Delete failed or unauthorized")
 )
 
+// ErrDeductionTypeMissing means no such deduction-type row exists at all, as opposed
+// to one the caller cannot reach.
+var ErrDeductionTypeMissing = apperr.Validation("Deduction type not found")
+
 // DeductionTypeRepository is the persistence boundary for the deduction-types domain.
 type DeductionTypeRepository interface {
+	Find(id uint) (models.DeductionType, error)
 	ListScoped(scope AccessScope) ([]models.DeductionType, error)
 	ListMinimalScoped(scope AccessScope) ([]models.DeductionType, error)
 	FindScoped(scope AccessScope, id uint) (models.DeductionType, error)
@@ -39,6 +44,20 @@ func NewDeductionTypeRepository() DeductionTypeRepository {
 // scoped filters by authorized company, the filter DeductionTypesPage declares as a company-level module.
 func (r *gormDeductionTypeRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("deduction_type.companies_id"))
+}
+
+// Find looks up a deduction type without any scope filter. The cycle-deduction rules
+// compare its company against the cycle's own, so they need to tell "no such row"
+// apart from "belongs to another company".
+func (r *gormDeductionTypeRepository) Find(id uint) (models.DeductionType, error) {
+	var deductionType models.DeductionType
+	if err := r.db.First(&deductionType, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.DeductionType{}, ErrDeductionTypeMissing
+		}
+		return models.DeductionType{}, err
+	}
+	return deductionType, nil
 }
 
 func (r *gormDeductionTypeRepository) ListScoped(scope AccessScope) ([]models.DeductionType, error) {

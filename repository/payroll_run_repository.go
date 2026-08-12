@@ -44,6 +44,7 @@ type TransactionSnapshot struct {
 // PayrollRunRepository is the persistence boundary for calculating a payroll cycle.
 type PayrollRunRepository interface {
 	FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
+	FindOpenCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	ListCyclesScoped(scope AccessScope) ([]models.PayrollCycle, error)
 	CreateCycle(cycle *models.PayrollCycle) error
 	MarkCycleClosed(cycle *models.PayrollCycle) error
@@ -93,6 +94,20 @@ func (r *gormPayrollRunRepository) FindCycleScoped(scope AccessScope, cycleID ui
 			return models.PayrollCycle{}, ErrPayrollCycleMissing
 		}
 		return models.PayrollCycle{}, err
+	}
+	return cycle, nil
+}
+
+// FindOpenCycleScoped resolves a cycle the caller may still post items into,
+// distinguishing "no such cycle in reach" from "the cycle is closed" so callers can
+// answer each differently.
+func (r *gormPayrollRunRepository) FindOpenCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error) {
+	cycle, err := r.FindCycleScoped(scope, cycleID)
+	if err != nil {
+		return models.PayrollCycle{}, err
+	}
+	if cycle.IsClosed {
+		return models.PayrollCycle{}, ErrPayrollCycleClosed
 	}
 	return cycle, nil
 }

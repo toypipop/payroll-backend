@@ -17,8 +17,13 @@ var (
 	ErrEarningTypeDeleteDenied = apperr.Forbidden("Delete failed or unauthorized")
 )
 
+// ErrEarningTypeMissing means no such earning-type row exists at all, as opposed to
+// one the caller cannot reach.
+var ErrEarningTypeMissing = apperr.Validation("Earning type not found")
+
 // EarningTypeRepository is the persistence boundary for the earning-types domain.
 type EarningTypeRepository interface {
+	Find(id uint) (models.EarningType, error)
 	ListScoped(scope AccessScope) ([]models.EarningType, error)
 	ListMinimalScoped(scope AccessScope) ([]models.EarningType, error)
 	FindScoped(scope AccessScope, id uint) (models.EarningType, error)
@@ -39,6 +44,20 @@ func NewEarningTypeRepository() EarningTypeRepository {
 // scoped filters by authorized company, the filter EarningTypesPage declares as a company-level module.
 func (r *gormEarningTypeRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("earning_type.companies_id"))
+}
+
+// Find looks up an earning type without any scope filter. The cycle-earning rules
+// compare its company against the cycle's own, so they need to tell "no such row"
+// apart from "belongs to another company".
+func (r *gormEarningTypeRepository) Find(id uint) (models.EarningType, error) {
+	var earningType models.EarningType
+	if err := r.db.First(&earningType, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.EarningType{}, ErrEarningTypeMissing
+		}
+		return models.EarningType{}, err
+	}
+	return earningType, nil
 }
 
 func (r *gormEarningTypeRepository) ListScoped(scope AccessScope) ([]models.EarningType, error) {
