@@ -4,11 +4,16 @@ import (
 	"errors"
 	"time"
 
+	"payroll-backend/apperr"
 	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
 )
+
+// ErrAttendanceConfigNotFound means the company has no schedule configuration yet,
+// which is a normal state rather than a failure: callers fall back to a default.
+var ErrAttendanceConfigNotFound = apperr.NotFound("Attendance configuration not found")
 
 // AttendanceConfigRepository is the persistence boundary for the attendance-config domain.
 type AttendanceConfigRepository interface {

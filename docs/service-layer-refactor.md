@@ -58,6 +58,24 @@ would have broken a working endpoint. Grep `routes/routes.go` for the handler na
 before assuming a function is live, and note the import aliases: `payhandler` is
 `handlers/payroll`, `cfghandler` is `handlers/payrollconfig`.
 
+## Preserved deliberately in round 5b — questionable, but not this refactor's call
+
+These were carried over unchanged. Each is a behaviour change if "fixed", so they
+need their own decision rather than being folded into a refactor.
+
+- `BulkCreate` writes logs one at a time and returns on the first failure, leaving
+  everything created so far in place. No transaction, so a mid-run error yields a
+  partial range with a 500.
+- The "this date already has a log" check builds its window from the parsed
+  calendar date, which is a UTC midnight, not a business-timezone day. The window
+  therefore covers 07:00 to 07:00 Bangkok. With the shifts actually in use (09:00,
+  16:00) it lands correctly, but a check-in before 07:00 Bangkok would be counted
+  against the previous date.
+- `DeriveStatus` ignores errors from its holiday and day-off counts and from the
+  attendance-config lookup, treating a failed query as "no holiday, no day off,
+  default 09:00 start". A database hiccup silently downgrades a status rather than
+  failing the request.
+
 ## Found while migrating — decide separately, do not fold into a refactor commit
 
 - ~~`applyCompanyFilter` returns the query unfiltered on an empty authorized company list~~ — **resolved**, now denies. Investigated first: this was never reachable. `AuthMiddleware` 403s when `AccessibleCompanyIDs` is empty, `CheckPermission` 403s unless it resolved at least one company, and `fk_employees_companies` makes `companies_id = 0` unstorable (verified by attempting the update: FK violation). Changed anyway so the branch fails closed if any of those guards ever moves. No user's access changed — confirmed by re-measuring all four seeded logins.
