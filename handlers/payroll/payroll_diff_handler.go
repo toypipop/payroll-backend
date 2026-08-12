@@ -2,9 +2,9 @@ package payroll
 
 import (
 	"net/http"
-	"payroll-backend/config"
-	"payroll-backend/models"
-	"payroll-backend/repository"
+
+	"payroll-backend/handlers/httpx"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,73 +20,46 @@ type cycleSummary struct {
 	NetPay         float64 `json:"net_pay"`
 }
 
-type aggregateRow struct {
-	EmployeeCount  int     `json:"employee_count"`
-	TotalEarning   float64 `json:"total_earning"`
-	TotalDeduction float64 `json:"total_deduction"`
-	SsoAmount      float64 `json:"sso_amount"`
-	TaxAmount      float64 `json:"tax_amount"`
-	NetPay         float64 `json:"net_pay"`
-}
-
-func aggregateCycle(cycleID uint) cycleSummary {
-	var row aggregateRow
-	config.DB.Model(&models.PayrollTransaction{}).
-		Select("COUNT(*) as employee_count, COALESCE(SUM(total_earning),0) as total_earning, COALESCE(SUM(total_deduction),0) as total_deduction, COALESCE(SUM(sso_amount),0) as sso_amount, COALESCE(SUM(tax_amount),0) as tax_amount, COALESCE(SUM(net_pay),0) as net_pay").
-		Where("cycle_id = ? AND deleted_at = 0", cycleID).
-		Scan(&row)
+// toCycleSummary converts the service's totals into the wire shape.
+func toCycleSummary(totals service.CycleTotals) cycleSummary {
 	return cycleSummary{
-		CycleID:        cycleID,
-		EmployeeCount:  row.EmployeeCount,
-		TotalEarning:   row.TotalEarning,
-		TotalDeduction: row.TotalDeduction,
-		SsoAmount:      row.SsoAmount,
-		TaxAmount:      row.TaxAmount,
-		NetPay:         row.NetPay,
+		CycleID:        totals.CycleID,
+		CycleName:      totals.CycleName,
+		EmployeeCount:  totals.EmployeeCount,
+		TotalEarning:   totals.TotalEarning,
+		TotalDeduction: totals.TotalDeduction,
+		SsoAmount:      totals.SsoAmount,
+		TaxAmount:      totals.TaxAmount,
+		NetPay:         totals.NetPay,
 	}
 }
 
+// GetPayrollDiff compares a cycle's totals against the company's previous closed cycle.
 func GetPayrollDiff(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	cycleID, ok := httpx.ParseID(c, "cycle_id", "payroll cycle")
+	if !ok {
 		return
 	}
 
-	cycleID := c.Param("cycle_id")
-
-	var cycle models.PayrollCycle
-	if err := config.DB.Scopes(repository.ApplyCompanyScopes(c, currentUser, "payroll_cycle.companies_id")).
-		First(&cycle, cycleID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Payroll cycle not found"})
+	diff, err := payrollRunService().Diff(scope, cycleID)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
-	}
-
-	current := aggregateCycle(cycle.ID)
-	current.CycleName = cycle.CycleName
-
-	// Find the most recent closed cycle for the same company before this cycle
-	var prevCycle models.PayrollCycle
-	hasPrevious := false
-	if err := config.DB.
-		Where("companies_id = ? AND is_closed = true AND end_date < ? AND deleted_at = 0", cycle.CompaniesID, cycle.StartDate).
-		Order("end_date DESC").
-		First(&prevCycle).Error; err == nil {
-		hasPrevious = true
 	}
 
 	var previous *cycleSummary
-	if hasPrevious {
-		s := aggregateCycle(prevCycle.ID)
-		s.CycleName = prevCycle.CycleName
-		previous = &s
+	if diff.Previous != nil {
+		summary := toCycleSummary(*diff.Previous)
+		previous = &summary
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"current":      current,
+		"current":      toCycleSummary(diff.Current),
 		"previous":     previous,
-		"has_previous": hasPrevious,
+		"has_previous": diff.HasPrevious,
 	})
 }

@@ -68,6 +68,12 @@ type PayrollRunRepository interface {
 
 	SaveSnapshot(cycleID uint, employeeID uint, snapshot TransactionSnapshot, details []models.PayrollTransactionDetail) error
 
+	CountLivePayrollConfigs(companiesID uint) (int64, error)
+	ListActiveEmployeesBrief(companiesID uint) ([]models.Employees, error)
+	ListEmployeeIDsWithSalaryUpTo(employeeIDs []uint, date time.Time) ([]uint, error)
+	AggregateCycle(cycleID uint) (CycleAggregate, error)
+	FindPreviousClosedCycle(companiesID uint, before time.Time) (models.PayrollCycle, bool, error)
+
 	ListTransactionsForCycle(cycleID uint) ([]models.PayrollTransaction, error)
 	FindTransactionDetail(transactionID uint) (models.PayrollTransaction, error)
 	FindCompany(companiesID uint) (models.Companies, error)
@@ -300,6 +306,74 @@ func (r *gormPayrollRunRepository) SaveSnapshot(cycleID uint, employeeID uint, s
 		}
 		return tx.Create(&details).Error
 	})
+}
+
+// CycleAggregate totals one cycle's transactions, for the run-versus-previous comparison.
+type CycleAggregate struct {
+	EmployeeCount  int
+	TotalEarning   float64
+	TotalDeduction float64
+	SsoAmount      float64
+	TaxAmount      float64
+	NetPay         float64
+}
+
+func (r *gormPayrollRunRepository) CountLivePayrollConfigs(companiesID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.PayrollConfig{}).
+		Where("companies_id = ? AND deleted_at IS NULL", companiesID).
+		Count(&count).Error
+	return count, err
+}
+
+// ListActiveEmployeesBrief loads only what the pre-check reports on.
+func (r *gormPayrollRunRepository) ListActiveEmployeesBrief(companiesID uint) ([]models.Employees, error) {
+	var employees []models.Employees
+	err := r.db.
+		Where("companies_id = ? AND is_active = ?", companiesID, true).
+		Select("id, first_name, last_name, bank_id").
+		Find(&employees).Error
+	return employees, err
+}
+
+// ListEmployeeIDsWithSalaryUpTo returns which of the given employees have a salary
+// record effective on or before the date, so the rest can be reported as skippable.
+func (r *gormPayrollRunRepository) ListEmployeeIDsWithSalaryUpTo(employeeIDs []uint, date time.Time) ([]uint, error) {
+	ids := make([]uint, 0)
+	if len(employeeIDs) == 0 {
+		return ids, nil
+	}
+	err := r.db.Model(&models.SalariesStructure{}).
+		Distinct().
+		Where("employees_id IN ? AND is_active = ? AND effective_date <= ?", employeeIDs, true, date).
+		Pluck("employees_id", &ids).Error
+	return ids, err
+}
+
+func (r *gormPayrollRunRepository) AggregateCycle(cycleID uint) (CycleAggregate, error) {
+	var aggregate CycleAggregate
+	err := r.db.Model(&models.PayrollTransaction{}).
+		Select("COUNT(*) as employee_count, COALESCE(SUM(total_earning),0) as total_earning, COALESCE(SUM(total_deduction),0) as total_deduction, COALESCE(SUM(sso_amount),0) as sso_amount, COALESCE(SUM(tax_amount),0) as tax_amount, COALESCE(SUM(net_pay),0) as net_pay").
+		Where("cycle_id = ? AND deleted_at = 0", cycleID).
+		Scan(&aggregate).Error
+	return aggregate, err
+}
+
+// FindPreviousClosedCycle returns the company's most recent closed cycle ending before
+// the given date, reporting whether one exists rather than treating absence as failure.
+func (r *gormPayrollRunRepository) FindPreviousClosedCycle(companiesID uint, before time.Time) (models.PayrollCycle, bool, error) {
+	var cycle models.PayrollCycle
+	err := r.db.
+		Where("companies_id = ? AND is_closed = true AND end_date < ? AND deleted_at = 0", companiesID, before).
+		Order("end_date DESC").
+		First(&cycle).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.PayrollCycle{}, false, nil
+		}
+		return models.PayrollCycle{}, false, err
+	}
+	return cycle, true, nil
 }
 
 func (r *gormPayrollRunRepository) ListTransactionsForCycle(cycleID uint) ([]models.PayrollTransaction, error) {

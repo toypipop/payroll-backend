@@ -50,7 +50,10 @@ files, rebuild and capture the same requests from the old code, then diff. 24
 responses (3 logins x 4 date windows x 2 endpoints) came back byte-for-byte
 identical. Use this for anything that computes money — it catches an arithmetic or
 ordering slip that no amount of reading will.
-- [ ] **6 — payroll** (8) · cycles, cycle_earnings, cycle_deductions, calculate, precheck, diff, myslips, snapshot_service — `payroll_handler.go` was already done in round 3
+- [x] **6 — payroll** (8) · cycles, cycle_earnings, cycle_deductions, calculate, precheck, diff, myslips, snapshot_service — `handlers/payroll` is now free of `config.DB`; `payroll_handler.go` was already done in round 3
+  - 6a snapshot engine + cycles + calculate, verified by A/B on real figures
+  - 6b cycle earnings and deductions; deleted `EnsurePayrollCycleOpen`
+  - 6c precheck + diff
 - [ ] **7 — reports** (1) · reports
 - [ ] **8 — auth** (1) · auth — repository + service for lookup/claims; JWT signing and cookie writing stay in the handler because those are HTTP
 - [ ] **9 — comment sweep** · both repos, rule 5 above

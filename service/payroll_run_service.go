@@ -590,6 +590,160 @@ func (s *PayrollRunService) computeEmployee(
 	return snapshot, details, nil
 }
 
+// PreCheckIssue is one thing worth telling the operator before a run.
+type PreCheckIssue struct {
+	Type      string
+	Message   string
+	Employees []string
+}
+
+// Issue types the pre-check can report.
+const (
+	IssueNoPayrollConfig = "no_payroll_config"
+	IssueNoEmployees     = "no_employees"
+	IssueNoSalary        = "no_salary"
+	IssueNoBank          = "no_bank"
+)
+
+// PreCheck reports what would go wrong or be skipped if the cycle were run now.
+// Nothing here blocks a run; the caller decides what to do with the list.
+func (s *PayrollRunService) PreCheck(scope repository.AccessScope, cycleID uint) ([]PreCheckIssue, error) {
+	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
+	if err != nil {
+		return nil, err
+	}
+
+	var issues []PreCheckIssue
+
+	configCount, err := s.repo.CountLivePayrollConfigs(cycle.CompaniesID)
+	if err != nil {
+		return nil, err
+	}
+	if configCount == 0 {
+		issues = append(issues, PreCheckIssue{
+			Type:    IssueNoPayrollConfig,
+			Message: "No payroll config found — configure it in Payroll Setup before running",
+		})
+	}
+
+	employees, err := s.repo.ListActiveEmployeesBrief(cycle.CompaniesID)
+	if err != nil {
+		return nil, err
+	}
+	// With nobody to pay, the remaining checks have nothing to say.
+	if len(employees) == 0 {
+		return append(issues, PreCheckIssue{
+			Type:    IssueNoEmployees,
+			Message: "No active employees found for this company",
+		}), nil
+	}
+
+	employeeIDs := make([]uint, 0, len(employees))
+	for _, employee := range employees {
+		employeeIDs = append(employeeIDs, employee.ID)
+	}
+	withSalary, err := s.repo.ListEmployeeIDsWithSalaryUpTo(employeeIDs, cycle.EndDate)
+	if err != nil {
+		return nil, err
+	}
+	hasSalary := make(map[uint]bool, len(withSalary))
+	for _, id := range withSalary {
+		hasSalary[id] = true
+	}
+
+	var noSalary []string
+	var noBank []string
+	for _, employee := range employees {
+		if !hasSalary[employee.ID] {
+			noSalary = append(noSalary, employee.FirstName+" "+employee.LastName)
+		}
+		if employee.BankID == nil || *employee.BankID == 0 {
+			noBank = append(noBank, employee.FirstName+" "+employee.LastName)
+		}
+	}
+
+	if len(noSalary) > 0 {
+		issues = append(issues, PreCheckIssue{
+			Type:      IssueNoSalary,
+			Message:   "These employees have no salary structure and will be skipped",
+			Employees: noSalary,
+		})
+	}
+	if len(noBank) > 0 {
+		issues = append(issues, PreCheckIssue{
+			Type:      IssueNoBank,
+			Message:   "These employees have no bank account assigned",
+			Employees: noBank,
+		})
+	}
+	return issues, nil
+}
+
+// CycleTotals is one cycle's totals, named for the comparison view.
+type CycleTotals struct {
+	CycleID        uint
+	CycleName      string
+	EmployeeCount  int
+	TotalEarning   float64
+	TotalDeduction float64
+	SsoAmount      float64
+	TaxAmount      float64
+	NetPay         float64
+}
+
+// CycleDiff compares a cycle against the company's previous closed one.
+type CycleDiff struct {
+	Current     CycleTotals
+	Previous    *CycleTotals
+	HasPrevious bool
+}
+
+// totalsFor reads one cycle's aggregate and labels it.
+func (s *PayrollRunService) totalsFor(cycle models.PayrollCycle) (CycleTotals, error) {
+	aggregate, err := s.repo.AggregateCycle(cycle.ID)
+	if err != nil {
+		return CycleTotals{}, err
+	}
+	return CycleTotals{
+		CycleID:        cycle.ID,
+		CycleName:      cycle.CycleName,
+		EmployeeCount:  aggregate.EmployeeCount,
+		TotalEarning:   aggregate.TotalEarning,
+		TotalDeduction: aggregate.TotalDeduction,
+		SsoAmount:      aggregate.SsoAmount,
+		TaxAmount:      aggregate.TaxAmount,
+		NetPay:         aggregate.NetPay,
+	}, nil
+}
+
+// Diff totals a cycle and, when there is one, the company's most recent closed cycle
+// ending before it, so an operator can sanity-check a run against the last one.
+func (s *PayrollRunService) Diff(scope repository.AccessScope, cycleID uint) (CycleDiff, error) {
+	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
+	if err != nil {
+		return CycleDiff{}, err
+	}
+
+	current, err := s.totalsFor(cycle)
+	if err != nil {
+		return CycleDiff{}, err
+	}
+
+	previousCycle, found, err := s.repo.FindPreviousClosedCycle(cycle.CompaniesID, cycle.StartDate)
+	if err != nil {
+		return CycleDiff{}, err
+	}
+	if !found {
+		return CycleDiff{Current: current}, nil
+	}
+
+	previous, err := s.totalsFor(previousCycle)
+	if err != nil {
+		return CycleDiff{}, err
+	}
+	return CycleDiff{Current: current, Previous: &previous, HasPrevious: true}, nil
+}
+
 // Transactions returns a cycle's transactions for the summary table.
 func (s *PayrollRunService) Transactions(scope repository.AccessScope, cycleID uint) (models.PayrollCycle, []models.PayrollTransaction, error) {
 	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
