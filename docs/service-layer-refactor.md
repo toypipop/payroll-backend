@@ -40,7 +40,16 @@ No test suite exists. `go build` catches signature breakage only — it cannot c
   - [x] 2c · companies, employee_company_access, permission
 - [x] **3 — payrollconfig** (4) · earning, deduction, employment_types, payrollconfig — plus `handlers/payroll/payroll_handler.go`, which held the *routed* copies of the payroll-config endpoints
 - [x] **4 — employees remainder** (4) · employee_earnings, employee_deductions, salary, salaries — `handlers/employees` is now free of `config.DB`
-- [ ] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary
+- [x] **5 — attendance** (5) · attendance_config, timelogs, leave, attendance_summary, earning_summary — `handlers/attendance` is now free of `config.DB`
+
+### Verifying a calculation refactor
+
+For the two summary endpoints, correctness was established by A/B comparison rather
+than by reasoning: capture the JSON from the new code, `git stash push -u` the new
+files, rebuild and capture the same requests from the old code, then diff. 24
+responses (3 logins x 4 date windows x 2 endpoints) came back byte-for-byte
+identical. Use this for anything that computes money — it catches an arithmetic or
+ordering slip that no amount of reading will.
 - [ ] **6 — payroll** (8) · cycles, cycle_earnings, cycle_deductions, calculate, precheck, diff, myslips, snapshot_service — `payroll_handler.go` was already done in round 3
 - [ ] **7 — reports** (1) · reports
 - [ ] **8 — auth** (1) · auth — repository + service for lookup/claims; JWT signing and cookie writing stay in the handler because those are HTTP
