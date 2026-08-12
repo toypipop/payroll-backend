@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	"payroll-backend/apperr"
@@ -106,26 +107,42 @@ func (s *TimeLogService) resolveEmployee(scope repository.AccessScope, employeeI
 // session timezone the driver attached, so reading it directly can land on the wrong
 // calendar day.
 //
-// Count failures are treated as "no holiday, no day off", which is how this
-// behaved before the split.
-func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, checkOut *time.Time) models.AttendanceStatus {
+// A failed lookup is returned rather than swallowed. Treating a database error as
+// "no holiday, no day off" silently mislabels attendance, and that label feeds
+// payroll deductions.
+func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, checkOut *time.Time) (models.AttendanceStatus, error) {
 	if checkIn == nil || checkOut == nil {
-		return models.StatusAbsent
+		return models.StatusAbsent, nil
 	}
 
 	bangkokCheckIn := timeutil.ToBangkok(*checkIn)
 
-	if holidays, err := s.repo.CountHolidaysOn(companiesID, bangkokCheckIn.Format(timeLogDateLayout)); err == nil && holidays > 0 {
-		return models.StatusHoliday
+	holidays, err := s.repo.CountHolidaysOn(companiesID, bangkokCheckIn.Format(timeLogDateLayout))
+	if err != nil {
+		return "", err
 	}
-	if dayOffs, err := s.repo.CountDayOffsOn(companiesID, int(bangkokCheckIn.Weekday())); err == nil && dayOffs > 0 {
-		return models.StatusHoliday
+	if holidays > 0 {
+		return models.StatusHoliday, nil
 	}
 
+	dayOffs, err := s.repo.CountDayOffsOn(companiesID, int(bangkokCheckIn.Weekday()))
+	if err != nil {
+		return "", err
+	}
+	if dayOffs > 0 {
+		return models.StatusHoliday, nil
+	}
+
+	// A company with no configuration yet is a normal state, not a failure: it
+	// falls back to the default start. Any other error is real.
 	startHour, startMinute := defaultWorkStartHour, defaultWorkStartMinute
-	if configuration, err := s.repo.FindAttendanceConfig(companiesID); err == nil && configuration.WorkStartTime != nil {
+	configuration, err := s.repo.FindAttendanceConfig(companiesID)
+	switch {
+	case err == nil && configuration.WorkStartTime != nil:
 		scheduled := timeutil.ToBangkok(*configuration.WorkStartTime)
 		startHour, startMinute = scheduled.Hour(), scheduled.Minute()
+	case err != nil && !errors.Is(err, repository.ErrAttendanceConfigNotFound):
+		return "", err
 	}
 
 	scheduledStart := time.Date(
@@ -133,9 +150,9 @@ func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, chec
 		startHour, startMinute, 0, 0, timeutil.BangkokLocation,
 	)
 	if checkIn.After(scheduledStart) {
-		return models.StatusLate
+		return models.StatusLate, nil
 	}
-	return models.StatusOnTime
+	return models.StatusOnTime, nil
 }
 
 // validateInput enforces the field rules shared by create and update.
@@ -165,7 +182,10 @@ func (s *TimeLogService) Create(scope repository.AccessScope, input models.TimeL
 
 	// The company comes from the employee, never from the request.
 	input.CompaniesID = employee.CompaniesID
-	input.Status = s.DeriveStatus(input.CompaniesID, input.CheckIn, input.CheckOut)
+	input.Status, err = s.DeriveStatus(input.CompaniesID, input.CheckIn, input.CheckOut)
+	if err != nil {
+		return models.TimeLog{}, err
+	}
 
 	if err := s.repo.Create(&input); err != nil {
 		return models.TimeLog{}, err
@@ -200,7 +220,10 @@ func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input mod
 		return models.TimeLog{}, ErrTimeLogCheckOutBefore
 	}
 
-	log.Status = s.DeriveStatus(log.CompaniesID, log.CheckIn, log.CheckOut)
+	log.Status, err = s.DeriveStatus(log.CompaniesID, log.CheckIn, log.CheckOut)
+	if err != nil {
+		return models.TimeLog{}, err
+	}
 	if err := s.repo.Save(&log); err != nil {
 		return models.TimeLog{}, err
 	}
@@ -227,17 +250,18 @@ func parseClock(value string) (int, int, error) {
 
 // BulkCreate creates one log per matching weekday in a date range, using the same
 // time of day for each. A date that already has a log for the employee is skipped
-// rather than duplicated.
+// rather than duplicated. The whole run is written as one transaction, so a failure
+// leaves no logs behind rather than a partial date range.
 //
-// Logs are written one at a time and a failure returns immediately, leaving the
-// logs created so far in place. That is the previous behaviour, preserved
-// deliberately rather than wrapped in a transaction.
+// Dates are parsed as midnight in the business timezone. Parsing them as UTC gave a
+// day-long duplicate-check window running 07:00 to 07:00 Bangkok, which straddled
+// two calendar days while the logs it created were anchored to Bangkok midnight.
 func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTimeLogInput) (BulkTimeLogResult, error) {
-	startDate, err := time.Parse(timeLogDateLayout, input.StartDate)
+	startDate, err := timeutil.ParseDayStart(input.StartDate)
 	if err != nil {
 		return BulkTimeLogResult{}, ErrTimeLogStartDateInvalid
 	}
-	endDate, err := time.Parse(timeLogDateLayout, input.EndDate)
+	endDate, err := timeutil.ParseDayStart(input.EndDate)
 	if err != nil {
 		return BulkTimeLogResult{}, ErrTimeLogEndDateInvalid
 	}
@@ -272,6 +296,7 @@ func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTime
 
 	workLocationID := input.WorkLocationID
 	result := BulkTimeLogResult{}
+	pending := make([]models.TimeLog, 0)
 
 	for day := startDate; !day.After(endDate); day = day.AddDate(0, 0, 1) {
 		if !weekdays[int(day.Weekday())] {
@@ -280,7 +305,7 @@ func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTime
 
 		existing, err := s.repo.CountForEmployeeBetween(employee.ID, day, day.AddDate(0, 0, 1))
 		if err != nil {
-			return result, err
+			return BulkTimeLogResult{}, err
 		}
 		if existing > 0 {
 			result.SkippedDates = append(result.SkippedDates, day.Format(timeLogDateLayout))
@@ -301,13 +326,16 @@ func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTime
 			CheckOut:       &checkOut,
 			WorkLocationID: &workLocationID,
 		}
-		log.Status = s.DeriveStatus(log.CompaniesID, log.CheckIn, log.CheckOut)
-
-		if err := s.repo.Create(&log); err != nil {
-			return result, err
+		log.Status, err = s.DeriveStatus(log.CompaniesID, log.CheckIn, log.CheckOut)
+		if err != nil {
+			return BulkTimeLogResult{}, err
 		}
-		result.CreatedCount++
+		pending = append(pending, log)
 	}
 
+	if err := s.repo.CreateMany(pending); err != nil {
+		return BulkTimeLogResult{}, err
+	}
+	result.CreatedCount = len(pending)
 	return result, nil
 }

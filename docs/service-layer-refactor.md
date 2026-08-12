@@ -58,23 +58,27 @@ would have broken a working endpoint. Grep `routes/routes.go` for the handler na
 before assuming a function is live, and note the import aliases: `payhandler` is
 `handlers/payroll`, `cfghandler` is `handlers/payrollconfig`.
 
-## Preserved deliberately in round 5b — questionable, but not this refactor's call
+## Fixed in round 5b — three real bugs found in the time-log path
 
-These were carried over unchanged. Each is a behaviour change if "fixed", so they
-need their own decision rather than being folded into a refactor.
+- **Bulk generation was not atomic.** Logs were written one at a time and the first
+  failure returned immediately, leaving a partial date range behind. It is now one
+  batched insert inside a transaction.
+- **The duplicate-date check used a UTC day window.** Dates were parsed with
+  `time.Parse`, giving UTC midnight, so the window ran 07:00 to 07:00 Bangkok while
+  the logs it created were anchored to Bangkok midnight. A check-in before 07:00
+  Bangkok was counted against the previous date, so re-running a range would
+  duplicate it. Dates are now parsed with `timeutil.ParseDayStart`.
+- **`DeriveStatus` swallowed query errors**, treating a failed holiday or day-off
+  count as "not a holiday" and a failed config lookup as a 09:00 start. That label
+  feeds payroll deductions, so a database hiccup could silently change pay. Errors
+  now propagate; "this company has no configuration yet" is still a normal
+  fallback, distinguished by `repository.ErrAttendanceConfigNotFound`.
 
-- `BulkCreate` writes logs one at a time and returns on the first failure, leaving
-  everything created so far in place. No transaction, so a mid-run error yields a
-  partial range with a 500.
-- The "this date already has a log" check builds its window from the parsed
-  calendar date, which is a UTC midnight, not a business-timezone day. The window
-  therefore covers 07:00 to 07:00 Bangkok. With the shifts actually in use (09:00,
-  16:00) it lands correctly, but a check-in before 07:00 Bangkok would be counted
-  against the previous date.
-- `DeriveStatus` ignores errors from its holiday and day-off counts and from the
-  attendance-config lookup, treating a failed query as "no holiday, no day off,
-  default 09:00 start". A database hiccup silently downgrades a status rather than
-  failing the request.
+`timeutil.ParseDayStart` exists for the first of these. Its doc comment names the
+date-only columns it must **not** be used on (`Holiday.Date`,
+`PayrollCycle.Start/EndDate`, `LeaveRequest.Start/EndDate`,
+`SalariesStructure.EffectiveDate`) — those are compared against other date-only
+values and anchoring them to +07 would shift them.
 
 ## Found while migrating — decide separately, do not fold into a refactor commit
 

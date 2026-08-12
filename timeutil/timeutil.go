@@ -33,3 +33,16 @@ func DayStart(t time.Time) time.Time {
 func DateKey(t time.Time) string {
 	return DayStart(t).Format("2006-01-02")
 }
+
+// ParseDayStart reads a "2006-01-02" string as midnight of that date in the
+// business timezone. Use it when the parsed value is compared against, or used to
+// build, a real timestamp — time.Parse would yield UTC midnight, which is 07:00
+// Bangkok, so a day-long window built from it straddles two Bangkok dates.
+//
+// Do NOT use this for the date-only columns that deliberately carry no timezone
+// (Holiday.Date, PayrollCycle.Start/EndDate, LeaveRequest.Start/EndDate,
+// SalariesStructure.EffectiveDate). Those are compared against other date-only
+// values, and anchoring them to +07 would shift them.
+func ParseDayStart(value string) (time.Time, error) {
+	return time.ParseInLocation("2006-01-02", value, BangkokLocation)
+}

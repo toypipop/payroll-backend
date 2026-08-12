@@ -23,6 +23,7 @@ type TimeLogRepository interface {
 	ListScoped(scope AccessScope) ([]models.TimeLog, error)
 	FindScoped(scope AccessScope, id uint) (models.TimeLog, error)
 	Create(log *models.TimeLog) error
+	CreateMany(logs []models.TimeLog) error
 	Save(log *models.TimeLog) error
 	Delete(log *models.TimeLog) error
 	CountForEmployeeBetween(employeesID uint, from time.Time, to time.Time) (int64, error)
@@ -70,6 +71,17 @@ func (r *gormTimeLogRepository) Create(log *models.TimeLog) error {
 	return r.db.Create(log).Error
 }
 
+// CreateMany writes a generated run as one transaction, so a failure part-way
+// through leaves no logs behind instead of a partial date range.
+func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog) error {
+	if len(logs) == 0 {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return tx.Create(&logs).Error
+	})
+}
+
 func (r *gormTimeLogRepository) Save(log *models.TimeLog) error {
 	return r.db.Save(log).Error
 }
@@ -79,10 +91,9 @@ func (r *gormTimeLogRepository) Delete(log *models.TimeLog) error {
 }
 
 // CountForEmployeeBetween counts an employee's logs whose check-in falls in
-// [from, to). The bulk generator uses it to skip a date that already has a log.
-// The window it passes is built from the parsed calendar date, which is not the
-// same as the business-timezone day; that is preserved from the previous
-// implementation rather than changed here.
+// [from, to). The bulk generator uses it to skip a date that already has a log,
+// and passes a window anchored to the business timezone so it covers exactly one
+// Bangkok calendar day.
 func (r *gormTimeLogRepository) CountForEmployeeBetween(employeesID uint, from time.Time, to time.Time) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.TimeLog{}).
