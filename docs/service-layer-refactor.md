@@ -55,7 +55,7 @@ ordering slip that no amount of reading will.
   - 6b cycle earnings and deductions; deleted `EnsurePayrollCycleOpen`
   - 6c precheck + diff
 - [x] **7 — reports** (1) · reports — verified by A/B, only the id-0 responses differ
-- [ ] **8 — auth** (1) · auth — repository + service for lookup/claims; JWT signing and cookie writing stay in the handler because those are HTTP
+- [x] **8 — auth** (1) · auth — JWT signing and cookie writing stayed in the handler; **every handler file is now off `config.DB`**
 - [ ] **9 — comment sweep** · both repos, rule 5 above
 
 ## Check the route table before refactoring a handler

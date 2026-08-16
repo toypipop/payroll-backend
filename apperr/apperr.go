@@ -48,6 +48,14 @@ func Unauthorized(message string) error {
 	return &Error{Kind: KindUnauthorized, Message: message}
 }
 
+// Internal answers 500 with an authored message instead of the generic line. Use it
+// only for text written here; never pass a driver or SQL error through it, since the
+// whole point of KindInternal's default message is that such text never reaches a
+// client.
+func Internal(message string) error {
+	return &Error{Kind: KindInternal, Message: message}
+}
+
 // KindOf classifies err, defaulting to KindInternal for anything not authored here.
 func KindOf(err error) Kind {
 	var appErr *Error
