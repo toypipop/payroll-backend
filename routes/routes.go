@@ -140,24 +140,21 @@ func SetupRouter() *gin.Engine {
 		api.GET("/payroll/config/:cycle_id", middleware.CheckPermission("RunPayrollPage", "VIEW"), cfghandler.GetConfigByPayrollCycle)
 
 		api.GET("/earning-types", middleware.CheckPermission("EarningTypesPage", "VIEW"), cfghandler.GetEarningTypes)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role assigning employee/cycle earnings needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role assigning employee/cycle earnings needs this dropdown.
 		api.GET("/earning-types/options", cfghandler.GetEarningTypeOptions)
 		api.POST("/earning-types", middleware.CheckPermission("EarningTypesPage", "CREATE"), cfghandler.CreateEarningType)
 		api.PUT("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), cfghandler.UpdateEarningType)
 		api.DELETE("/earning-types/:id", middleware.CheckPermission("EarningTypesPage", "EDIT"), middleware.PreventDeleteIfReferenced("earning_type"), cfghandler.DeleteEarningType)
 
 		api.GET("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "VIEW"), cfghandler.GetDeductionTypes)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role assigning employee/cycle deductions needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role assigning employee/cycle deductions needs this dropdown.
 		api.GET("/deduction-types/options", cfghandler.GetDeductionTypeOptions)
 		api.POST("/deduction-types", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.CreateDeductionType)
 		api.PUT("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), cfghandler.UpdateDeductionType)
 		api.DELETE("/deduction-types/:id", middleware.CheckPermission("DeductionTypesPage", "EDIT"), middleware.PreventDeleteIfReferenced("deduction_type"), cfghandler.DeleteDeductionType)
 
 		api.GET("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "VIEW"), cfghandler.GetEmploymentTypes)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role filling out an employee-linked form needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role filling out an employee-linked form needs this dropdown.
 		api.GET("/master/employment-types/options", cfghandler.GetEmploymentTypeOptions)
 		api.POST("/master/employment-types", middleware.CheckPermission("EmploymentTypePage", "CREATE"), cfghandler.CreateEmploymentType)
 		api.PUT("/master/employment-types/:id", middleware.CheckPermission("EmploymentTypePage", "EDIT"), cfghandler.UpdateEmploymentType)
@@ -165,8 +162,7 @@ func SetupRouter() *gin.Engine {
 
 		// --- Settings ---
 		api.GET("/departments", middleware.CheckPermission("DepartmentSettings", "VIEW"), sethandler.GetDepartments)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role filling out an employee-linked form needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role filling out an employee-linked form needs this dropdown.
 		api.GET("/departments/options", sethandler.GetDepartmentOptions)
 		api.POST("/departments", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartment)
 		api.PUT("/departments/:id", middleware.CheckPermission("DepartmentSettings", "EDIT"), sethandler.UpdateDepartment)
@@ -175,8 +171,7 @@ func SetupRouter() *gin.Engine {
 		api.POST("/department-categories", middleware.CheckPermission("DepartmentSettings", "CREATE"), sethandler.CreateDepartmentCategory)
 
 		api.GET("/positions", middleware.CheckPermission("PositionSettings", "VIEW"), sethandler.GetPositions)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role filling out an employee-linked form needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role filling out an employee-linked form needs this dropdown.
 		api.GET("/positions/options", sethandler.GetPositionOptions)
 		api.POST("/positions", middleware.CheckPermission("PositionSettings", "CREATE"), sethandler.CreatePosition)
 		api.PUT("/positions/:id", middleware.CheckPermission("PositionSettings", "EDIT"), sethandler.UpdatePosition)
@@ -184,8 +179,6 @@ func SetupRouter() *gin.Engine {
 
 		api.GET("/roles", middleware.CheckPermission("RolesPage", "VIEW"), sethandler.GetRoles)
 		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role filling out an employee-linked form or granting
-		// company access needs this dropdown.
 		api.GET("/roles/options", sethandler.GetRoleOptions)
 		api.POST("/roles", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.CreateRole)
 		api.PUT("/roles/:id", middleware.CheckPermission("RolesPage", "EDIT"), sethandler.UpdateRole)
@@ -200,17 +193,14 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/employee-company-access/:id", middleware.CheckPermission("EmployeeCompanyAccessPage", "DELETE"), sethandler.DeleteEmployeeCompanyAccess)
 
 		api.GET("/companies/all", middleware.CheckPermission("CompaniesPage", "VIEW"), sethandler.GetAllCompanies)
-		// No CheckPermission gate: the handler already limits the result to the
-		// caller's accessible companies, and every role needs this dropdown.
+		// No CheckPermission gate: the handler already limits the result to the caller's accessible companies, and every role needs this dropdown.
 		api.GET("/companies/options", sethandler.GetCompanies)
 		api.POST("/companies", middleware.CheckPermission("CompaniesPage", "CREATE"), sethandler.CreateCompanies)
 		api.PUT("/companies/:id", middleware.CheckPermission("CompaniesPage", "EDIT"), sethandler.UpdateCompanies)
 		api.DELETE("/companies/:id", middleware.CheckPermission("CompaniesPage", "DELETE"), middleware.PreventDeleteIfReferenced("companies"), sethandler.DeleteCompanies)
 
 		api.GET("/master/banks", middleware.CheckPermission("MasterBankPage", "VIEW"), sethandler.GetBanks)
-		// No CheckPermission gate: handler returns global reference data (not
-		// company-scoped), and any role filling out a bank-account field needs
-		// this dropdown, not just MasterBankPage users.
+		// No CheckPermission gate: the handler returns global reference data, not company rows.
 		api.GET("/master/banks/options", sethandler.GetBankOptions)
 		api.POST("/master/banks", middleware.CheckPermission("MasterBankPage", "CREATE"), sethandler.CreateBank)
 		api.PUT("/master/banks/:id", middleware.CheckPermission("MasterBankPage", "EDIT"), sethandler.UpdateBank)
@@ -229,16 +219,14 @@ func SetupRouter() *gin.Engine {
 		api.DELETE("/master/day-offs/:id", middleware.CheckPermission("DayOffPage", "DELETE"), sethandler.DeleteDayOff)
 
 		api.GET("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "VIEW"), sethandler.GetWorkLocations)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role filling out a time log needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role filling out a time log needs this dropdown.
 		api.GET("/master/work-locations/options", sethandler.GetWorkLocationOptions)
 		api.POST("/master/work-locations", middleware.CheckPermission("WorkLocationPage", "CREATE"), sethandler.CreateWorkLocation)
 		api.PUT("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "EDIT"), sethandler.UpdateWorkLocation)
 		api.DELETE("/master/work-locations/:id", middleware.CheckPermission("WorkLocationPage", "DELETE"), middleware.PreventDeleteIfReferenced("work_location"), sethandler.DeleteWorkLocation)
 
 		api.GET("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "VIEW"), sethandler.GetLeaveTypeSettings)
-		// No CheckPermission gate: handler limits results to caller's accessible
-		// companies, and any role submitting a leave request needs this dropdown.
+		// No CheckPermission gate: handler limits results to caller's accessible companies, and any role submitting a leave request needs this dropdown.
 		api.GET("/master/leave-types/options", sethandler.GetLeaveTypeOptions)
 		api.POST("/master/leave-types", middleware.CheckPermission("MasterLeaveTypePage", "CREATE"), sethandler.CreateLeaveTypeSetting)
 		api.PUT("/master/leave-types/:id", middleware.CheckPermission("MasterLeaveTypePage", "EDIT"), sethandler.UpdateLeaveTypeSetting)

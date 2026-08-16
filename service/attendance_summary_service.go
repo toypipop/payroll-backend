@@ -62,13 +62,7 @@ func (r SummaryRange) ToLabel() string {
 	return time.Date(r.To.Year(), r.To.Month(), r.To.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 }
 
-// AttendanceSummaryService owns the attendance arithmetic: which days count as
-// worked, how many minutes late or overtime they carry, and what that is worth at
-// the company's configured rates.
-//
-// Every calendar comparison goes through timeutil, because a time.Time read back
-// from Postgres carries whatever session timezone the driver attached and reading
-// Y/M/D off it directly can land on the wrong day.
+// AttendanceSummaryService owns the attendance arithmetic: which days count as Every calendar comparison goes through timeutil, because a time.Time read back
 type AttendanceSummaryService struct {
 	repo repository.AttendanceSummaryRepository
 }
@@ -135,9 +129,7 @@ func employeeDayKey(employeeID uint, day time.Time) string {
 	return fmt.Sprintf("%d|%s", employeeID, timeutil.DateKey(day))
 }
 
-// load reads the whole window. Unlike the previous implementation it reports query
-// failures instead of discarding them: a dropped holiday or leave row silently turns
-// into a counted absence, and that feeds a payroll deduction.
+// load reads the whole window.
 func (s *AttendanceSummaryService) load(scope repository.AccessScope, window SummaryRange, withLeave bool) (summaryData, error) {
 	data := summaryData{
 		configs:   map[uint]models.AttendanceConfig{},

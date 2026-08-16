@@ -22,8 +22,7 @@ func cycleEarningService() *service.CycleEarningService {
 	)
 }
 
-// queryCycleID reads the cycle_id query parameter, returning 0 when it is absent or
-// unparseable so the service can answer with its own message.
+// queryCycleID reads the cycle_id query parameter, returning 0 when it is absent or unparseable so the service can answer with its own message.
 func queryCycleID(c *gin.Context) uint {
 	value, err := strconv.ParseUint(c.Query("cycle_id"), 10, 64)
 	if err != nil {

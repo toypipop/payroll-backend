@@ -16,8 +16,7 @@ func payrollConfigService() *service.PayrollConfigService {
 	return service.NewPayrollConfigService(repository.NewPayrollConfigRepository())
 }
 
-// GetPayrollConfigs starts from companies so a company with no configuration yet
-// still appears in the list.
+// GetPayrollConfigs starts from companies so a company with no configuration yet still appears in the list.
 func GetPayrollConfigs(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
@@ -32,8 +31,7 @@ func GetPayrollConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, companies)
 }
 
-// UpdatePayrollConfig saves a company's configuration, updating the existing row
-// when there is one: companies_id is unique, so a company has exactly one.
+// UpdatePayrollConfig saves a company's configuration, updating the existing row when there is one: companies_id is unique, so a company has exactly one.
 func UpdatePayrollConfig(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

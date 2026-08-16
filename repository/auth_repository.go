@@ -11,8 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// Auth lookup failures. Login deliberately distinguishes an unknown email from a
-// wrong password, which is what this API has always answered.
+// Auth lookup failures.
 var (
 	ErrAuthEmailUnknown  = apperr.Unauthorized("Invalid email")
 	ErrAuthUserNotLoaded = apperr.Unauthorized("Unauthorized")
@@ -60,8 +59,7 @@ func (r *gormAuthRepository) FindEmployee(id uint) (models.Employees, error) {
 	return employee, nil
 }
 
-// ListActiveModulesOrdered returns the active module tree in display order. AppModule
-// is global master data, so there is nothing to scope here.
+// ListActiveModulesOrdered returns the active module tree in display order.
 func (r *gormAuthRepository) ListActiveModulesOrdered() ([]models.AppModule, error) {
 	var modules []models.AppModule
 	err := r.db.
@@ -95,8 +93,7 @@ func (r *gormAuthRepository) ListViewableModuleIDs(roleIDs []uint) (map[uint]boo
 	return viewable, nil
 }
 
-// The three below delegate to the package-level helpers so the service depends only
-// on this interface and can be exercised against a fake.
+// The three below delegate to the package-level helpers so the service depends only on this interface and can be exercised against a fake.
 func (r *gormAuthRepository) AccessibleCompanyIDs(userID uint) []uint {
 	return AccessibleCompanyIDs(userID)
 }

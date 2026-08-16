@@ -18,7 +18,6 @@ func reportService() *service.ReportService {
 // ─── Payslip ─────────────────────────────────────────────────────────────────
 
 // GetPayslipReport returns a single payslip for a closed cycle transaction.
-// This is the canonical handler for GET /payslips/:transaction_id.
 func GetPayslipReport(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
@@ -52,7 +51,6 @@ type BankTransferRow struct {
 }
 
 // GetBankTransferReport returns aggregated Net Pay and bank account details for a closed cycle.
-// Output is suitable for generating an iBusiness bank transfer file or a summary PDF.
 func GetBankTransferReport(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

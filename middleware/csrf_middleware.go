@@ -7,8 +7,6 @@ import (
 )
 
 // RequireXMLHttpRequest blocks mutating requests that don't carry the X-Requested-With header.
-// Browsers prevent cross-origin JS from setting custom headers, so this stops CSRF attacks
-// without needing a stateful token.
 func RequireXMLHttpRequest() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		switch c.Request.Method {

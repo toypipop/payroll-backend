@@ -30,9 +30,7 @@ func GetPositions(c *gin.Context) {
 	c.JSON(http.StatusOK, positions)
 }
 
-// GetPositionOptions returns a minimal id/name list for dropdowns. Ungated by
-// page permission (mirrors GetCompanies) so any role filling out an
-// employee-linked form can see whether positions exist for a company.
+// GetPositionOptions returns a minimal id/name list for dropdowns.
 func GetPositionOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

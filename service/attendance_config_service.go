@@ -41,9 +41,7 @@ type CompanySchedule struct {
 	IsConfigured  bool
 }
 
-// AttendanceConfigService owns the attendance-configuration rules. Its schedule
-// fields are wall-clock times, so every read and write goes through timeutil rather
-// than the ambient timezone of whatever machine is running.
+// AttendanceConfigService owns the attendance-configuration rules.
 type AttendanceConfigService struct {
 	repo repository.AttendanceConfigRepository
 }
@@ -58,8 +56,7 @@ func (s *AttendanceConfigService) List(scope repository.AccessScope) ([]models.C
 	return s.repo.ListCompaniesWithConfig(scope)
 }
 
-// Schedules returns each company's start and end time as HH:MM in the business
-// timezone, omitting the payroll rates so a timelog-only user never sees them.
+// Schedules returns each company's start and end time as HH:MM in the business timezone, omitting the payroll rates so a timelog-only user never sees them.
 func (s *AttendanceConfigService) Schedules(scope repository.AccessScope) ([]CompanySchedule, error) {
 	companies, err := s.repo.ListCompaniesWithConfig(scope)
 	if err != nil {
@@ -80,11 +77,7 @@ func (s *AttendanceConfigService) Schedules(scope repository.AccessScope) ([]Com
 	return schedules, nil
 }
 
-// parseWorkTime turns an HH:MM string into an instant anchored to today's date in
-// the business timezone. An empty string means "not configured"; anything else that
-// does not parse is rejected rather than silently discarded, which previously left
-// the schedule nulled out with the save still reported as successful. Go's parser
-// accepts a missing leading zero, so "9:00" is valid.
+// parseWorkTime turns an HH:MM string into an instant anchored to today's date in the business timezone.
 func parseWorkTime(value string) (*time.Time, error) {
 	if value == "" {
 		return nil, nil

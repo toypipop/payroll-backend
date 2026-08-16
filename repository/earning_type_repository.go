@@ -10,15 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// Earning-type lookups answer 403 rather than 404 when a row is missing or out of
-// scope, which is the status this domain has always returned.
+// Earning-type lookups answer 403 rather than 404 when a row is missing or out of scope, which is the status this domain has always returned.
 var (
 	ErrEarningTypeDenied       = apperr.Forbidden("Access denied or record not found")
 	ErrEarningTypeDeleteDenied = apperr.Forbidden("Delete failed or unauthorized")
 )
 
-// ErrEarningTypeMissing means no such earning-type row exists at all, as opposed to
-// one the caller cannot reach.
+// ErrEarningTypeMissing means no such earning-type row exists at all, as opposed to one the caller cannot reach.
 var ErrEarningTypeMissing = apperr.Validation("Earning type not found")
 
 // EarningTypeRepository is the persistence boundary for the earning-types domain.
@@ -46,9 +44,7 @@ func (r *gormEarningTypeRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("earning_type.companies_id"))
 }
 
-// Find looks up an earning type without any scope filter. The cycle-earning rules
-// compare its company against the cycle's own, so they need to tell "no such row"
-// apart from "belongs to another company".
+// Find looks up an earning type without any scope filter.
 func (r *gormEarningTypeRepository) Find(id uint) (models.EarningType, error) {
 	var earningType models.EarningType
 	if err := r.db.First(&earningType, id).Error; err != nil {

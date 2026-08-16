@@ -44,9 +44,7 @@ func (s *HolidayService) List(scope repository.AccessScope) ([]models.Holiday, e
 	return s.repo.ListScoped(scope)
 }
 
-// parseHolidayFields validates the shared name and date rules. Holiday.Date is a
-// date-only value with no time-of-day component, so it is deliberately not run
-// through timeutil's business timezone.
+// parseHolidayFields validates the shared name and date rules.
 func parseHolidayFields(name string, date string) (string, time.Time, error) {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" {

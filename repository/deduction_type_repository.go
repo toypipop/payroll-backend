@@ -10,15 +10,13 @@ import (
 	"gorm.io/gorm"
 )
 
-// Deduction-type lookups answer 403 rather than 404 when a row is missing or out
-// of scope, which is the status this domain has always returned.
+// Deduction-type lookups answer 403 rather than 404 when a row is missing or out of scope, which is the status this domain has always returned.
 var (
 	ErrDeductionTypeDenied       = apperr.Forbidden("Access denied or record not found")
 	ErrDeductionTypeDeleteDenied = apperr.Forbidden("Delete failed or unauthorized")
 )
 
-// ErrDeductionTypeMissing means no such deduction-type row exists at all, as opposed
-// to one the caller cannot reach.
+// ErrDeductionTypeMissing means no such deduction-type row exists at all, as opposed to one the caller cannot reach.
 var ErrDeductionTypeMissing = apperr.Validation("Deduction type not found")
 
 // DeductionTypeRepository is the persistence boundary for the deduction-types domain.
@@ -46,9 +44,7 @@ func (r *gormDeductionTypeRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("deduction_type.companies_id"))
 }
 
-// Find looks up a deduction type without any scope filter. The cycle-deduction rules
-// compare its company against the cycle's own, so they need to tell "no such row"
-// apart from "belongs to another company".
+// Find looks up a deduction type without any scope filter.
 func (r *gormDeductionTypeRepository) Find(id uint) (models.DeductionType, error) {
 	var deductionType models.DeductionType
 	if err := r.db.First(&deductionType, id).Error; err != nil {

@@ -8,8 +8,7 @@ import (
 	"payroll-backend/repository"
 )
 
-// Leave-request rule failures. This domain answers 400 where other domains answer
-// 403 for an employee outside the caller's reach; that is preserved.
+// Leave-request rule failures.
 var (
 	ErrLeaveEndBeforeStart   = apperr.Validation("End date must be on or after start date")
 	ErrLeaveTypeRequired     = apperr.Validation("Leave type is required")
@@ -47,8 +46,7 @@ type PendingLeave struct {
 	QuotaExceeded bool
 }
 
-// LeaveRequestService owns the leave rules: no overlapping requests, a leave type
-// belonging to the employee's company, and only a pending request being editable.
+// LeaveRequestService owns the leave rules: no overlapping requests, a leave type belonging to the employee's company, and only a pending request being editable.
 type LeaveRequestService struct {
 	repo       repository.LeaveRequestRepository
 	employees  repository.EmployeesRepository
@@ -65,10 +63,6 @@ func NewLeaveRequestService(
 }
 
 // dateOnly strips the time of day, anchored to UTC.
-//
-// Leave dates are calendar values with no time-of-day component, so they are
-// deliberately NOT run through timeutil: they are compared against each other and
-// against EXTRACT(YEAR FROM ...), and anchoring them to +07 would shift them.
 func dateOnly(value time.Time) time.Time {
 	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, time.UTC)
 }
@@ -190,8 +184,7 @@ func (s *LeaveRequestService) Update(scope repository.AccessScope, id uint, inpu
 		return models.LeaveRequest{}, err
 	}
 
-	// A failed reload still returns the updated row rather than an error, which is
-	// how this behaved before.
+	// A failed reload still returns the updated row rather than an error, which is how this behaved before.
 	if detailed, err := s.repo.FindDetail(leave.ID); err == nil {
 		return detailed, nil
 	}
@@ -207,9 +200,7 @@ func (s *LeaveRequestService) Delete(scope repository.AccessScope, id uint) erro
 	return s.repo.Delete(&leave)
 }
 
-// Pending returns the requests awaiting approval, each decorated with how much of
-// the leave type's yearly quota the employee has already used. The quota only warns;
-// it never blocks.
+// Pending returns the requests awaiting approval, each decorated with how much of the leave type's yearly quota the employee has already used.
 func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLeave, error) {
 	leaves, err := s.repo.ListPendingScoped(scope)
 	if err != nil {
@@ -234,10 +225,6 @@ func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLe
 }
 
 // Decide approves or rejects a pending request.
-//
-// The approver is the authenticated caller, not a value from the request body. The
-// body used to supply it, and the frontend read it out of localStorage, so anyone
-// able to approve could record the approval against another employee's name.
 func (s *LeaveRequestService) Decide(scope repository.AccessScope, id uint, status string) error {
 	if status != string(models.LeaveStatusApproved) && status != string(models.LeaveStatusRejected) {
 		return ErrLeaveStatusInvalid

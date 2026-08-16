@@ -39,9 +39,7 @@ var (
 	ErrPayrollSlipCycleOpen      = repository.ErrPayrollSlipCycleOpen
 )
 
-// ProratedEmployee names an employee whose base salary this run pro-rated by
-// calendar days, because their first salary record only covers part of the cycle
-// (a new hire who started mid-cycle). Informational, not a warning.
+// ProratedEmployee names an employee whose base salary this run pro-rated by calendar days.
 type ProratedEmployee struct {
 	Name  string `json:"name"`
 	Days  int    `json:"days"`
@@ -56,9 +54,7 @@ type RunResult struct {
 	Prorated       []ProratedEmployee
 }
 
-// PayrollRunService owns the payroll calculation: which salary applies to a cycle,
-// what the attendance record adds or takes away, and how tax and social security
-// fall out of the result.
+// PayrollRunService owns the payroll calculation, from the salary that applies through to tax and social security.
 type PayrollRunService struct {
 	repo repository.PayrollRunRepository
 }
@@ -68,15 +64,12 @@ func NewPayrollRunService(repo repository.PayrollRunRepository) *PayrollRunServi
 	return &PayrollRunService{repo: repo}
 }
 
-// dayOf truncates to the start of a stored calendar date. The cycle and leave dates
-// are stored as midnight UTC, so Truncate is the right operation on them and
-// timeutil.DayStart deliberately is not: anchoring them to +07 would shift the day.
+// dayOf truncates to the start of a stored calendar date.
 func dayOf(value time.Time) time.Time {
 	return value.Truncate(24 * time.Hour)
 }
 
-// dateKey renders a stored calendar date as the map key both the log and the
-// day-by-day loops use.
+// dateKey renders a stored calendar date as the map key both the log and the day-by-day loops use.
 func dateKey(value time.Time) string {
 	return value.Format("2006-01-02")
 }
@@ -92,8 +85,7 @@ func (w scheduleWindow) scheduledStart(day time.Time) time.Time {
 	return time.Date(day.Year(), day.Month(), day.Day(), w.startHour, w.startMin, 0, 0, timeutil.BangkokLocation)
 }
 
-// scheduledEnd is the shift end on a given calendar day, pushed to the next day when
-// the end falls at or before the start, which means the shift runs past midnight.
+// scheduledEnd is the shift end on a day, pushed to the next day when the shift runs past midnight.
 func (w scheduleWindow) scheduledEnd(day time.Time) time.Time {
 	end := time.Date(day.Year(), day.Month(), day.Day(), w.endHour, w.endMin, 0, 0, timeutil.BangkokLocation)
 	if w.endHour < w.startHour || (w.endHour == w.startHour && w.endMin <= w.startMin) {
@@ -135,8 +127,7 @@ func (s *PayrollRunService) CreateCycle(scope repository.AccessScope, name strin
 	return cycle, nil
 }
 
-// Close snapshots the cycle's transactions and then marks it closed, so a closed
-// cycle always has the figures it was closed on.
+// Close snapshots the cycle's transactions and then marks it closed, so a closed cycle always has the figures it was closed on.
 func (s *PayrollRunService) Close(scope repository.AccessScope, cycleID uint) (models.PayrollCycle, RunResult, error) {
 	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
 	if err != nil {
@@ -175,9 +166,6 @@ func (s *PayrollRunService) Recalculate(scope repository.AccessScope, cycleID ui
 }
 
 // Snapshot recalculates and persists the transactions and detail lines for one cycle.
-//
-// A per-employee failure is recorded and the run continues, so one bad row cannot
-// stop the rest of the payroll; the last such error is returned alongside the counts.
 func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, error) {
 	companiesID := cycle.CompaniesID
 
@@ -190,8 +178,7 @@ func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, erro
 		return RunResult{}, err
 	}
 
-	// No attendance configuration leaves the deduction flags enabled so payroll
-	// still runs, which is the long-standing default.
+	// No attendance configuration leaves the deduction flags enabled so payroll still runs, which is the long-standing default.
 	attendanceConfig, err := s.repo.FindAttendanceConfigForRun(companiesID)
 	if err != nil {
 		attendanceConfig = models.AttendanceConfig{
@@ -243,8 +230,7 @@ func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, erro
 		if !found {
 			result.SkippedCount++
 			result.SkippedNames = append(result.SkippedNames, employee.FirstName+" "+employee.LastName)
-			// Clear a transaction an earlier run wrote when this employee did have a
-			// usable salary record, so a stale figure does not linger.
+			// Clear a transaction an earlier run wrote when this employee did have a usable salary record, so a stale figure does not linger.
 			if err := s.repo.DeleteTransactionForEmployee(cycle.ID, employee.ID); err != nil {
 				lastErr = err
 			}
@@ -284,11 +270,6 @@ func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, erro
 }
 
 // salaryForCycle picks the salary a cycle should be paid on.
-//
-// A raise only takes effect from the cycle whose start it covers: one effective
-// mid-cycle applies from the next cycle onward, never retroactively within this one.
-// If nothing covers the start at all, the employee can only be a new hire whose very
-// first record lands mid-cycle, and that first partial cycle is pro-rated.
 func (s *PayrollRunService) salaryForCycle(employeeID uint, cycle models.PayrollCycle) (models.SalariesStructure, bool, bool, error) {
 	record, err := s.repo.FindActiveSalaryOnOrBefore(employeeID, cycle.StartDate)
 	if err == nil {
@@ -302,8 +283,7 @@ func (s *PayrollRunService) salaryForCycle(employeeID uint, cycle models.Payroll
 	return record, true, true, nil
 }
 
-// computeEmployee turns one employee's inputs into the figures to store and the
-// detail lines that explain them.
+// computeEmployee turns one employee's inputs into the figures to store and the detail lines that explain them.
 func (s *PayrollRunService) computeEmployee(
 	cycle models.PayrollCycle,
 	employee models.Employees,
@@ -379,8 +359,7 @@ func (s *PayrollRunService) computeEmployee(
 		day := timeutil.DayStart(*log.CheckIn)
 		key := dateKey(day)
 
-		// Working a holiday or a configured day off earns the extra-day rate; those
-		// days are not measured for overtime or lateness.
+		// Working a holiday or a configured day off earns the extra-day rate; those days are not measured for overtime or lateness.
 		if holidaySet[key] || dayOffWeekdays[int(day.Weekday())] {
 			extraDays++
 			continue
@@ -501,8 +480,7 @@ func (s *PayrollRunService) computeEmployee(
 		absentDeduction = round2(float64(absentDays) * attendanceConfig.AbsentRatePerDay)
 	}
 
-	// Thai law prices tax and social security on income actually earned, so time
-	// not worked comes off the base first.
+	// Thai law prices tax and social security on income actually earned, so time not worked comes off the base first.
 	taxableBase = math.Max(0, taxableBase-lateDeduction-absentDeduction)
 	ssoBase = math.Max(0, ssoBase-ssoDeductible-lateDeduction-absentDeduction)
 
@@ -515,8 +493,7 @@ func (s *PayrollRunService) computeEmployee(
 		ssoAmount = round2(computed)
 	}
 
-	// The employee's own social security contribution is deductible from taxable
-	// income, on top of whatever deduction items are tax-deductible.
+	// The employee's own social security contribution is deductible from taxable income, on top of whatever deduction items are tax-deductible.
 	netTaxableIncome := round2(math.Max(0, taxableBase-(taxDeductible+ssoAmount)))
 	monthlyTax := MonthlyTax(payrollConfig.TaxCalculation, taxableBase, taxDeductible+ssoAmount)
 
@@ -606,7 +583,6 @@ const (
 )
 
 // PreCheck reports what would go wrong or be skipped if the cycle were run now.
-// Nothing here blocks a run; the caller decides what to do with the list.
 func (s *PayrollRunService) PreCheck(scope repository.AccessScope, cycleID uint) ([]PreCheckIssue, error) {
 	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
 	if err != nil {
@@ -716,8 +692,7 @@ func (s *PayrollRunService) totalsFor(cycle models.PayrollCycle) (CycleTotals, e
 	}, nil
 }
 
-// Diff totals a cycle and, when there is one, the company's most recent closed cycle
-// ending before it, so an operator can sanity-check a run against the last one.
+// Diff totals a cycle and, when there is one, the company's most recent closed cycle ending before it, so an operator can sanity-check a run against the last one.
 func (s *PayrollRunService) Diff(scope repository.AccessScope, cycleID uint) (CycleDiff, error) {
 	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
 	if err != nil {
@@ -757,8 +732,7 @@ func (s *PayrollRunService) Transactions(scope repository.AccessScope, cycleID u
 	return cycle, transactions, nil
 }
 
-// Slip returns one payslip. Payslips exist only for closed cycles, which are the
-// immutable audit record.
+// Slip returns one payslip.
 func (s *PayrollRunService) Slip(scope repository.AccessScope, transactionID uint) (models.PayrollCycle, models.PayrollTransaction, models.Companies, error) {
 	transaction, err := s.repo.FindTransactionDetail(transactionID)
 	if err != nil {

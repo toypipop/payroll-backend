@@ -16,9 +16,6 @@ func payrollConfigService() *service.PayrollConfigService {
 }
 
 // GetConfigByPayrollCycle returns the configuration in force for a cycle's company.
-// The /global list and save endpoints are served from handlers/payroll, which is
-// where the routed copies live; the unrouted duplicates that used to sit here have
-// been removed.
 func GetConfigByPayrollCycle(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

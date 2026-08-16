@@ -30,9 +30,7 @@ func GetLeaveTypeSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, leaveTypes)
 }
 
-// GetLeaveTypeOptions returns a minimal id/name list for dropdowns. Ungated
-// by page permission (mirrors GetCompanies) so any role submitting a leave
-// request can see whether leave types exist for a company.
+// GetLeaveTypeOptions returns a minimal id/name list for dropdowns.
 func GetLeaveTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

@@ -31,8 +31,6 @@ func GetEarningTypes(c *gin.Context) {
 }
 
 // GetEarningTypeOptions returns a minimal id/name list for dropdowns.
-// Ungated by page permission (mirrors GetCompanies) so any role assigning
-// employee/cycle earnings can see whether earning types exist for a company.
 func GetEarningTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

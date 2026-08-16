@@ -36,22 +36,18 @@ type SalaryInput struct {
 	Disable       bool
 }
 
-// SalaryHistoryEntry is one row of an employee's salary history plus whether it can
-// still be erased.
+// SalaryHistoryEntry is one row of an employee's salary history plus whether it can still be erased.
 type SalaryHistoryEntry struct {
 	Record    models.SalariesStructure
 	CanDelete bool
 }
 
-// SaveResult reports which branch a save took, since disabling and replacing return
-// different messages.
+// SaveResult reports which branch a save took, since disabling and replacing return different messages.
 type SaveResult struct {
 	Disabled bool
 }
 
-// SalariesStructureService owns the salary-history rules. A record has three real
-// states: current, superseded but preserved because a closed cycle used it, and
-// erased because no real calculation ever did.
+// SalariesStructureService owns the salary-history rules.
 type SalariesStructureService struct {
 	repo      repository.SalariesStructureRepository
 	employees repository.EmployeesRepository
@@ -70,8 +66,7 @@ func (s *SalariesStructureService) ListEmployees(scope repository.AccessScope) (
 	return s.repo.ListEmployeesWithSalary(scope)
 }
 
-// History returns every record that counts as history for one employee, flagging
-// which ones are still safe to erase.
+// History returns every record that counts as history for one employee, flagging which ones are still safe to erase.
 func (s *SalariesStructureService) History(scope repository.AccessScope, employeesID uint) ([]SalaryHistoryEntry, error) {
 	if _, err := s.employees.FindBriefScoped(scope, employeesID); err != nil {
 		return nil, ErrSalaryEmployeeDenied
@@ -98,8 +93,7 @@ func (s *SalariesStructureService) History(scope repository.AccessScope, employe
 	return entries, nil
 }
 
-// decisionsFor turns usage counts into per-record archive decisions: a record a
-// closed cycle relied on is kept for audit, anything else is erased.
+// decisionsFor turns usage counts into per-record archive decisions: a record a closed cycle relied on is kept for audit, anything else is erased.
 func decisionsFor(records []models.SalariesStructure, usage map[uint]int64) []repository.ArchiveDecision {
 	decisions := make([]repository.ArchiveDecision, 0, len(records))
 	for _, record := range records {
@@ -155,8 +149,7 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 		return SaveResult{Disabled: true}, nil
 	}
 
-	// Backdating into a period that has already been paid out and closed would
-	// change a figure someone has already been paid against.
+	// Backdating into a period that has already been paid out and closed would change a figure someone has already been paid against.
 	closedCycles, err := s.repo.CountClosedCyclesCovering(employee.CompaniesID, effectiveDate)
 	if err != nil {
 		return SaveResult{}, err
@@ -165,8 +158,7 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 		return SaveResult{}, ErrSalaryDateInClosed
 	}
 
-	// The effective date must not move backward from the most recent record, erased
-	// ones included, so history stays in chronological order.
+	// The effective date must not move backward from the most recent record, erased ones included, so history stays in chronological order.
 	if len(existing) > 0 {
 		last := existing[len(existing)-1]
 		if effectiveDate.Before(last.EffectiveDate) {
@@ -209,8 +201,7 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 		return err
 	}
 
-	// Erasing the current record should roll the employee back to the state before
-	// that mistake, not leave them with no active salary at all.
+	// Erasing the current record should roll the employee back to the state before that mistake, not leave them with no active salary at all.
 	if record.IsActive {
 		return s.repo.ActivateLatest(record.EmployeesID)
 	}

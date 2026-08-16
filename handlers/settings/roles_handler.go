@@ -16,9 +16,7 @@ func roleService() *service.RoleService {
 	return service.NewRoleService(repository.NewRoleRepository())
 }
 
-// GetRoles returns the roles of the caller's authorized companies. This used to
-// read every role in the database regardless of company, which contradicted both
-// its own doc comment and RolesPage being declared a company-level module.
+// GetRoles returns the roles of the caller's authorized companies.
 func GetRoles(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
@@ -33,10 +31,7 @@ func GetRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, roles)
 }
 
-// GetRoleOptions returns a minimal id/name list for dropdowns, scoped to the
-// caller's accessible companies. Ungated by page permission (mirrors
-// GetCompanies) so any role filling out an employee-linked form or granting
-// company access can see whether roles exist for a company.
+// GetRoleOptions returns a minimal id/name list for dropdowns, scoped to the caller's accessible companies.
 func GetRoleOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

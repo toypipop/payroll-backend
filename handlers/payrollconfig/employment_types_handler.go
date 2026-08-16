@@ -31,8 +31,6 @@ func GetEmploymentTypes(c *gin.Context) {
 }
 
 // GetEmploymentTypeOptions returns a minimal id/name list for dropdowns.
-// Ungated by page permission (mirrors GetCompanies) so any role filling out
-// an employee-linked form can see whether employment types exist for a company.
 func GetEmploymentTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

@@ -50,9 +50,6 @@ func CreateTimeLog(c *gin.Context) {
 }
 
 // BulkCreateTimeLog creates one TimeLog per matching weekday within a date
-// range for a single employee, using the same check-in/check-out time of
-// day for every generated log. Dates that already have a log for that
-// employee are skipped rather than duplicated.
 func BulkCreateTimeLog(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

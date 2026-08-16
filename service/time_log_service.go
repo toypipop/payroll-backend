@@ -64,8 +64,7 @@ type BulkTimeLogResult struct {
 	SkippedDates []string
 }
 
-// TimeLogService owns the time-log rules: who a log may be filed against, and what
-// attendance status a pair of timestamps amounts to.
+// TimeLogService owns the time-log rules: who a log may be filed against, and what attendance status a pair of timestamps amounts to.
 type TimeLogService struct {
 	repo      repository.TimeLogRepository
 	employees repository.EmployeesRepository
@@ -81,8 +80,7 @@ func (s *TimeLogService) List(scope repository.AccessScope) ([]models.TimeLog, e
 	return s.repo.ListScoped(scope)
 }
 
-// resolveEmployee confirms the employee sits in the requested company and that the
-// caller may act on that company, returning the employee to file the log against.
+// resolveEmployee confirms the employee sits in the requested company and that the caller may act on that company, returning the employee to file the log against.
 func (s *TimeLogService) resolveEmployee(scope repository.AccessScope, employeeID uint, companyID uint) (models.Employees, error) {
 	if companyID == 0 || employeeID == 0 {
 		return models.Employees{}, ErrTimeLogEmployeeCompany
@@ -97,19 +95,7 @@ func (s *TimeLogService) resolveEmployee(scope repository.AccessScope, employeeI
 	return employee, nil
 }
 
-// DeriveStatus decides what a check-in and check-out pair amounts to. A missing
-// timestamp on either side counts as absent; a company holiday or a configured day
-// off outranks lateness; otherwise the check-in is compared against the company's
-// scheduled start.
-//
-// Both timestamps are normalised to the business timezone before any date or
-// weekday is read from them: a *time.Time read back from Postgres carries whatever
-// session timezone the driver attached, so reading it directly can land on the wrong
-// calendar day.
-//
-// A failed lookup is returned rather than swallowed. Treating a database error as
-// "no holiday, no day off" silently mislabels attendance, and that label feeds
-// payroll deductions.
+// DeriveStatus decides what a check-in and check-out pair amounts to.
 func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, checkOut *time.Time) (models.AttendanceStatus, error) {
 	if checkIn == nil || checkOut == nil {
 		return models.StatusAbsent, nil
@@ -133,8 +119,7 @@ func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, chec
 		return models.StatusHoliday, nil
 	}
 
-	// A company with no configuration yet is a normal state, not a failure: it
-	// falls back to the default start. Any other error is real.
+	// A company with no configuration yet is a normal state, not a failure: it falls back to the default start.
 	startHour, startMinute := defaultWorkStartHour, defaultWorkStartMinute
 	configuration, err := s.repo.FindAttendanceConfig(companiesID)
 	switch {
@@ -248,14 +233,7 @@ func parseClock(value string) (int, int, error) {
 	return parsed.Hour(), parsed.Minute(), nil
 }
 
-// BulkCreate creates one log per matching weekday in a date range, using the same
-// time of day for each. A date that already has a log for the employee is skipped
-// rather than duplicated. The whole run is written as one transaction, so a failure
-// leaves no logs behind rather than a partial date range.
-//
-// Dates are parsed as midnight in the business timezone. Parsing them as UTC gave a
-// day-long duplicate-check window running 07:00 to 07:00 Bangkok, which straddled
-// two calendar days while the logs it created were anchored to Bangkok midnight.
+// BulkCreate creates one log per matching weekday in a date range, using the same time of day for each.
 func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTimeLogInput) (BulkTimeLogResult, error) {
 	startDate, err := timeutil.ParseDayStart(input.StartDate)
 	if err != nil {

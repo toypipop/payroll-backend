@@ -29,10 +29,7 @@ func GetAttendanceConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, companies)
 }
 
-// GetTimelogScheduleConfig returns a minimal, per-company work schedule for the
-// Time Logs page. It is gated by TimelogsListPage permission (not
-// AttendanceSettingsPage) and intentionally omits deduction/earning rates so a
-// timelog-only user can auto-fill check in/out without seeing payroll rate data.
+// GetTimelogScheduleConfig returns a minimal, per-company work schedule for the Time Logs page.
 func GetTimelogScheduleConfig(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

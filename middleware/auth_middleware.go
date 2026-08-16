@@ -108,10 +108,7 @@ func permissionAllows(access *models.RolesModuleAccess, action string) bool {
 	}
 }
 
-// resolveAuthorizedCompanies pairs each company the employee can reach with the
-// role they act under in that company, and keeps only the companies whose role
-// actually grants `action` for the queried module(s). This is what makes
-// permissions per-company instead of a single allow/deny for the whole user.
+// resolveAuthorizedCompanies keeps only the companies whose role actually grants the action.
 func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses []models.RolesModuleAccess, action string) ([]uint, models.DataScope, bool) {
 	type roleResult struct {
 		allowed bool
@@ -168,8 +165,7 @@ func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 		}
 
 		var accesses []models.RolesModuleAccess
-		// PostgreSQL does not support MySQL backtick quoting; the mixed-case
-		// GORM association alias must use double-quoted identifiers here.
+		// PostgreSQL does not support MySQL backtick quoting; the mixed-case GORM association alias must use double-quoted identifiers here.
 		err := config.DB.
 			InnerJoins("AppModule", config.DB.Where(appModuleDeletedAtColumn+" = ?", 0)).
 			Where("roles_module_access.roles_id IN ?", roleIDs).
@@ -228,8 +224,7 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 		}
 
 		var accesses []models.RolesModuleAccess
-		// PostgreSQL does not support MySQL backtick quoting; the mixed-case
-		// GORM association alias must use double-quoted identifiers here.
+		// PostgreSQL does not support MySQL backtick quoting; the mixed-case GORM association alias must use double-quoted identifiers here.
 		err := config.DB.
 			InnerJoins("AppModule", config.DB.Where(appModuleDeletedAtColumn+" = ?", 0)).
 			Where("roles_module_access.roles_id IN ?", roleIDs).

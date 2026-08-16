@@ -1,14 +1,6 @@
 package models
 
-// ModuleScopeLevel says whether a module's rows are owned by a person or only
-// by a company. This is a *fact about the handler*, not a policy choice: a
-// module is employee-level exactly when its queries go through
-// repository.ApplyEmployeeScopes, and company-level when they go through
-// repository.ApplyCompanyScopes.
-//
-// Getting this wrong reintroduces the bug it exists to prevent — an admin
-// setting DataScope=Own on a company-level module, the UI reporting success,
-// and nothing actually being restricted.
+// ModuleScopeLevel says whether a module's rows are owned by a person or only by a company.
 type ModuleScopeLevel string
 
 const (
@@ -24,25 +16,17 @@ const (
 	ActionDelete = "DELETE"
 )
 
-// ModuleCapability declares what the backend can actually enforce for one
-// module, so the permission UI never offers a control the server ignores.
+// ModuleCapability declares what the backend can actually enforce for one module, so the permission UI never offers a control the server ignores.
 type ModuleCapability struct {
 	// ScopeLevel decides which DataScope values are meaningful.
 	ScopeLevel ModuleScopeLevel
 	// AllowedActions lists only the actions some route actually gates on.
-	// A module whose DELETE route is gated by CheckPermission(..., "EDIT")
-	// does not list DELETE — ticking it would do nothing.
 	AllowedActions []string
-	// ActionsAtomic presents create/edit/delete as one on/off toggle instead
-	// of four independent checkboxes. Unlike the two fields above this is a
-	// presentation policy, not a technical limit.
+	// ActionsAtomic presents create/edit/delete as one on/off toggle instead of four independent checkboxes.
 	ActionsAtomic bool
 }
 
-// AllowedScopes returns the DataScope values that actually change the query
-// result for this module. Derived from ScopeLevel so the two can never
-// disagree. ScopeAll is deliberately absent: it is not assignable through the
-// permission API.
+// AllowedScopes returns the DataScope values that actually change the query result for this module.
 func (mc ModuleCapability) AllowedScopes() []string {
 	if mc.ScopeLevel == ScopeLevelEmployee {
 		return []string{string(ScopeOwn), string(ScopeDepartment), string(ScopeCompanies)}
@@ -83,13 +67,7 @@ func atomic(mc ModuleCapability) ModuleCapability {
 	return mc
 }
 
-// moduleCapabilities is the single source of truth. AppModule rows are
-// refreshed from this on every boot (see migrations.SyncModuleCapabilities),
-// so the database is a projection of this map and cannot drift from it.
-//
-// When adding a module: the ScopeLevel must match which Apply*Scopes its
-// handler calls, and AllowedActions must match the action strings its routes
-// pass to CheckPermission. Boot fails loudly if a seeded module is missing here.
+// moduleCapabilities is the single source of truth.
 var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	// --- Employee-level: rows carry an employee column, so Own/Department bite ---
 	"EmployeesListPage":         employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
@@ -105,22 +83,17 @@ var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	"CycleDeductionsPage":       employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"EmployeeCompanyAccessPage": employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 
-	// DashboardPage is deliberately absent: it is not permission-controlled at
-	// all. Like My Payslips it is a universal landing page — App.tsx hardcodes
-	// the /dashboard route and redirects "/" to it, so revoking the module
-	// only ever hid the sidebar link while the page stayed reachable. What a
-	// user actually sees there is decided by the modules it reads from
-	// (EmployeesListPage, PayrollCyclesPage), each enforcing its own scope.
+	// DashboardPage is deliberately absent: it is not permission-controlled at all.
 
 	// --- Company-level: rows belong to a company, no per-person meaning ---
-	"PayrollCyclesPage": companyLevel(ActionView, ActionCreate, ActionEdit),
+	"PayrollCyclesPage":         companyLevel(ActionView, ActionCreate, ActionEdit),
 	"RunPayrollPage":            companyLevel(ActionView, ActionEdit),
 	"TransactionsPage":          companyLevel(ActionView),
 	"PayrollGlobalSettingsPage": companyLevel(ActionView, ActionEdit),
 	// Delete routes for these two are gated by EDIT, so DELETE is not offered.
-	"EarningTypesPage":   companyLevel(ActionView, ActionCreate, ActionEdit),
-	"DeductionTypesPage": companyLevel(ActionView, ActionEdit),
-	"EmploymentTypePage": companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
+	"EarningTypesPage":       companyLevel(ActionView, ActionCreate, ActionEdit),
+	"DeductionTypesPage":     companyLevel(ActionView, ActionEdit),
+	"EmploymentTypePage":     companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"AttendanceSettingsPage": companyLevel(ActionView, ActionEdit),
 	"DepartmentSettings":     companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"PositionSettings":       companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
@@ -140,7 +113,7 @@ var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	"PayrollAnalysisPage":    companyLevel(ActionView),
 
 	// Presented as a single on/off toggle.
-	"CompaniesPage": atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
+	"CompaniesPage":  atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
 	"MasterBankPage": atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
 	"HelpPage":       atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
 }

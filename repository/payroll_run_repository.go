@@ -21,9 +21,7 @@ var (
 	ErrPayrollSlipCycleOpen      = apperr.Forbidden("Payslips are only available for closed payroll cycles")
 )
 
-// TransactionSnapshot is the set of computed values a run writes onto one
-// employee's transaction row. It is applied onto whatever row already exists so
-// audit columns such as created_at survive a recalculation.
+// TransactionSnapshot is the set of computed values a run writes onto one employee's transaction row.
 type TransactionSnapshot struct {
 	SalariesStructureID uint
 	SalariesAtTime      float64
@@ -90,8 +88,7 @@ func NewPayrollRunRepository() PayrollRunRepository {
 	return &gormPayrollRunRepository{db: config.DB}
 }
 
-// FindCycleScoped resolves a cycle the caller's role authorizes. A payroll cycle
-// belongs to a company rather than a person, so this is company-scoped.
+// FindCycleScoped resolves a cycle the caller's role authorizes.
 func (r *gormPayrollRunRepository) FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error) {
 	var cycle models.PayrollCycle
 	err := r.db.Scopes(scope.ApplyCompany("payroll_cycle.companies_id")).First(&cycle, cycleID).Error
@@ -104,9 +101,7 @@ func (r *gormPayrollRunRepository) FindCycleScoped(scope AccessScope, cycleID ui
 	return cycle, nil
 }
 
-// FindOpenCycleScoped resolves a cycle the caller may still post items into,
-// distinguishing "no such cycle in reach" from "the cycle is closed" so callers can
-// answer each differently.
+// FindOpenCycleScoped resolves a cycle the caller may still post items into, keeping missing and closed distinct.
 func (r *gormPayrollRunRepository) FindOpenCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error) {
 	cycle, err := r.FindCycleScoped(scope, cycleID)
 	if err != nil {
@@ -135,8 +130,7 @@ func (r *gormPayrollRunRepository) MarkCycleClosed(cycle *models.PayrollCycle) e
 	return r.db.Model(cycle).Update("is_closed", true).Error
 }
 
-// FindLatestPayrollConfig returns the newest live configuration. A run must never
-// price against a superseded version.
+// FindLatestPayrollConfig returns the newest live configuration.
 func (r *gormPayrollRunRepository) FindLatestPayrollConfig(companiesID uint) (models.PayrollConfig, error) {
 	var configuration models.PayrollConfig
 	err := r.db.Where("companies_id = ? AND deleted_at IS NULL", companiesID).
@@ -185,8 +179,7 @@ func (r *gormPayrollRunRepository) FindActiveSalaryOnOrBefore(employeeID uint, d
 	return record, err
 }
 
-// FindEarliestActiveSalaryOnOrBefore returns the employee's first salary record up to
-// the given date, for a new hire whose first record lands mid-cycle.
+// FindEarliestActiveSalaryOnOrBefore returns the employee's first salary record up to the given date, for a new hire whose first record lands mid-cycle.
 func (r *gormPayrollRunRepository) FindEarliestActiveSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
 	var record models.SalariesStructure
 	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
@@ -195,8 +188,7 @@ func (r *gormPayrollRunRepository) FindEarliestActiveSalaryOnOrBefore(employeeID
 	return record, err
 }
 
-// DeleteTransactionForEmployee clears a transaction left by an earlier run that this
-// run is skipping, so a stale figure does not keep appearing.
+// DeleteTransactionForEmployee clears a transaction left by an earlier run that this run is skipping, so a stale figure does not keep appearing.
 func (r *gormPayrollRunRepository) DeleteTransactionForEmployee(cycleID uint, employeeID uint) error {
 	var stale models.PayrollTransaction
 	if err := r.db.Where("cycle_id = ? AND employees_id = ?", cycleID, employeeID).First(&stale).Error; err != nil {
@@ -235,9 +227,7 @@ func (r *gormPayrollRunRepository) ListCycleDeductions(employeeID uint, cycleID 
 	return items, err
 }
 
-// ListPairedTimeLogs takes logs with both a check-in and a check-out whose check-in
-// falls in [from, to). Both bounds are on check_in: a workday belongs to the date the
-// employee clocked in, and bounding on check_out would drop the last day entirely.
+// ListPairedTimeLogs takes logs with both a check-in and a check-out whose check-in falls in [from, to).
 func (r *gormPayrollRunRepository) ListPairedTimeLogs(employeeID uint, from time.Time, to time.Time) ([]models.TimeLog, error) {
 	var logs []models.TimeLog
 	err := r.db.Where(
@@ -256,9 +246,7 @@ func (r *gormPayrollRunRepository) ListApprovedLeavesInRange(employeeID uint, cy
 	return leaves, err
 }
 
-// SaveSnapshot writes one employee's computed transaction and replaces its detail
-// lines, as a single transaction. The computed values are applied onto the existing
-// row when there is one, so created_at and any other stored column survive a rerun.
+// SaveSnapshot writes one employee's computed transaction and replaces its detail lines, as a single transaction.
 func (r *gormPayrollRunRepository) SaveSnapshot(cycleID uint, employeeID uint, snapshot TransactionSnapshot, details []models.PayrollTransactionDetail) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var transaction models.PayrollTransaction
@@ -337,7 +325,6 @@ func (r *gormPayrollRunRepository) ListActiveEmployeesBrief(companiesID uint) ([
 }
 
 // ListEmployeeIDsWithSalaryUpTo returns which of the given employees have a salary
-// record effective on or before the date, so the rest can be reported as skippable.
 func (r *gormPayrollRunRepository) ListEmployeeIDsWithSalaryUpTo(employeeIDs []uint, date time.Time) ([]uint, error) {
 	ids := make([]uint, 0)
 	if len(employeeIDs) == 0 {
@@ -360,7 +347,6 @@ func (r *gormPayrollRunRepository) AggregateCycle(cycleID uint) (CycleAggregate,
 }
 
 // FindPreviousClosedCycle returns the company's most recent closed cycle ending before
-// the given date, reporting whether one exists rather than treating absence as failure.
 func (r *gormPayrollRunRepository) FindPreviousClosedCycle(companiesID uint, before time.Time) (models.PayrollCycle, bool, error) {
 	var cycle models.PayrollCycle
 	err := r.db.
@@ -411,8 +397,7 @@ func (r *gormPayrollRunRepository) FindCompany(companiesID uint) (models.Compani
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return models.Companies{}, err
 	}
-	// A missing company leaves the zero value, matching the previous behaviour of
-	// ignoring this lookup's error.
+	// A missing company leaves the zero value, matching the previous behaviour of ignoring this lookup's error.
 	return company, nil
 }
 

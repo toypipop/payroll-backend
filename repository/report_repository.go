@@ -10,9 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Report failures. The three "not closed" answers differ by endpoint and all three
-// are preserved: the cycle reports say 400, a payslip says 403, and 50 Tawi says 400
-// with its own wording.
+// Report failures.
 var (
 	ErrReportCycleNotFound   = apperr.NotFound("Payroll cycle not found")
 	ErrReportCycleOpen       = apperr.Validation("This report is only available for closed payroll cycles")
@@ -72,8 +70,7 @@ func (r *gormReportRepository) FindCycleWithCompanyScoped(scope AccessScope, cyc
 	return cycle, nil
 }
 
-// FindClosedCycleScoped is the gate the cycle-wide reports share: the cycle must be in
-// reach and closed, since a report is a statement about final figures.
+// FindClosedCycleScoped is the gate the cycle-wide reports share: the cycle must be in reach and closed, since a report is a statement about final figures.
 func (r *gormReportRepository) FindClosedCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error) {
 	cycle, err := r.FindCycleWithCompanyScoped(scope, cycleID)
 	if err != nil {
@@ -120,8 +117,7 @@ func (r *gormReportRepository) FindTaxCertificateTransaction(transactionID uint)
 	return transaction, nil
 }
 
-// FindCompany loads a company for a report header. A missing row leaves the zero
-// value, matching the previous behaviour of ignoring this lookup's error.
+// FindCompany loads a company for a report header.
 func (r *gormReportRepository) FindCompany(companiesID uint) (models.Companies, error) {
 	var company models.Companies
 	err := r.db.First(&company, companiesID).Error
@@ -132,7 +128,6 @@ func (r *gormReportRepository) FindCompany(companiesID uint) (models.Companies, 
 }
 
 // FindPayrollConfig loads the company's configuration for the rates a report prints.
-// A missing row leaves the zero value, as before.
 func (r *gormReportRepository) FindPayrollConfig(companiesID uint) (models.PayrollConfig, error) {
 	var configuration models.PayrollConfig
 	err := r.db.Where("companies_id = ?", companiesID).First(&configuration).Error

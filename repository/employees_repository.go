@@ -16,12 +16,9 @@ var ErrEmployeeNotFound = apperr.NotFound("Employee not found or access denied")
 var ErrRoleNotFound = apperr.NotFound("Role not found")
 
 // ClearField is the value to place in an update map to null a nullable column.
-// It keeps GORM's clause types out of the service layer.
 var ClearField = struct{}{}
 
 // EmployeesRepository is the persistence boundary for the employees domain.
-// Services depend on this interface, never on config.DB, so business rules can
-// be exercised against a fake without a live PostgreSQL.
 type EmployeesRepository interface {
 	ListScoped(scope AccessScope) ([]models.Employees, error)
 	FindScoped(scope AccessScope, id uint) (models.Employees, error)
@@ -37,8 +34,7 @@ type gormEmployeesRepository struct {
 	db *gorm.DB
 }
 
-// NewEmployeesRepository returns the GORM-backed implementation bound to the
-// process-wide connection. Tests supply their own EmployeesRepository instead.
+// NewEmployeesRepository returns the GORM-backed implementation bound to the process-wide connection.
 func NewEmployeesRepository() EmployeesRepository {
 	return &gormEmployeesRepository{db: config.DB}
 }
@@ -72,8 +68,7 @@ func (r *gormEmployeesRepository) FindScoped(scope AccessScope, id uint) (models
 	return employee, nil
 }
 
-// FindBriefScoped loads only what a cross-domain company check needs, so callers
-// linking a record to an employee never drag the password hash around.
+// FindBriefScoped loads only what a cross-domain company check needs, so callers linking a record to an employee never drag the password hash around.
 func (r *gormEmployeesRepository) FindBriefScoped(scope AccessScope, id uint) (models.Employees, error) {
 	var employee models.Employees
 	if err := r.scoped(scope).Select("id, companies_id").First(&employee, id).Error; err != nil {
@@ -104,8 +99,7 @@ func (r *gormEmployeesRepository) UpdateFields(employee *models.Employees, field
 	if len(fields) == 0 {
 		return nil
 	}
-	// Translate the layer-neutral ClearField marker into a SQL NULL here, so
-	// the service never has to name a GORM type.
+	// Translate the layer-neutral ClearField marker into a SQL NULL here, so the service never has to name a GORM type.
 	patch := make(map[string]any, len(fields))
 	for key, value := range fields {
 		if value == ClearField {

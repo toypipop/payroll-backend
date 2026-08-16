@@ -120,9 +120,7 @@ func DeleteLeaveRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }
 
-// pendingLeaveResponse decorates a pending request with yearly quota usage so
-// the approval page can warn (not block) when the employee would exceed
-// MaxDaysPerYear of the leave type.
+// pendingLeaveResponse adds yearly quota usage so the approval page can warn without blocking.
 type pendingLeaveResponse struct {
 	models.LeaveRequest
 	QuotaMaxDays  float64 `json:"quota_max_days"`
@@ -154,9 +152,7 @@ func GetPendingLeaveRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, responses)
 }
 
-// ApproveLeaveRequest records an approval or rejection. approved_by is still
-// accepted in the body for compatibility but ignored: the approver is the
-// authenticated caller.
+// ApproveLeaveRequest records an approval or rejection.
 func ApproveLeaveRequest(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

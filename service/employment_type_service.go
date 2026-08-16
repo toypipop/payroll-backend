@@ -34,8 +34,7 @@ func (s *EmploymentTypeService) Options(scope repository.AccessScope) ([]models.
 	return s.repo.ListMinimalScoped(scope)
 }
 
-// Create adds an employment type to an explicitly named company; this domain has
-// never defaulted to the caller's home company.
+// Create adds an employment type to an explicitly named company; this domain has never defaulted to the caller's home company.
 func (s *EmploymentTypeService) Create(scope repository.AccessScope, input models.EmploymentType) (models.EmploymentType, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

@@ -20,7 +20,6 @@ func salariesStructureService() *service.SalariesStructureService {
 }
 
 // GetSalaries returns all employees in scope with their salary structure (nil if not yet assigned).
-// Used by the SalariesStructurePage to list employees and allow salary assignment.
 func GetSalaries(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
@@ -36,8 +35,6 @@ func GetSalaries(c *gin.Context) {
 }
 
 // GetSalaryHistory returns every salary record for one employee (current +
-// preserved/archived), excluding records that were truly deleted (never used
-// in a real calculation — those don't count as history at all).
 func GetSalaryHistory(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
@@ -65,9 +62,7 @@ func GetSalaryHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, rows)
 }
 
-// DeleteSalaryRecord permanently removes a salary record, but only if it was
-// never actually used in a real payroll calculation — once used, a record is
-// kept forever for audit and can only be superseded/disabled, never deleted.
+// DeleteSalaryRecord erases a salary record, but only one that no closed cycle ever used.
 func DeleteSalaryRecord(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

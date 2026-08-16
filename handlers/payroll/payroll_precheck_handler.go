@@ -15,7 +15,6 @@ type preCheckIssue struct {
 }
 
 // PreCheckPayroll reports what would be skipped or missing if the cycle were run now.
-// It never blocks a run: "ok" simply says whether the list is empty.
 func PreCheckPayroll(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

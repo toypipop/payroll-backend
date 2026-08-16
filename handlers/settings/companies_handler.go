@@ -17,9 +17,6 @@ func companyService() *service.CompanyService {
 }
 
 // GetCompanies backs /companies/options and is limited to the caller's
-// accessible companies (home plus employee_company_access), not to the companies
-// whose role can view CompaniesPage — company-level ADMIN intentionally lacks
-// that yet still needs the dropdown.
 func GetCompanies(c *gin.Context) {
 	userID, _ := repository.GetContextAuth(c)
 
@@ -41,9 +38,6 @@ func GetAllCompanies(c *gin.Context) {
 }
 
 // CreateCompanies bootstraps a usable tenant in one transaction: the company
-// itself, a default ADMIN role with full permissions on every active module
-// (except CompaniesPage, which stays SYSTEM_ADMIN-only per seed convention),
-// and company access for the creator so the new company is immediately usable.
 func CreateCompanies(c *gin.Context) {
 	userID, _ := repository.GetContextAuth(c)
 

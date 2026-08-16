@@ -10,8 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Employee-deduction lookup failures. Update and delete answered slightly different
-// messages before the split, and both are kept.
+// Employee-deduction lookup failures.
 var (
 	ErrEmployeeDeductionNotFound     = apperr.NotFound("Record not found or access denied")
 	ErrEmployeeDeductionNotDeletable = apperr.NotFound("Record not found or unauthorized")
@@ -37,7 +36,6 @@ func NewEmployeeDeductionRepository() EmployeeDeductionRepository {
 }
 
 // scoped filters by company and by employee: the table has a real employee column
-// and EmployeeDeductionsPage is declared employee-level, so Own and Department bite.
 func (r *gormEmployeeDeductionRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("employee_deduction.companies_id", "employee_deduction.employees_id"))
 }

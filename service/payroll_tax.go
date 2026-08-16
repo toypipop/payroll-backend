@@ -50,9 +50,7 @@ func AnnualThaiProgressiveTax(annualNetIncome float64) float64 {
 	return tax
 }
 
-// MonthlyTax turns a monthly taxable base into one month's tax under the company's
-// configured method. Anything other than an explicit "none" is treated as
-// progressive, which is how unknown values have always been handled.
+// MonthlyTax turns a monthly taxable base into one month's tax under the company's configured method.
 func MonthlyTax(taxMethod string, taxableBase float64, taxDeductible float64) float64 {
 	method := strings.ToLower(strings.TrimSpace(taxMethod))
 	if method == "none" || method == "no tax" {

@@ -10,8 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Cycle-deduction lookup failures. Update and delete answered slightly different
-// messages before the split, and both are kept.
+// Cycle-deduction lookup failures.
 var (
 	ErrCycleDeductionNotFound     = apperr.NotFound("Record not found or access denied")
 	ErrCycleDeductionNotDeletable = apperr.NotFound("Record not found or unauthorized")
@@ -36,8 +35,7 @@ func NewCycleDeductionRepository() CycleDeductionRepository {
 	return &gormCycleDeductionRepository{db: config.DB}
 }
 
-// scoped filters by company and by employee: the table has a real employee column
-// and CycleDeductionsPage is declared employee-level, so Own and Department bite.
+// scoped filters by company and by employee: the table has a real employee column and CycleDeductionsPage is declared employee-level, so Own and Department bite.
 func (r *gormCycleDeductionRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("payroll_cycle_deduction.companies_id", "payroll_cycle_deduction.employees_id"))
 }

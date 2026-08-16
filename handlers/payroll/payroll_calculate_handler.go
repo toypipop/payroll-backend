@@ -54,8 +54,7 @@ func GetPayrollTransactions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"cycle": cycle, "transactions": transactions})
 }
 
-// GetPayrollSlip returns one employee's payslip. Payslips exist only for closed
-// cycles, which are the immutable audit record.
+// GetPayrollSlip returns one employee's payslip.
 func GetPayrollSlip(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

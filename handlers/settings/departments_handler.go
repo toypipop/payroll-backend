@@ -30,10 +30,7 @@ func GetDepartments(c *gin.Context) {
 	c.JSON(http.StatusOK, departments)
 }
 
-// GetDepartmentOptions returns a minimal id/name list for dropdowns. Ungated by
-// page permission (mirrors GetCompanies) since any role filling out an
-// employee-linked form needs to know whether departments exist for a company,
-// not just users who can manage DepartmentSettings.
+// GetDepartmentOptions returns a minimal id/name list for dropdowns.
 func GetDepartmentOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

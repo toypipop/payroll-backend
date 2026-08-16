@@ -10,8 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Cycle-earning lookup failures. Update and delete answered slightly different
-// messages before the split, and both are kept.
+// Cycle-earning lookup failures.
 var (
 	ErrCycleEarningNotFound     = apperr.NotFound("Record not found or access denied")
 	ErrCycleEarningNotDeletable = apperr.NotFound("Record not found or unauthorized")
@@ -36,8 +35,7 @@ func NewCycleEarningRepository() CycleEarningRepository {
 	return &gormCycleEarningRepository{db: config.DB}
 }
 
-// scoped filters by company and by employee: the table has a real employee column
-// and CycleEarningsPage is declared employee-level, so Own and Department bite.
+// scoped filters by company and by employee: the table has a real employee column and CycleEarningsPage is declared employee-level, so Own and Department bite.
 func (r *gormCycleEarningRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"))
 }

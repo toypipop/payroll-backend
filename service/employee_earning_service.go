@@ -18,9 +18,7 @@ var (
 	ErrEmployeeEarningNotDeletable = repository.ErrEmployeeEarningNotDeletable
 )
 
-// EmployeeEarningService owns the rules for attaching an earning to an employee:
-// the employee must be one the caller can reach in the named company, and the
-// earning type must belong to that same company.
+// EmployeeEarningService owns the rules for attaching an earning to an employee.
 type EmployeeEarningService struct {
 	repo         repository.EmployeeEarningRepository
 	employees    repository.EmployeesRepository
@@ -41,8 +39,7 @@ func (s *EmployeeEarningService) List(scope repository.AccessScope) ([]models.Em
 	return s.repo.ListScoped(scope)
 }
 
-// resolveTarget confirms the employee sits in the requested company and that the
-// earning type belongs to that company too, returning the company to store.
+// resolveTarget confirms the employee sits in the requested company and that the earning type belongs to that company too, returning the company to store.
 func (s *EmployeeEarningService) resolveTarget(scope repository.AccessScope, employeeID uint, companyID uint, earningTypeID uint) (uint, error) {
 	if employeeID == 0 || companyID == 0 {
 		return 0, ErrEarningEmployeeCompany

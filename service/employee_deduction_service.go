@@ -18,9 +18,7 @@ var (
 	ErrEmployeeDeductionNotDeletable = repository.ErrEmployeeDeductionNotDeletable
 )
 
-// EmployeeDeductionService owns the rules for attaching a deduction to an employee:
-// the employee must be one the caller can reach in the named company, and the
-// deduction type must belong to that same company.
+// EmployeeDeductionService owns the rules for attaching a deduction to an employee.
 type EmployeeDeductionService struct {
 	repo           repository.EmployeeDeductionRepository
 	employees      repository.EmployeesRepository
@@ -41,8 +39,7 @@ func (s *EmployeeDeductionService) List(scope repository.AccessScope) ([]models.
 	return s.repo.ListScoped(scope)
 }
 
-// resolveTarget confirms the employee sits in the requested company and that the
-// deduction type belongs to that company too, returning the company to store.
+// resolveTarget confirms the employee sits in the requested company and that the deduction type belongs to that company too, returning the company to store.
 func (s *EmployeeDeductionService) resolveTarget(scope repository.AccessScope, employeeID uint, companyID uint, deductionTypeID uint) (uint, error) {
 	if employeeID == 0 || companyID == 0 {
 		return 0, ErrDeductionEmployeeCompany

@@ -22,9 +22,7 @@ var (
 // ErrEmployeeNotFound is re-exported so handlers import a single package.
 var ErrEmployeeNotFound = repository.ErrEmployeeNotFound
 
-// EmployeesService owns the employee business rules: which company a record may
-// belong to, that a role must match that company, and how credentials are
-// stored. It talks to persistence only through EmployeesRepository.
+// EmployeesService owns the employee business rules: which company a record may belong to, that a role must match that company, and how credentials are stored.
 type EmployeesService struct {
 	repo repository.EmployeesRepository
 }
@@ -38,8 +36,7 @@ func (s *EmployeesService) List(scope repository.AccessScope) ([]models.Employee
 	return s.repo.ListScoped(scope)
 }
 
-// assertRoleBelongsTo enforces the rule that a role is company-owned: an
-// employee can never be given a role defined under a different company.
+// assertRoleBelongsTo enforces the rule that a role is company-owned: an employee can never be given a role defined under a different company.
 func (s *EmployeesService) assertRoleBelongsTo(roleID uint, companyID uint) error {
 	role, err := s.repo.FindRole(roleID)
 	if err != nil {
@@ -77,9 +74,7 @@ func (s *EmployeesService) Create(scope repository.AccessScope, input models.Emp
 	return input, nil
 }
 
-// Update applies a partial patch. The employee's company is immutable after
-// creation, so companies_id is dropped from the patch regardless of what the
-// client sent — this mirrors the frontend disabling the field on edit forms.
+// Update applies a partial patch.
 func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch map[string]any) (models.Employees, error) {
 	employee, err := s.repo.FindScoped(scope, id)
 	if err != nil {
@@ -119,9 +114,7 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 	return s.repo.FindDetail(id)
 }
 
-// normalizeBankID turns the several shapes a JSON client can send for an
-// optional bank (absent, null, or 0) into either a concrete id or an explicit
-// "clear this column" marker.
+// normalizeBankID turns the shapes a JSON client can send for an optional bank into an id or a clear marker.
 func normalizeBankID(patch map[string]any) {
 	raw, present := patch["bank_id"]
 	if !present {

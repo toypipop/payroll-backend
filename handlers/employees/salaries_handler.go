@@ -9,9 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UpdateSalariesStructure either disables an employee's current salary or
-// supersedes it with a new record. The archive-or-erase decision for the outgoing
-// records lives in the service; see SalariesStructureService.
+// UpdateSalariesStructure either disables an employee's current salary or supersedes it with a new record.
 func UpdateSalariesStructure(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

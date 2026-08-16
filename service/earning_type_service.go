@@ -37,8 +37,7 @@ func (s *EarningTypeService) Options(scope repository.AccessScope) ([]models.Ear
 	return s.repo.ListMinimalScoped(scope)
 }
 
-// Create adds an earning type to an explicitly named company; this domain has
-// never defaulted to the caller's home company.
+// Create adds an earning type to an explicitly named company; this domain has never defaulted to the caller's home company.
 func (s *EarningTypeService) Create(scope repository.AccessScope, input models.EarningType) (models.EarningType, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -61,8 +60,7 @@ func (s *EarningTypeService) Create(scope repository.AccessScope, input models.E
 	return earningType, nil
 }
 
-// Update rewrites the flags and name. The company is immutable after creation, so
-// it is never taken from input.
+// Update rewrites the flags and name.
 func (s *EarningTypeService) Update(scope repository.AccessScope, id uint, input models.EarningType) (models.EarningType, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

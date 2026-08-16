@@ -11,8 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Leave-request lookup failures. The three endpoints answered three different
-// messages before the split, and all three are kept.
+// Leave-request lookup failures.
 var (
 	ErrLeaveRequestNotFound      = apperr.NotFound("Record not found or access denied")
 	ErrLeaveRequestNotDeletable  = apperr.NotFound("Record not found or unauthorized")
@@ -41,8 +40,7 @@ func NewLeaveRequestRepository() LeaveRequestRepository {
 	return &gormLeaveRequestRepository{db: config.DB}
 }
 
-// scoped filters by company and by employee: the table has a real employee column
-// and LeaveRequestsPage is declared employee-level, so Own and Department bite.
+// scoped filters by company and by employee: the table has a real employee column and LeaveRequestsPage is declared employee-level, so Own and Department bite.
 func (r *gormLeaveRequestRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("leave_request.companies_id", "leave_request.employees_id"))
 }
@@ -113,8 +111,7 @@ func (r *gormLeaveRequestRepository) Delete(leave *models.LeaveRequest) error {
 	return r.db.Delete(leave).Error
 }
 
-// CountOverlapping counts the employee's pending or approved requests that overlap
-// [start, end]. Pass excludeID to ignore the row being edited.
+// CountOverlapping counts the employee's pending or approved requests that overlap [start, end].
 func (r *gormLeaveRequestRepository) CountOverlapping(employeesID uint, start time.Time, end time.Time, excludeID uint) (int64, error) {
 	query := r.db.Model(&models.LeaveRequest{}).
 		Where("employees_id = ? AND status IN (?)", employeesID,
@@ -129,8 +126,7 @@ func (r *gormLeaveRequestRepository) CountOverlapping(employeesID uint, start ti
 	return count, err
 }
 
-// SumApprovedDaysInYear totals the approved days an employee has already taken of one
-// leave type in a calendar year, for the quota warning on the approval page.
+// SumApprovedDaysInYear totals the approved days an employee has already taken of one leave type in a calendar year, for the quota warning on the approval page.
 func (r *gormLeaveRequestRepository) SumApprovedDaysInYear(employeesID uint, leaveTypeID uint, year int) (float64, error) {
 	var used float64
 	err := r.db.Model(&models.LeaveRequest{}).

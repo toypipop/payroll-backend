@@ -8,9 +8,7 @@ import (
 	"payroll-backend/repository"
 )
 
-// Bootstrap policy for a newly created company: an ADMIN role holding every
-// action on every active module except CompaniesPage, which stays
-// SYSTEM_ADMIN-only per the seed convention.
+// Bootstrap policy for a new company: an ADMIN role with every action on every active module except CompaniesPage.
 const (
 	bootstrapRoleName        = "ADMIN"
 	bootstrapRoleDescription = "Company Admin - full access to all modules"
@@ -50,8 +48,7 @@ func (s *CompanyService) ListAll() ([]models.Companies, error) {
 	return s.repo.ListAll()
 }
 
-// Create bootstraps a usable tenant: the company, a default ADMIN role with full
-// permissions on every active module, and company access for the creator.
+// Create bootstraps a usable tenant: the company, a default ADMIN role with full permissions on every active module, and company access for the creator.
 func (s *CompanyService) Create(creatorID uint, input models.Companies) (models.Companies, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -78,8 +75,7 @@ func (s *CompanyService) Create(creatorID uint, input models.Companies) (models.
 	return input, nil
 }
 
-// Update rewrites a company's profile fields. An omitted or blank field keeps its
-// stored value, which is how the previous struct-based update behaved.
+// Update rewrites a company's profile fields.
 func (s *CompanyService) Update(id uint, input CompanyUpdate) (models.Companies, error) {
 	company, err := s.repo.Find(id)
 	if err != nil {

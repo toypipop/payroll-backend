@@ -31,8 +31,6 @@ func GetWorkLocations(c *gin.Context) {
 }
 
 // GetWorkLocationOptions returns a minimal id/name list for dropdowns.
-// Ungated by page permission (mirrors GetCompanies) so any role filling
-// out a time log needs this dropdown, not just WorkLocationPage users.
 func GetWorkLocationOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

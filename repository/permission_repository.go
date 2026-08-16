@@ -9,8 +9,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ErrUnknownModule marks a payload naming a module row that does not exist, or
-// one with no capability declaration. Both are client or config errors.
+// ErrUnknownModule marks a payload naming a module row that does not exist, or one with no capability declaration.
 var ErrUnknownModule = apperr.Validation("Permission payload references an unknown module")
 
 // PermissionRepository is the persistence boundary for the role-permission matrix.
@@ -30,8 +29,7 @@ func NewPermissionRepository() PermissionRepository {
 	return &gormPermissionRepository{db: config.DB}
 }
 
-// ListModulesOrdered returns the whole module tree in display order; the matrix
-// shows every module regardless of which companies the caller administers.
+// ListModulesOrdered returns the whole module tree in display order; the matrix shows every module regardless of which companies the caller administers.
 func (r *gormPermissionRepository) ListModulesOrdered() ([]models.AppModule, error) {
 	var modules []models.AppModule
 	// Let GORM quote the reserved column name for PostgreSQL instead of hand-writing SQL.
@@ -47,8 +45,7 @@ func (r *gormPermissionRepository) ListRoleAccessScoped(scope AccessScope, roles
 	return access, err
 }
 
-// CapabilitiesFor resolves every module id to its declared capability in one
-// query, so the write loop stays free of per-item lookups.
+// CapabilitiesFor resolves every module id to its declared capability in one query, so the write loop stays free of per-item lookups.
 func (r *gormPermissionRepository) CapabilitiesFor(moduleIDs []uint) (map[uint]models.ModuleCapability, error) {
 	var modules []models.AppModule
 	if err := r.db.Select("id, module_key").Where("id IN ?", moduleIDs).Find(&modules).Error; err != nil {
@@ -72,8 +69,7 @@ func (r *gormPermissionRepository) CapabilitiesFor(moduleIDs []uint) (map[uint]m
 	return capabilities, nil
 }
 
-// ReplaceRoleAccess swaps a role's permission rows in one transaction. The delete
-// is scoped so a caller can only clear rows in companies they administer.
+// ReplaceRoleAccess swaps a role's permission rows in one transaction.
 func (r *gormPermissionRepository) ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Scopes(scope.ApplyCompany("roles_module_access.companies_id")).

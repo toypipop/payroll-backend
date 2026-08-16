@@ -13,8 +13,7 @@ import (
 // ErrCompanyNotFound means the referenced company row does not exist.
 var ErrCompanyNotFound = apperr.NotFound("Companies not found")
 
-// TenantBootstrap carries the role and grant policy to create alongside a new
-// company. The values come from the service; only the atomicity lives here.
+// TenantBootstrap carries the role and grant policy to create alongside a new company.
 type TenantBootstrap struct {
 	RoleName        string
 	RoleDescription string
@@ -50,10 +49,7 @@ func (r *gormCompanyRepository) ListScoped(scope AccessScope) ([]models.Companie
 	return companies, err
 }
 
-// ListAccessible returns the companies the caller can reach at all (home plus
-// employee_company_access). This is deliberately not the authorized-company list:
-// that one is narrowed to roles that can view CompaniesPage, which company-level
-// ADMIN intentionally lacks, yet every role still needs the company dropdown.
+// ListAccessible returns the companies the caller can reach at all (home plus employee_company_access).
 func (r *gormCompanyRepository) ListAccessible(userID uint) ([]models.Companies, error) {
 	var companies []models.Companies
 	err := r.db.Where("id IN ?", AccessibleCompanyIDs(userID)).Order("id ASC").Find(&companies).Error
@@ -86,9 +82,7 @@ func (r *gormCompanyRepository) Delete(company *models.Companies) error {
 	return r.db.Delete(company).Error
 }
 
-// CreateTenant writes the company, its bootstrap role, that role's grants on
-// every active module, and the creator's access to the new company as one
-// transaction, so a half-built tenant can never be left behind.
+// CreateTenant writes the company, its bootstrap role, that role's grants and the creator's access as one transaction.
 func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot TenantBootstrap) error {
 	excluded := make(map[models.ModuleKey]bool, len(boot.ExcludeModules))
 	for _, key := range boot.ExcludeModules {

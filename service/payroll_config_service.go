@@ -22,8 +22,7 @@ type CycleConfig struct {
 	CompaniesID uint
 }
 
-// PayrollConfigService owns the payroll-configuration rules. A company has exactly
-// one configuration, enforced by a unique index on companies_id.
+// PayrollConfigService owns the payroll-configuration rules.
 type PayrollConfigService struct {
 	repo repository.PayrollConfigRepository
 }
@@ -38,8 +37,7 @@ func (s *PayrollConfigService) List(scope repository.AccessScope) ([]models.Comp
 	return s.repo.ListCompaniesWithConfig(scope)
 }
 
-// Save writes the configuration for a company the caller administers, updating the
-// existing row when there is one.
+// Save writes the configuration for a company the caller administers, updating the existing row when there is one.
 func (s *PayrollConfigService) Save(scope repository.AccessScope, input models.PayrollConfig) (models.PayrollConfig, error) {
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.PayrollConfig{}, ErrPayrollConfigCompanyDenied

@@ -37,8 +37,7 @@ func (s *DeductionTypeService) Options(scope repository.AccessScope) ([]models.D
 	return s.repo.ListMinimalScoped(scope)
 }
 
-// Create adds a deduction type to an explicitly named company; this domain has
-// never defaulted to the caller's home company.
+// Create adds a deduction type to an explicitly named company; this domain has never defaulted to the caller's home company.
 func (s *DeductionTypeService) Create(scope repository.AccessScope, input models.DeductionType) (models.DeductionType, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -60,8 +59,7 @@ func (s *DeductionTypeService) Create(scope repository.AccessScope, input models
 	return deductionType, nil
 }
 
-// Update rewrites the flags and name. The company is immutable after creation, so
-// it is never taken from input.
+// Update rewrites the flags and name.
 func (s *DeductionTypeService) Update(scope repository.AccessScope, id uint, input models.DeductionType) (models.DeductionType, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

@@ -23,10 +23,6 @@ type PayslipReport struct {
 }
 
 // BankTransferRow is one payment instruction.
-//
-// The bank details come from the transaction's own snapshot columns, not from the
-// employee's current record: a closed cycle must keep paying to the account that was
-// on file when it ran, even if the employee has changed banks since.
 type BankTransferRow struct {
 	EmployeesID   uint
 	EmployeesCode string
@@ -117,8 +113,7 @@ type AnalysisReport struct {
 	Journal              []JournalEntry
 }
 
-// ReportService owns the reporting rules. Every cycle-wide report requires a closed
-// cycle, because a report states final figures and an open cycle has none.
+// ReportService owns the reporting rules.
 type ReportService struct {
 	repo repository.ReportRepository
 }
@@ -128,8 +123,7 @@ func NewReportService(repo repository.ReportRepository) *ReportService {
 	return &ReportService{repo: repo}
 }
 
-// Payslip returns one payslip. Its cycle must be in reach and closed, and both
-// failures answer 403 here rather than 404 and 400.
+// Payslip returns one payslip.
 func (s *ReportService) Payslip(scope repository.AccessScope, transactionID uint) (PayslipReport, error) {
 	transaction, err := s.repo.FindPayslipTransaction(transactionID)
 	if err != nil {
@@ -209,8 +203,7 @@ func (s *ReportService) PND1(scope repository.AccessScope, cycleID uint) (PND1Re
 	return report, nil
 }
 
-// TaxCertificate returns one employee's withholding certificate. Its cycle must be in
-// reach, and an open cycle is refused with 400 rather than the payslip's 403.
+// TaxCertificate returns one employee's withholding certificate.
 func (s *ReportService) TaxCertificate(scope repository.AccessScope, transactionID uint) (TaxCertificate, error) {
 	transaction, err := s.repo.FindTaxCertificateTransaction(transactionID)
 	if err != nil {
@@ -227,9 +220,7 @@ func (s *ReportService) TaxCertificate(scope repository.AccessScope, transaction
 	return TaxCertificate{Cycle: cycle, Company: cycle.Companies, Transaction: transaction}, nil
 }
 
-// SSO returns the social security return for a closed cycle. Thai social security is
-// matched by the employer at the same rate, so the employer column repeats the
-// employee's contribution.
+// SSO returns the social security return for a closed cycle.
 func (s *ReportService) SSO(scope repository.AccessScope, cycleID uint) (SSOReport, error) {
 	cycle, err := s.repo.FindClosedCycleScoped(scope, cycleID)
 	if err != nil {

@@ -18,9 +18,6 @@ var (
 )
 
 // ArchiveDecision says what to do with a salary record that is no longer current.
-// Keep means the record was used in a closed cycle and must survive for audit, so
-// it is only deactivated; otherwise it was never used in a real calculation and is
-// safe to erase.
 type ArchiveDecision struct {
 	ID   uint
 	Keep bool
@@ -49,9 +46,7 @@ func NewSalariesStructureRepository() SalariesStructureRepository {
 	return &gormSalariesStructureRepository{db: config.DB}
 }
 
-// ListEmployeesWithSalary lists the employees in scope with their current salary
-// attached, so the page can show who still has none. SalariesStructurePage is
-// employee-level, so this filters on a real employee column.
+// ListEmployeesWithSalary lists the employees in scope with their current salary attached, so the page can show who still has none.
 func (r *gormSalariesStructureRepository) ListEmployeesWithSalary(scope AccessScope) ([]models.Employees, error) {
 	var employees []models.Employees
 	err := r.db.Scopes(scope.ApplyEmployee("employees.companies_id", "employees.id")).
@@ -63,8 +58,7 @@ func (r *gormSalariesStructureRepository) ListEmployeesWithSalary(scope AccessSc
 	return employees, err
 }
 
-// ListRecordsForEmployee returns the records that count as history: the current one
-// plus those preserved for audit. Erased records are excluded by soft delete.
+// ListRecordsForEmployee returns the records that count as history: the current one plus those preserved for audit.
 func (r *gormSalariesStructureRepository) ListRecordsForEmployee(employeesID uint) ([]models.SalariesStructure, error) {
 	var records []models.SalariesStructure
 	err := r.db.Where("employees_id = ?", employeesID).
@@ -73,8 +67,7 @@ func (r *gormSalariesStructureRepository) ListRecordsForEmployee(employeesID uin
 	return records, err
 }
 
-// ListAllRecordsUnscoped includes erased records, because the chronology rule has to
-// consider every effective date the employee has ever had, not only the live ones.
+// ListAllRecordsUnscoped includes erased records, because the chronology rule weighs every effective date ever used.
 func (r *gormSalariesStructureRepository) ListAllRecordsUnscoped(employeesID uint, companyID uint) ([]models.SalariesStructure, error) {
 	var records []models.SalariesStructure
 	err := r.db.Unscoped().
@@ -84,10 +77,7 @@ func (r *gormSalariesStructureRepository) ListAllRecordsUnscoped(employeesID uin
 	return records, err
 }
 
-// ClosedCycleUsage counts, per salary record, the payroll transactions belonging to
-// a closed cycle. Transactions in open cycles are drafts that get recalculated, so
-// they do not make a record undeletable. One grouped query replaces the per-record
-// count the history endpoint used to run.
+// ClosedCycleUsage counts, per salary record, the payroll transactions belonging to a closed cycle.
 func (r *gormSalariesStructureRepository) ClosedCycleUsage(recordIDs []uint) (map[uint]int64, error) {
 	usage := make(map[uint]int64, len(recordIDs))
 	if len(recordIDs) == 0 {
@@ -125,8 +115,7 @@ func (r *gormSalariesStructureRepository) FindRecord(id uint) (models.SalariesSt
 	return record, nil
 }
 
-// CountClosedCyclesCovering reports how many closed cycles of the company contain
-// the given date, which is what blocks backdating into an already-paid period.
+// CountClosedCyclesCovering reports how many closed cycles of the company contain the given date, which is what blocks backdating into an already-paid period.
 func (r *gormSalariesStructureRepository) CountClosedCyclesCovering(companyID uint, date time.Time) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.PayrollCycle{}).
@@ -161,8 +150,7 @@ func (r *gormSalariesStructureRepository) ArchiveRecords(decisions []ArchiveDeci
 	})
 }
 
-// ArchiveAndCreate retires the outgoing records and inserts the new one as one
-// transaction, so an employee is never left without an active salary.
+// ArchiveAndCreate retires the outgoing records and inserts the new one as one transaction, so an employee is never left without an active salary.
 func (r *gormSalariesStructureRepository) ArchiveAndCreate(decisions []ArchiveDecision, next *models.SalariesStructure) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := applyDecisions(tx, decisions); err != nil {

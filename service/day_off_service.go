@@ -25,8 +25,7 @@ type DayOffInput struct {
 	IsPaid      bool
 }
 
-// DayOffService owns the day-off rules. It also serves the company picker that
-// page needs, which is why it holds a company repository as well.
+// DayOffService owns the day-off rules.
 type DayOffService struct {
 	repo      repository.DayOffRepository
 	companies repository.CompanyRepository

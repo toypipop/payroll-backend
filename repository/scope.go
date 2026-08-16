@@ -54,9 +54,7 @@ type CompanyRole struct {
 	RoleID    uint
 }
 
-// AccessibleCompanyRoles returns the role the employee acts under in each
-// company they can reach: their home role for their home company, and the
-// mapped role for every active employee_company_access company.
+// AccessibleCompanyRoles returns the role the employee acts under in each company they can reach.
 func AccessibleCompanyRoles(userID uint) []CompanyRole {
 	var user models.Employees
 	if err := config.DB.Select("id, companies_id, roles_id").First(&user, userID).Error; err != nil {
@@ -140,13 +138,7 @@ func RoleNames(userID uint) []string {
 	return names
 }
 
-// The *gin.Context versions of CanAccessCompany, ResolveCompanyID and
-// ResolveEmployeeForCompany are gone. Their replacements are the AccessScope methods
-// of the same name plus EmployeesRepository.FindBriefScoped, which take a resolved
-// value instead of the web framework's request object.
-//
-// GetAuthorizedCompanyIDs stays because NewAccessScope is where the gin.Context is
-// unwrapped: it is the boundary, and nothing below it sees a request any more.
+// The *gin.Context versions of CanAccessCompany, ResolveCompanyID and ResolveEmployeeForCompany are gone.
 func GetAuthorizedCompanyIDs(c *gin.Context, userID uint) []uint {
 	if val, ok := c.Get("authorized_company_ids"); ok {
 		if ids, ok := val.([]uint); ok {
@@ -174,35 +166,9 @@ func GetContextAuth(c *gin.Context) (uint, models.DataScope) {
 	return userID, scope
 }
 
-// Row-level scoping has exactly two entry points, and which one a call site uses is
-// the whole statement about that table:
-//
-//   - AccessScope.ApplyCompany  — the table has no employee column. Rows belong to a
-//     company, not a person (payroll cycles, holidays, master data). DataScope cannot
-//     narrow these, so the method does not accept one.
-//   - AccessScope.ApplyEmployee — the table has an employee column, so Own and
-//     Department are meaningful and DataScope is honoured.
-//
-// Both restrict the query to `authorized_company_ids` (set by CheckPermission): the
-// companies whose role actually grants the action, not merely the companies the user
-// can reach. Reachability is app access, not permission to act.
-//
-// Picking the wrong one is a compile-time decision, not a runtime string comparison —
-// that is the point of the split. The oracle for which is right is the module's
-// ScopeLevel in models/module_capability.go.
+// Row-level scoping has two entry points, and picking between them is the whole statement about a table.
 
-// applyCompanyFilter narrows to the authorized companies, denying everything
-// when there are none.
-//
-// No request can currently arrive here with an empty list: AuthMiddleware 403s
-// when AccessibleCompanyIDs is empty, CheckPermission 403s unless it resolved at
-// least one company, and an FK to companies(id) makes companies_id = 0
-// unstorable. So this branch is unreachable rather than a live hole. It is
-// written to deny anyway, because the alternative — returning db unfiltered —
-// means the day one of those three guards moves, the failure mode is disclosing
-// every company's rows instead of none. Absence of an authorized company should
-// read as no access, which is how ScopeCompanyIDs and the Department branch of
-// scopeDataAccess already treat it.
+// applyCompanyFilter narrows to the authorized companies, denying everything when there are none.
 func applyCompanyFilter(db *gorm.DB, companyIDs []uint, companiesCol string) *gorm.DB {
 	if len(companyIDs) == 0 {
 		return db.Where("1 = 0")
@@ -210,14 +176,7 @@ func applyCompanyFilter(db *gorm.DB, companyIDs []uint, companiesCol string) *go
 	return db.Scopes(ScopeCompanyIDs(companyIDs, companiesCol))
 }
 
-// scopeDataAccess turns a DataScope into a predicate on employeeCol. Only
-// AccessScope.ApplyEmployee calls it, so employeeCol always names a real column.
-//
-// ScopeDepartment matches on the department's *category*, not the literal
-// department row: two companies' "HR" departments share one
-// DepartmentCategory, so a Department-scoped role reaches its counterparts in
-// every company it is authorized for. Matching on employees.dept_id instead
-// would confine the user to their own single department row.
+// scopeDataAccess turns a DataScope into a predicate on employeeCol.
 func scopeDataAccess(user models.Employees, scope models.DataScope, companyIDs []uint, employeeCol string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		switch scope {

@@ -34,7 +34,6 @@ func NewEmployeeCompanyAccessRepository() EmployeeCompanyAccessRepository {
 }
 
 // scoped filters by company and by employee: the table has a real employee column
-// and EmployeeCompanyAccessPage is declared employee-level, so Own and Department bite.
 func (r *gormEmployeeCompanyAccessRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee(
 		"employee_company_access.company_id",

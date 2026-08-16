@@ -10,9 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetMySlips returns the caller's own payslips. It is ungated by page permission
-// because every signed-in user reaches My Payslips, and it is scoped to the caller's
-// own employee id rather than to a module's data scope.
+// GetMySlips returns the caller's own payslips.
 func GetMySlips(c *gin.Context) {
 	userID, _ := repository.GetContextAuth(c)
 

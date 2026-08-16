@@ -31,8 +31,6 @@ func GetDeductionTypes(c *gin.Context) {
 }
 
 // GetDeductionTypeOptions returns a minimal id/name list for dropdowns.
-// Ungated by page permission (mirrors GetCompanies) so any role assigning
-// employee/cycle deductions can see whether deduction types exist for a company.
 func GetDeductionTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

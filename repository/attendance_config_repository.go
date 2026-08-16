@@ -11,8 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrAttendanceConfigNotFound means the company has no schedule configuration yet,
-// which is a normal state rather than a failure: callers fall back to a default.
+// ErrAttendanceConfigNotFound means the company has no schedule configuration yet, which is a normal state rather than a failure: callers fall back to a default.
 var ErrAttendanceConfigNotFound = apperr.NotFound("Attendance configuration not found")
 
 // AttendanceConfigRepository is the persistence boundary for the attendance-config domain.
@@ -30,8 +29,7 @@ func NewAttendanceConfigRepository() AttendanceConfigRepository {
 	return &gormAttendanceConfigRepository{db: config.DB}
 }
 
-// ListCompaniesWithConfig reads companies rather than configs so a company that has
-// not been configured yet still appears on the page.
+// ListCompaniesWithConfig reads companies rather than configs so a company that has not been configured yet still appears on the page.
 func (r *gormAttendanceConfigRepository) ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error) {
 	var companies []models.Companies
 	err := r.db.Scopes(scope.ApplyCompany("companies.id")).
@@ -42,14 +40,6 @@ func (r *gormAttendanceConfigRepository) ListCompaniesWithConfig(scope AccessSco
 }
 
 // saveFields lists every column a save owns, as a map rather than a struct.
-//
-// This is a correctness requirement, not a style choice. IsLateDeductionEnabled and
-// IsAbsentDeductionEnabled are declared `default:true`, and GORM drops a Go zero
-// value for any field carrying a default, so writing this row from a struct silently
-// discards a toggle switched off and the database default puts it back on. A map is
-// written literally. Neither Select("*") nor Select with the column names overrides
-// the omission, and an ON CONFLICT upsert cannot either: its SET clause reads
-// excluded.<col>, which is the default when the INSERT dropped that column.
 func saveFields(configuration *models.AttendanceConfig) map[string]any {
 	return map[string]any{
 		"late_rate_per_minute":         configuration.LateRatePerMinute,
@@ -65,8 +55,7 @@ func saveFields(configuration *models.AttendanceConfig) map[string]any {
 	}
 }
 
-// UpsertForCompany writes the configuration, updating in place when the company
-// already has one: companies_id is unique, so a company has exactly one.
+// UpsertForCompany writes the configuration, updating in place when the company already has one: companies_id is unique, so a company has exactly one.
 func (r *gormAttendanceConfigRepository) UpsertForCompany(configuration *models.AttendanceConfig) error {
 	fields := saveFields(configuration)
 	now := time.Now()

@@ -11,17 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// SyncModuleCapabilities rewrites every module's capability columns from the
-// moduleCapabilities registry in models/module_capability.go.
-//
-// The registry is the source of truth; these columns are only a projection of
-// it that the frontend can read over /modules. Running this on every boot means
-// the two cannot drift: editing the columns directly has no lasting effect, and
-// a deploy never depends on someone remembering to reseed.
-//
-// A seeded, active, non-category module with no registry entry is a genuine
-// mistake — someone added a module without declaring what the backend can
-// enforce for it — so this fails the boot rather than guessing a default.
+// SyncModuleCapabilities rewrites every module's capability columns from the moduleCapabilities registry in models/module_capability.go.
 func SyncModuleCapabilities(db *gorm.DB) error {
 	var modules []models.AppModule
 	if err := db.Find(&modules).Error; err != nil {
@@ -54,11 +44,7 @@ func SyncModuleCapabilities(db *gorm.DB) error {
 			continue
 		}
 
-		// Must be a struct update, not a map: GORM applies the serializer:json tag
-		// on AllowedActions/AllowedScopes only when it knows which model field it
-		// is writing. A map hands the raw []string to the driver, which cannot type
-		// a text parameter from it (SQLSTATE 42P18). Select names the columns so the
-		// false value of ActionsAtomic is still written instead of skipped as a zero.
+		// Must be a struct update, not a map: GORM applies the serializer:json tag on AllowedActions/AllowedScopes only when it knows which model field it is writing.
 		if err := db.Model(&models.AppModule{}).
 			Where("id = ?", module.ID).
 			Select("scope_level", "allowed_actions", "allowed_scopes", "actions_atomic").
@@ -86,15 +72,7 @@ func SyncModuleCapabilities(db *gorm.DB) error {
 	return nil
 }
 
-// RemoveDashboardModule drops the DashboardPage module and its permission
-// rows from databases seeded before Dashboard stopped being permission-
-// controlled. Seed only ever creates or updates module rows, so removing the
-// entry from the seed list leaves existing rows behind — and once DashboardPage
-// left the capability registry, SyncModuleCapabilities would refuse to boot
-// over that leftover row. Must therefore run before the capability sync.
-//
-// Nothing is lost: /dashboard is a hardcoded route that "/" redirects to, so
-// the module row only ever controlled whether the sidebar link was drawn.
+// RemoveDashboardModule drops the DashboardPage module and its permission rows from databases seeded before Dashboard stopped being permission- controlled.
 func RemoveDashboardModule(db *gorm.DB) error {
 	var module models.AppModule
 	err := db.Where("module_key = ?", "DashboardPage").First(&module).Error
@@ -116,11 +94,7 @@ func RemoveDashboardModule(db *gorm.DB) error {
 	return nil
 }
 
-// PruneStaleRoleScopes rewrites saved permission rows whose DataScope the
-// backend cannot honour — a company-level module left at Own or Department by
-// the old UI, which silently behaved as Companies anyway. This only makes the
-// stored value agree with the behaviour that was already in effect; no role
-// gains or loses access.
+// PruneStaleRoleScopes rewrites saved permission rows whose DataScope a company-level module cannot honour.
 func PruneStaleRoleScopes(db *gorm.DB) error {
 	var modules []models.AppModule
 	if err := db.Where("is_category = ?", false).Find(&modules).Error; err != nil {

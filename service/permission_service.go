@@ -34,8 +34,7 @@ type PermissionOverview struct {
 	Access  []models.RolesModuleAccess
 }
 
-// PermissionService owns the rule that the database may only hold permission
-// claims the permission check will actually honour.
+// PermissionService owns the rule that the database may only hold permission claims the permission check will actually honour.
 type PermissionService struct {
 	repo  repository.PermissionRepository
 	roles repository.RoleRepository
@@ -69,11 +68,7 @@ func validScope(scope models.DataScope) bool {
 	}
 }
 
-// Replace rewrites a role's permissions, coercing away anything the backend
-// cannot enforce. A module whose rows have no employee column cannot answer Own
-// or Department, and an action no route gates on can never fire — persisting
-// either would put a claim in the database that the permission check silently
-// ignores, which is the exact defect the capability model exists to remove.
+// Replace rewrites a role's permissions, coercing away anything the backend cannot enforce.
 func (s *PermissionService) Replace(scope repository.AccessScope, rolesID uint, entries []PermissionEntry) error {
 	role, err := s.roles.FindScoped(scope, rolesID)
 	if err != nil {

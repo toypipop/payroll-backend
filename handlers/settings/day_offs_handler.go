@@ -37,10 +37,7 @@ func GetDayOffs(c *gin.Context) {
 	c.JSON(http.StatusOK, dayOffs)
 }
 
-// GetDayOffOptions returns a minimal id/weekday/companies_id list. Ungated by
-// page permission (mirrors GetWorkLocationOptions) so other pages (e.g. the
-// Time Log bulk-add form) can default weekday selection to a company's
-// configured day-offs without needing DayOffPage permission.
+// GetDayOffOptions returns a minimal id/weekday/companies_id list.
 func GetDayOffOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

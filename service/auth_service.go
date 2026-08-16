@@ -27,9 +27,7 @@ type TokenSubject struct {
 	RolesID     uint
 }
 
-// AuthService owns credential checking and the shape of the identity a signed-in
-// caller sees. Signing the token and writing the cookie stay in the handler, because
-// those are HTTP concerns rather than rules.
+// AuthService owns credential checking and the shape of the identity a signed-in caller sees.
 type AuthService struct {
 	repo repository.AuthRepository
 }
@@ -39,8 +37,7 @@ func NewAuthService(repo repository.AuthRepository) *AuthService {
 	return &AuthService{repo: repo}
 }
 
-// Authenticate checks an email and password pair. An unknown email and a wrong
-// password answer differently, as this API has always done.
+// Authenticate checks an email and password pair.
 func (s *AuthService) Authenticate(email string, password string) (models.Employees, error) {
 	employee, err := s.repo.FindByEmail(email)
 	if err != nil {
@@ -59,10 +56,6 @@ func (s *AuthService) Subject(employee models.Employees) TokenSubject {
 }
 
 // Identity is the profile a signed-in caller sees, for both login and /auth/me.
-//
-// The stored fields are deliberately few: id, name, roles and the companies the
-// caller can reach. Nothing here is authorisation — permission is always resolved
-// server-side per request.
 func (s *AuthService) Identity(employee models.Employees) models.LoginResponse {
 	companyID := repository.DefaultCompanyID(employee)
 	companyIDs := s.repo.AccessibleCompanyIDs(employee.ID)
@@ -89,16 +82,12 @@ func (s *AuthService) IdentityByID(userID uint) (models.LoginResponse, error) {
 	return s.Identity(employee), nil
 }
 
-// AllModules returns every active module, unfiltered. The Permission Settings screen
-// needs the whole tree regardless of the admin's own access.
+// AllModules returns every active module, unfiltered.
 func (s *AuthService) AllModules() ([]models.AppModule, error) {
 	return s.repo.ListActiveModulesOrdered()
 }
 
 // MyModules returns the active modules the caller can actually view: a leaf survives
-// if any of their roles, across every company they can reach, grants CanView on it,
-// and a category survives only if one of its children did. This is what the sidebar,
-// the route table and the "Set it up" links read.
 func (s *AuthService) MyModules(userID uint) ([]models.AppModule, error) {
 	modules, err := s.repo.ListActiveModulesOrdered()
 	if err != nil {

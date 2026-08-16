@@ -27,18 +27,16 @@ type PayrollCycle struct {
 
 // PayrollTransaction records the actual payout for an Employees
 type PayrollTransaction struct {
-	ID             uint                  `gorm:"primaryKey" json:"id"`
-	CreatedAt      time.Time             `json:"created_at"`
-	UpdatedAt      time.Time             `json:"updated_at"`
-	DeletedAt      soft_delete.DeletedAt `gorm:"index" json:"-"`
-	CycleID        uint                  `gorm:"not null" json:"cycle_id"`
-	EmployeesID    uint                  `gorm:"not null" json:"employees_id"`
-	// Which salary record produced SalariesAtTime — lets the salary handler tell
-	// whether a superseded record was ever actually used in a real calculation.
+	ID          uint                  `gorm:"primaryKey" json:"id"`
+	CreatedAt   time.Time             `json:"created_at"`
+	UpdatedAt   time.Time             `json:"updated_at"`
+	DeletedAt   soft_delete.DeletedAt `gorm:"index" json:"-"`
+	CycleID     uint                  `gorm:"not null" json:"cycle_id"`
+	EmployeesID uint                  `gorm:"not null" json:"employees_id"`
+	// Which salary record produced SalariesAtTime — lets the salary handler tell whether a superseded record was ever actually used in a real calculation.
 	SalariesStructureID uint    `gorm:"not null;index" json:"salaries_structure_id"`
 	SalariesAtTime      float64 `gorm:"type:decimal(15,2)" json:"salaries_at_time"`
 	// Snapshot fields: captured at calculation time so historical payslips stay accurate
-	// even if the employee's position/department/bank changes afterward (English Comment)
 	PositionName       string  `gorm:"size:255" json:"position_name"`
 	DepartmentName     string  `gorm:"size:255" json:"department_name"`
 	EmploymentTypeName string  `gorm:"size:100" json:"employment_type_name"`
@@ -48,11 +46,10 @@ type PayrollTransaction struct {
 	TotalEarning       float64 `gorm:"type:decimal(15,2)" json:"total_earning"`
 	TotalDeduction     float64 `gorm:"type:decimal(15,2)" json:"total_deduction"`
 	SsoAmount          float64 `gorm:"type:decimal(15,2)" json:"sso_amount"`
-	// TaxableIncome is income left after all tax-deductible items (SSO, provident
-	// fund, etc.) are subtracted — the base actually fed into the tax calculation.
+	// TaxableIncome is income left after all tax-deductible items (SSO, provident fund, etc.) are subtracted — the base actually fed into the tax calculation.
 	TaxableIncome float64 `gorm:"type:decimal(15,2)" json:"taxable_income"`
 	TaxAmount     float64 `gorm:"type:decimal(15,2)" json:"tax_amount"`
-	NetPay             float64 `gorm:"type:decimal(15,2)" json:"net_pay"`
+	NetPay        float64 `gorm:"type:decimal(15,2)" json:"net_pay"`
 	// Relations (English Comment)
 	Details   []PayrollTransactionDetail `gorm:"foreignKey:TransactionID" json:"details"`
 	Employees Employees                  `gorm:"foreignKey:EmployeesID" json:"employees"`
@@ -67,8 +64,6 @@ type PayrollTransactionDetail struct {
 	Amount        float64               `gorm:"type:decimal(15,2)" json:"amount"`
 	Type          string                `gorm:"size:20" json:"type"` // "earning" or "deduction"
 	// IsTaxRelevant marks whether this line item actually fed into the tax
-	// calculation (earning counted toward taxable income, or deduction
-	// subtracted from it) — lets the UI grey out items that don't affect tax.
 	IsTaxRelevant bool `json:"is_tax_relevant"`
 	// Reference to master data if applicable (English Comment)
 	EarningTypeID   *uint `json:"earning_type_id"`

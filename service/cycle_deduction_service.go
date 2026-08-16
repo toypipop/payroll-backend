@@ -8,8 +8,7 @@ import (
 	"payroll-backend/repository"
 )
 
-// Cycle-deduction rule failures. This domain answers 400 for every rule, including
-// the cycle checks, which is what its callers already saw.
+// Cycle-deduction rule failures.
 var (
 	ErrCycleDeductionCycleDenied     = apperr.Validation("Cycle not found or access denied")
 	ErrCycleDeductionCycleClosedAdd  = apperr.Validation("Cannot add deductions to a closed cycle")
@@ -27,9 +26,7 @@ var (
 	ErrDeductionTypeMissing       = repository.ErrDeductionTypeMissing
 )
 
-// CycleDeductionService owns the rules for a one-off deduction on a payroll cycle: the
-// cycle must be open and in reach, and the employee and deduction type must both
-// belong to that cycle's company.
+// CycleDeductionService owns the rules for a one-off deduction on a payroll cycle.
 type CycleDeductionService struct {
 	repo           repository.CycleDeductionRepository
 	cycles         repository.PayrollRunRepository
@@ -47,8 +44,7 @@ func NewCycleDeductionService(
 	return &CycleDeductionService{repo: repo, cycles: cycles, employees: employees, deductionTypes: deductionTypes}
 }
 
-// openCycle resolves the cycle, translating its two failure modes into the message
-// this endpoint uses for the action being attempted.
+// openCycle resolves the cycle, translating its two failure modes into the message this endpoint uses for the action being attempted.
 func (s *CycleDeductionService) openCycle(scope repository.AccessScope, cycleID uint, closedErr error) (models.PayrollCycle, error) {
 	cycle, err := s.cycles.FindOpenCycleScoped(scope, cycleID)
 	switch {
@@ -121,8 +117,7 @@ func (s *CycleDeductionService) Update(scope repository.AccessScope, id uint, in
 		return models.PayrollCycleDeduction{}, ErrCycleDeductionCompanyMismatch
 	}
 
-	// On update a missing deduction type and one from another company answer the same
-	// message, which is how this endpoint has always behaved.
+	// On update a missing deduction type and one from another company answer the same message, which is how this endpoint has always behaved.
 	deductionType, err := s.deductionTypes.Find(input.DeductionTypeID)
 	if err != nil || deductionType.CompaniesID != cycle.CompaniesID {
 		return models.PayrollCycleDeduction{}, ErrCycleDeductionTypeCompany

@@ -9,9 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// AttendanceSummaryRepository is the read boundary shared by the deduction and
-// earning summaries. Both walk the same window of employees, schedules, calendars
-// and time logs, so both draw from one place.
+// AttendanceSummaryRepository is the read boundary shared by the deduction and earning summaries.
 type AttendanceSummaryRepository interface {
 	ListEmployeesScoped(scope AccessScope) ([]models.Employees, error)
 	ListConfigsForCompanies(companyIDs []uint) ([]models.AttendanceConfig, error)
@@ -30,8 +28,7 @@ func NewAttendanceSummaryRepository() AttendanceSummaryRepository {
 	return &gormAttendanceSummaryRepository{db: config.DB}
 }
 
-// ListEmployeesScoped filters by company and by employee, matching the
-// employee-level declaration of both summary pages.
+// ListEmployeesScoped filters by company and by employee, matching the employee-level declaration of both summary pages.
 func (r *gormAttendanceSummaryRepository) ListEmployeesScoped(scope AccessScope) ([]models.Employees, error) {
 	var employees []models.Employees
 	err := r.db.Scopes(scope.ApplyEmployee("employees.companies_id", "employees.id")).
@@ -79,8 +76,7 @@ func (r *gormAttendanceSummaryRepository) ListApprovedLeavesOverlapping(employee
 	return leaves, err
 }
 
-// ListTimeLogsBetween takes logs whose check-in falls in the window, plus logs with
-// no check-in at all, which are placed by their creation time instead.
+// ListTimeLogsBetween takes logs whose check-in falls in the window, plus logs with no check-in at all, which are placed by their creation time instead.
 func (r *gormAttendanceSummaryRepository) ListTimeLogsBetween(employeeIDs []uint, from time.Time, to time.Time) ([]models.TimeLog, error) {
 	var logs []models.TimeLog
 	if len(employeeIDs) == 0 {

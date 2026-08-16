@@ -11,8 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Time-log lookup failures. Update and delete answered slightly different messages
-// before the split, and both are kept.
+// Time-log lookup failures.
 var (
 	ErrTimeLogNotFound     = apperr.NotFound("Record not found or access denied")
 	ErrTimeLogNotDeletable = apperr.NotFound("Record not found or unauthorized")
@@ -41,8 +40,7 @@ func NewTimeLogRepository() TimeLogRepository {
 	return &gormTimeLogRepository{db: config.DB}
 }
 
-// scoped filters by company and by employee: the table has a real employee column
-// and TimelogsListPage is declared employee-level, so Own and Department bite.
+// scoped filters by company and by employee: the table has a real employee column and TimelogsListPage is declared employee-level, so Own and Department bite.
 func (r *gormTimeLogRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("time_log.companies_id", "time_log.employees_id"))
 }
@@ -71,8 +69,7 @@ func (r *gormTimeLogRepository) Create(log *models.TimeLog) error {
 	return r.db.Create(log).Error
 }
 
-// CreateMany writes a generated run as one transaction, so a failure part-way
-// through leaves no logs behind instead of a partial date range.
+// CreateMany writes a generated run as one transaction, so a failure part-way through leaves no logs behind instead of a partial date range.
 func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog) error {
 	if len(logs) == 0 {
 		return nil
@@ -90,10 +87,7 @@ func (r *gormTimeLogRepository) Delete(log *models.TimeLog) error {
 	return r.db.Delete(log).Error
 }
 
-// CountForEmployeeBetween counts an employee's logs whose check-in falls in
-// [from, to). The bulk generator uses it to skip a date that already has a log,
-// and passes a window anchored to the business timezone so it covers exactly one
-// Bangkok calendar day.
+// CountForEmployeeBetween counts an employee's logs whose check-in falls in [from, to).
 func (r *gormTimeLogRepository) CountForEmployeeBetween(employeesID uint, from time.Time, to time.Time) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.TimeLog{}).

@@ -25,10 +25,7 @@ func GetBanks(c *gin.Context) {
 	c.JSON(http.StatusOK, banks)
 }
 
-// GetBankOptions returns a minimal list for dropdowns. Ungated by page
-// permission (mirrors GetCompanies) so any role filling out a bank-account
-// field needs this dropdown, not just MasterBankPage users. Banks are global
-// (not company-scoped), so no data-access check applies.
+// GetBankOptions returns a minimal list for dropdowns.
 func GetBankOptions(c *gin.Context) {
 	banks, err := bankService().List()
 	if err != nil {

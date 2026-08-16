@@ -6,9 +6,7 @@ import (
 	"payroll-backend/repository"
 )
 
-// Employee-company-access rule failures. All three answer 403, as they did
-// before the split, because each means the caller aimed at something outside
-// what they administer rather than sending a malformed request.
+// Employee-company-access rule failures.
 var (
 	ErrAccessEmployeeMissing = apperr.Forbidden("employee not found")
 	ErrAccessRoleDenied      = apperr.Forbidden("access denied to this role")
@@ -33,9 +31,7 @@ type EmployeeCompanyAccessInput struct {
 	IsActive   bool
 }
 
-// EmployeeCompanyAccessService owns the rules for granting an employee access to
-// a company: the caller must administer that company, the employee must exist,
-// and the role must be one the caller can reach and must belong to that company.
+// EmployeeCompanyAccessService owns the rules for granting an employee access to a company.
 type EmployeeCompanyAccessService struct {
 	repo  repository.EmployeeCompanyAccessRepository
 	roles repository.RoleRepository

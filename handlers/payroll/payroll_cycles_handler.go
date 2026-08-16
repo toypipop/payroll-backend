@@ -54,8 +54,7 @@ func CreatePayrollCycle(c *gin.Context) {
 	c.JSON(http.StatusCreated, cycle)
 }
 
-// ClosePayrollCycle snapshots the cycle's transactions and then closes it, so a
-// closed cycle always carries the figures it was closed on.
+// ClosePayrollCycle snapshots the cycle's transactions and then closes it, so a closed cycle always carries the figures it was closed on.
 func ClosePayrollCycle(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {

@@ -13,7 +13,6 @@ import (
 )
 
 // ErrPayrollConfigNotFound means the cycle's company has no live configuration.
-// The cycle-not-found sentinel is shared with payroll_cycle_lock.go.
 var ErrPayrollConfigNotFound = apperr.NotFound("No active payroll config found for this cycle's company")
 
 // PayrollConfigRepository is the persistence boundary for the payroll-config domain.
@@ -33,10 +32,7 @@ func NewPayrollConfigRepository() PayrollConfigRepository {
 	return &gormPayrollConfigRepository{db: config.DB}
 }
 
-// ListCompaniesWithConfig returns the caller's authorized companies, each with its
-// configuration preloaded. The page is company-driven: a company with no
-// configuration yet must still appear, which is why this reads companies rather
-// than configs.
+// ListCompaniesWithConfig returns the caller's authorized companies, each with its configuration preloaded.
 func (r *gormPayrollConfigRepository) ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error) {
 	var companies []models.Companies
 	err := r.db.Scopes(scope.ApplyCompany("companies.id")).
@@ -46,9 +42,7 @@ func (r *gormPayrollConfigRepository) ListCompaniesWithConfig(scope AccessScope)
 	return companies, err
 }
 
-// FindCycleScoped resolves a payroll cycle the caller may read. It lives here
-// because the payroll domain has not been migrated yet; move it to the cycle
-// repository when that happens.
+// FindCycleScoped resolves a payroll cycle the caller may read.
 func (r *gormPayrollConfigRepository) FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error) {
 	var cycle models.PayrollCycle
 	err := r.db.Scopes(scope.ApplyCompany("payroll_cycle.companies_id")).
@@ -78,10 +72,7 @@ func (r *gormPayrollConfigRepository) FindActiveForCompany(companyID uint) (mode
 	return payrollConfig, nil
 }
 
-// UpsertForCompany writes the configuration, updating in place when the company
-// already has one. A company has exactly one configuration: companies_id carries a
-// plain unique index, so an archive-then-insert scheme would collide with the
-// soft-deleted row still occupying that value.
+// UpsertForCompany writes the configuration, updating in place when the company already has one.
 func (r *gormPayrollConfigRepository) UpsertForCompany(configuration *models.PayrollConfig) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "companies_id"}},

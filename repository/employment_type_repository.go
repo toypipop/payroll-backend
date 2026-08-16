@@ -10,8 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrEmploymentTypeNotFound answers 404, which is what this domain has always
-// returned for a missing or out-of-scope row.
+// ErrEmploymentTypeNotFound answers 404, which is what this domain has always returned for a missing or out-of-scope row.
 var ErrEmploymentTypeNotFound = apperr.NotFound("Employment type not found")
 
 // EmploymentTypeRepository is the persistence boundary for the employment-types domain.

@@ -116,8 +116,7 @@ func GetAuthCookieName() string {
 	return authCookieName
 }
 
-// issueToken signs a token for an authenticated employee. Signing and the cookie stay
-// in the handler because they are transport, not rules.
+// issueToken signs a token for an authenticated employee.
 func issueToken(subject service.TokenSubject) (string, error) {
 	secret, err := GetJWTSecret()
 	if err != nil {
@@ -189,8 +188,7 @@ func Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
-// GetAppModules returns every active module, unfiltered. Permission Settings needs the
-// whole tree regardless of the admin's own access.
+// GetAppModules returns every active module, unfiltered.
 func GetAppModules(c *gin.Context) {
 	modules, err := authService().AllModules()
 	if err != nil {
@@ -200,14 +198,7 @@ func GetAppModules(c *gin.Context) {
 	c.JSON(http.StatusOK, modules)
 }
 
-// GetMyAppModules returns the same active module list as GetAppModules, but
-// filtered to what the requesting user can actually VIEW: a leaf module is
-// kept only if one of the user's roles (across every company they can
-// reach) grants CanView on it, and a category is kept only if at least one
-// of its children survived that filter. Unlike GetAppModules (which stays
-// unfiltered for the Permission Settings admin UI, which must list every
-// module regardless of the admin's own access), this is what the Sidebar,
-// route table, and "Set it up" links should use.
+// GetMyAppModules returns the active modules the caller can view, for the sidebar and route table.
 func GetMyAppModules(c *gin.Context) {
 	userIDVal, ok := c.Get("user_id")
 	if !ok {

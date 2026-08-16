@@ -8,8 +8,7 @@ import (
 	"payroll-backend/repository"
 )
 
-// Cycle-earning rule failures. This domain answers 400 for every rule, including the
-// cycle checks, which is what its callers already saw.
+// Cycle-earning rule failures.
 var (
 	ErrCycleIDRequired             = apperr.Validation("cycle_id query param required")
 	ErrCycleEarningCycleDenied     = apperr.Validation("Cycle not found or access denied")
@@ -28,9 +27,7 @@ var (
 	ErrEarningTypeMissing       = repository.ErrEarningTypeMissing
 )
 
-// CycleEarningService owns the rules for a one-off earning on a payroll cycle: the
-// cycle must be open and in reach, and the employee and earning type must both belong
-// to that cycle's company.
+// CycleEarningService owns the rules for a one-off earning on a payroll cycle.
 type CycleEarningService struct {
 	repo         repository.CycleEarningRepository
 	cycles       repository.PayrollRunRepository
@@ -48,8 +45,7 @@ func NewCycleEarningService(
 	return &CycleEarningService{repo: repo, cycles: cycles, employees: employees, earningTypes: earningTypes}
 }
 
-// openCycle resolves the cycle, translating its two failure modes into the message
-// this endpoint uses for the action being attempted.
+// openCycle resolves the cycle, translating its two failure modes into the message this endpoint uses for the action being attempted.
 func (s *CycleEarningService) openCycle(scope repository.AccessScope, cycleID uint, closedErr error) (models.PayrollCycle, error) {
 	cycle, err := s.cycles.FindOpenCycleScoped(scope, cycleID)
 	switch {
@@ -130,8 +126,7 @@ func (s *CycleEarningService) Update(scope repository.AccessScope, id uint, inpu
 		return models.PayrollCycleEarning{}, ErrCycleEarningCompanyMismatch
 	}
 
-	// On update a missing earning type and one from another company answer the same
-	// message, which is how this endpoint has always behaved.
+	// On update a missing earning type and one from another company answer the same message, which is how this endpoint has always behaved.
 	earningType, err := s.earningTypes.Find(input.EarningTypeID)
 	if err != nil || earningType.CompaniesID != cycle.CompaniesID {
 		return models.PayrollCycleEarning{}, ErrCycleEarningTypeCompany
