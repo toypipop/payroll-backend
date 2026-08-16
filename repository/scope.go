@@ -140,48 +140,13 @@ func RoleNames(userID uint) []string {
 	return names
 }
 
-func CanAccessCompany(c *gin.Context, userID uint, scope models.DataScope, companyID uint) bool {
-	if companyID == 0 {
-		return false
-	}
-	for _, accessibleID := range GetAuthorizedCompanyIDs(c, userID) {
-		if accessibleID == companyID {
-			return true
-		}
-	}
-	return false
-}
-
-func ResolveCompanyID(c *gin.Context, user models.Employees, scope models.DataScope, requestedCompanyID uint) (uint, bool) {
-	companyID := requestedCompanyID
-	if companyID == 0 {
-		companyID = DefaultCompanyID(user)
-	}
-	return companyID, CanAccessCompany(c, user.ID, scope, companyID)
-}
-
-func ResolveEmployeeForCompany(c *gin.Context, user models.Employees, scope models.DataScope, employeeID uint, requestedCompanyID uint) (models.Employees, bool) {
-	if requestedCompanyID == 0 {
-		return models.Employees{}, false
-	}
-	companyID, ok := ResolveCompanyID(c, user, scope, requestedCompanyID)
-	if !ok || employeeID == 0 {
-		return models.Employees{}, false
-	}
-
-	var employee models.Employees
-	if err := config.DB.Scopes(
-		ApplyEmployeeScopes(c, user, scope, "employees.companies_id", "employees.id"),
-	).Select("id, companies_id").First(&employee, employeeID).Error; err != nil {
-		return models.Employees{}, false
-	}
-	if employee.CompaniesID != companyID {
-		return models.Employees{}, false
-	}
-
-	return employee, true
-}
-
+// The *gin.Context versions of CanAccessCompany, ResolveCompanyID and
+// ResolveEmployeeForCompany are gone. Their replacements are the AccessScope methods
+// of the same name plus EmployeesRepository.FindBriefScoped, which take a resolved
+// value instead of the web framework's request object.
+//
+// GetAuthorizedCompanyIDs stays because NewAccessScope is where the gin.Context is
+// unwrapped: it is the boundary, and nothing below it sees a request any more.
 func GetAuthorizedCompanyIDs(c *gin.Context, userID uint) []uint {
 	if val, ok := c.Get("authorized_company_ids"); ok {
 		if ids, ok := val.([]uint); ok {
@@ -209,21 +174,22 @@ func GetContextAuth(c *gin.Context) (uint, models.DataScope) {
 	return userID, scope
 }
 
-// Row-level scoping has exactly two entry points, and which one a call site
-// uses is the whole statement about that table:
+// Row-level scoping has exactly two entry points, and which one a call site uses is
+// the whole statement about that table:
 //
-//   - ApplyCompanyScopes  — the table has no employee column. Rows belong to a
-//     company, not a person (payroll cycles, holidays, master data). DataScope
-//     cannot narrow these, so the function does not accept one.
-//   - ApplyEmployeeScopes — the table has an employee column, so Own and
+//   - AccessScope.ApplyCompany  — the table has no employee column. Rows belong to a
+//     company, not a person (payroll cycles, holidays, master data). DataScope cannot
+//     narrow these, so the method does not accept one.
+//   - AccessScope.ApplyEmployee — the table has an employee column, so Own and
 //     Department are meaningful and DataScope is honoured.
 //
-// Both restrict the query to `authorized_company_ids` (set by CheckPermission):
-// the companies whose role actually grants the action, not merely the companies
-// the user can reach. Reachability is app access, not permission to act.
+// Both restrict the query to `authorized_company_ids` (set by CheckPermission): the
+// companies whose role actually grants the action, not merely the companies the user
+// can reach. Reachability is app access, not permission to act.
 //
-// Picking the wrong one is a compile-time decision, not a runtime string
-// comparison — that is the point of the split.
+// Picking the wrong one is a compile-time decision, not a runtime string comparison —
+// that is the point of the split. The oracle for which is right is the module's
+// ScopeLevel in models/module_capability.go.
 
 // applyCompanyFilter narrows to the authorized companies, denying everything
 // when there are none.
@@ -244,26 +210,8 @@ func applyCompanyFilter(db *gorm.DB, companyIDs []uint, companiesCol string) *go
 	return db.Scopes(ScopeCompanyIDs(companyIDs, companiesCol))
 }
 
-// ApplyCompanyScopes scopes a company-owned table. There is no DataScope
-// parameter because none of Own/Department/Companies would change the result.
-func ApplyCompanyScopes(c *gin.Context, user models.Employees, companiesCol string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return applyCompanyFilter(db, GetAuthorizedCompanyIDs(c, user.ID), companiesCol)
-	}
-}
-
-// ApplyEmployeeScopes scopes an employee-owned table: authorized companies
-// first, then the role's DataScope against employeeCol.
-func ApplyEmployeeScopes(c *gin.Context, user models.Employees, scope models.DataScope, companiesCol string, employeeCol string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		companyIDs := GetAuthorizedCompanyIDs(c, user.ID)
-		query := db.Scopes(scopeDataAccess(user, scope, companyIDs, employeeCol))
-		return applyCompanyFilter(query, companyIDs, companiesCol)
-	}
-}
-
 // scopeDataAccess turns a DataScope into a predicate on employeeCol. Only
-// ApplyEmployeeScopes calls it, so employeeCol always names a real column.
+// AccessScope.ApplyEmployee calls it, so employeeCol always names a real column.
 //
 // ScopeDepartment matches on the department's *category*, not the literal
 // department row: two companies' "HR" departments share one

@@ -121,4 +121,4 @@ declaring. That asymmetry is why `RemoveDashboardModule` had to exist.
 
 ## Endgame
 
-Once every domain is migrated, the `gin.Context`-taking scope helpers (`repository.ApplyCompanyScopes`, `repository.ApplyEmployeeScopes`) have no callers left and get deleted. `AccessScope` becomes the only way to scope a query.
+Done. The `gin.Context`-taking scope helpers are deleted; `AccessScope` is the only way to scope a query.

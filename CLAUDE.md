@@ -89,7 +89,7 @@ New or refactored domains follow handler → service → repository:
 - A domain's repository must use the filter its `models/module_capability.go` entry declares: `ScopeLevel == "employee"` ⟺ `scope.ApplyEmployee`, `"company"` ⟺ `scope.ApplyCompany`. That pair is the check that catches a cross-company data leak, which `go build` cannot.
 - `gofmt -w` rewrites line endings on every file it reads (the tree is checked out CRLF), so scope it to the directories you edited instead of the whole repo.
 - Use `repository.ClearField` in an update map to null a nullable column; the repository translates it to SQL `NULL` so GORM clause types stay out of services.
-- Handlers not yet migrated still call `config.DB` directly. That is legacy, not the pattern to copy.
+- **Every handler is migrated.** No file under `handlers/` imports `config`, and the `*gin.Context` scope helpers (`ApplyCompanyScopes`, `ApplyEmployeeScopes`, `ResolveCompanyID`, `CanAccessCompany`, `ResolveEmployeeForCompany`, `EnsurePayrollCycleOpen`) are deleted. `repository.NewAccessScope` and `GetContextAuth` are the only places a request object is unwrapped; nothing below them sees gin. A new handler that reaches for `config.DB` is a regression, not a shortcut.
 
 ## Auth/API
 
