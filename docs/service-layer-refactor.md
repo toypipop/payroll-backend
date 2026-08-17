@@ -122,3 +122,28 @@ declaring. That asymmetry is why `RemoveDashboardModule` had to exist.
 ## Endgame
 
 Done. The `gin.Context`-taking scope helpers are deleted; `AccessScope` is the only way to scope a query.
+
+## Round 7 — dependency injection (2026-08-17)
+
+Repository constructors take the connection instead of reading the `config.DB` global: `repository.NewXxxRepository(db)`. Every per-handler `xxxService()` builder is gone; each handler package declares a `Handler` struct whose fields are the services it needs, and its routed functions are methods on it. `wire.go`'s `buildHandlers(db)` assembles repositories → services → handlers once and returns `routes.Handlers`, which `SetupRouter(h)` consumes.
+
+`main.go` and `wire.go` are now the only files outside `config` that name `config.DB`. Guard the boundary with:
+
+```bash
+grep -rl '"payroll-backend/config"' handlers/   # must print nothing
+```
+
+## Round 8 — the last of the global, and gin out of `repository/` (2026-08-17)
+
+- `repository/access_repository.go` is new: `AccessRepository` (`AccessibleCompanyIDs`, `AccessibleRoleIDs`, `AccessibleCompanyRoles`, `RoleNames`, `FindScopeUser`, `ModuleAccesses`) holds what used to be package-level functions reading `config.DB` in `scope.go`.
+- `repository.NewAccessScope(user, dataScope, authorizedCompanyIDs)` takes plain values and runs no query. The gin-reading half moved to `httpx.RequestScope` / `httpx.ContextAuth` / `httpx.AuthorizedCompanyIDs`, so **`repository/` no longer imports gin**.
+- `Guard.Auth` stores `scope_user` on the request, which is what lets `RequestScope` skip the per-request user lookup `NewAccessScope` used to do.
+- `delete_guard.go` became `DeleteGuardRepository`; `middleware.PreventDeleteIfReferenced` is a `Guard` method.
+- `AuthorizedCompanyIDs` falls back to the context's `accessible_company_ids` (set by `Guard.Auth`) instead of re-querying, for routes with no permission gate — same values, one fewer round trip.
+
+Verify with:
+
+```bash
+grep -rln '"payroll-backend/config"' handlers/ middleware/ repository/ routes/ service/   # must print nothing
+grep -rln 'gin-gonic' repository/                                                          # must print nothing
+```

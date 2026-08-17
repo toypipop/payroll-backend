@@ -10,7 +10,7 @@ import (
 )
 
 // UpdateSalariesStructure either disables an employee's current salary or supersedes it with a new record.
-func UpdateSalariesStructure(c *gin.Context) {
+func (h *Handler) UpdateSalariesStructure(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -27,7 +27,7 @@ func UpdateSalariesStructure(c *gin.Context) {
 		return
 	}
 
-	result, err := salariesStructureService().Save(scope, service.SalaryInput{
+	result, err := h.SalariesStructure.Save(scope, service.SalaryInput{
 		EmployeesID:   input.EmployeesID,
 		CompaniesID:   input.CompaniesID,
 		BaseSalaries:  input.BaseSalaries,

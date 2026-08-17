@@ -5,24 +5,18 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// timeLogService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func timeLogService() *service.TimeLogService {
-	return service.NewTimeLogService(repository.NewTimeLogRepository(), repository.NewEmployeesRepository())
-}
-
-func GetTimeLogs(c *gin.Context) {
+func (h *Handler) GetTimeLogs(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	logs, err := timeLogService().List(scope)
+	logs, err := h.TimeLog.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -30,7 +24,7 @@ func GetTimeLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, logs)
 }
 
-func CreateTimeLog(c *gin.Context) {
+func (h *Handler) CreateTimeLog(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -41,7 +35,7 @@ func CreateTimeLog(c *gin.Context) {
 		return
 	}
 
-	log, err := timeLogService().Create(scope, input)
+	log, err := h.TimeLog.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -50,7 +44,7 @@ func CreateTimeLog(c *gin.Context) {
 }
 
 // BulkCreateTimeLog creates one TimeLog per matching weekday within a date
-func BulkCreateTimeLog(c *gin.Context) {
+func (h *Handler) BulkCreateTimeLog(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -70,7 +64,7 @@ func BulkCreateTimeLog(c *gin.Context) {
 		return
 	}
 
-	result, err := timeLogService().BulkCreate(scope, service.BulkTimeLogInput{
+	result, err := h.TimeLog.BulkCreate(scope, service.BulkTimeLogInput{
 		EmployeesID:    input.EmployeesID,
 		CompaniesID:    input.CompaniesID,
 		WorkLocationID: input.WorkLocationID,
@@ -92,7 +86,7 @@ func BulkCreateTimeLog(c *gin.Context) {
 	})
 }
 
-func UpdateTimeLog(c *gin.Context) {
+func (h *Handler) UpdateTimeLog(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -107,7 +101,7 @@ func UpdateTimeLog(c *gin.Context) {
 		return
 	}
 
-	log, err := timeLogService().Update(scope, id, input)
+	log, err := h.TimeLog.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -115,7 +109,7 @@ func UpdateTimeLog(c *gin.Context) {
 	c.JSON(http.StatusOK, log)
 }
 
-func DeleteTimeLog(c *gin.Context) {
+func (h *Handler) DeleteTimeLog(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -125,7 +119,7 @@ func DeleteTimeLog(c *gin.Context) {
 		return
 	}
 
-	if err := timeLogService().Delete(scope, id); err != nil {
+	if err := h.TimeLog.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

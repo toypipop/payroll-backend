@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -34,9 +33,9 @@ type gormAuthRepository struct {
 	db *gorm.DB
 }
 
-// NewAuthRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewAuthRepository() AuthRepository {
-	return &gormAuthRepository{db: config.DB}
+// NewAuthRepository returns the GORM-backed implementation on the given connection.
+func NewAuthRepository(db *gorm.DB) AuthRepository {
+	return &gormAuthRepository{db: db}
 }
 
 // FindByEmail loads the full row, since login needs the password hash.
@@ -93,15 +92,15 @@ func (r *gormAuthRepository) ListViewableModuleIDs(roleIDs []uint) (map[uint]boo
 	return viewable, nil
 }
 
-// The three below delegate to the package-level helpers so the service depends only on this interface and can be exercised against a fake.
+// The three below delegate to AccessRepository so the service depends only on this interface and can be exercised against a fake.
 func (r *gormAuthRepository) AccessibleCompanyIDs(userID uint) []uint {
-	return AccessibleCompanyIDs(userID)
+	return newGormAccessRepository(r.db).AccessibleCompanyIDs(userID)
 }
 
 func (r *gormAuthRepository) AccessibleCompanyRoles(userID uint) []CompanyRole {
-	return AccessibleCompanyRoles(userID)
+	return newGormAccessRepository(r.db).AccessibleCompanyRoles(userID)
 }
 
 func (r *gormAuthRepository) RoleNames(userID uint) []string {
-	return RoleNames(userID)
+	return newGormAccessRepository(r.db).RoleNames(userID)
 }

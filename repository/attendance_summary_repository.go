@@ -3,7 +3,6 @@ package repository
 import (
 	"time"
 
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -23,9 +22,9 @@ type gormAttendanceSummaryRepository struct {
 	db *gorm.DB
 }
 
-// NewAttendanceSummaryRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewAttendanceSummaryRepository() AttendanceSummaryRepository {
-	return &gormAttendanceSummaryRepository{db: config.DB}
+// NewAttendanceSummaryRepository returns the GORM-backed implementation on the given connection.
+func NewAttendanceSummaryRepository(db *gorm.DB) AttendanceSummaryRepository {
+	return &gormAttendanceSummaryRepository{db: db}
 }
 
 // ListEmployeesScoped filters by company and by employee, matching the employee-level declaration of both summary pages.

@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -37,9 +36,9 @@ type gormReportRepository struct {
 	db *gorm.DB
 }
 
-// NewReportRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewReportRepository() ReportRepository {
-	return &gormReportRepository{db: config.DB}
+// NewReportRepository returns the GORM-backed implementation on the given connection.
+func NewReportRepository(db *gorm.DB) ReportRepository {
+	return &gormReportRepository{db: db}
 }
 
 // FindCycleScoped resolves a cycle the caller's role authorizes, without its company.

@@ -5,28 +5,18 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// salariesStructureService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func salariesStructureService() *service.SalariesStructureService {
-	return service.NewSalariesStructureService(
-		repository.NewSalariesStructureRepository(),
-		repository.NewEmployeesRepository(),
-	)
-}
-
 // GetSalaries returns all employees in scope with their salary structure (nil if not yet assigned).
-func GetSalaries(c *gin.Context) {
+func (h *Handler) GetSalaries(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	employees, err := salariesStructureService().ListEmployees(scope)
+	employees, err := h.SalariesStructure.ListEmployees(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -35,7 +25,7 @@ func GetSalaries(c *gin.Context) {
 }
 
 // GetSalaryHistory returns every salary record for one employee (current +
-func GetSalaryHistory(c *gin.Context) {
+func (h *Handler) GetSalaryHistory(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -45,7 +35,7 @@ func GetSalaryHistory(c *gin.Context) {
 		return
 	}
 
-	entries, err := salariesStructureService().History(scope, employeesID)
+	entries, err := h.SalariesStructure.History(scope, employeesID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -63,7 +53,7 @@ func GetSalaryHistory(c *gin.Context) {
 }
 
 // DeleteSalaryRecord erases a salary record, but only one that no closed cycle ever used.
-func DeleteSalaryRecord(c *gin.Context) {
+func (h *Handler) DeleteSalaryRecord(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -73,7 +63,7 @@ func DeleteSalaryRecord(c *gin.Context) {
 		return
 	}
 
-	if err := salariesStructureService().DeleteRecord(scope, id); err != nil {
+	if err := h.SalariesStructure.DeleteRecord(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

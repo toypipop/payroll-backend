@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -27,9 +26,9 @@ type gormPayrollConfigRepository struct {
 	db *gorm.DB
 }
 
-// NewPayrollConfigRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewPayrollConfigRepository() PayrollConfigRepository {
-	return &gormPayrollConfigRepository{db: config.DB}
+// NewPayrollConfigRepository returns the GORM-backed implementation on the given connection.
+func NewPayrollConfigRepository(db *gorm.DB) PayrollConfigRepository {
+	return &gormPayrollConfigRepository{db: db}
 }
 
 // ListCompaniesWithConfig returns the caller's authorized companies, each with its configuration preloaded.

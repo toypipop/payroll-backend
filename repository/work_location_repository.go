@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -27,9 +26,9 @@ type gormWorkLocationRepository struct {
 	db *gorm.DB
 }
 
-// NewWorkLocationRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewWorkLocationRepository() WorkLocationRepository {
-	return &gormWorkLocationRepository{db: config.DB}
+// NewWorkLocationRepository returns the GORM-backed implementation on the given connection.
+func NewWorkLocationRepository(db *gorm.DB) WorkLocationRepository {
+	return &gormWorkLocationRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter WorkLocationPage declares as a company-level module.

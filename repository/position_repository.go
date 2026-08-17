@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -27,9 +26,9 @@ type gormPositionRepository struct {
 	db *gorm.DB
 }
 
-// NewPositionRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewPositionRepository() PositionRepository {
-	return &gormPositionRepository{db: config.DB}
+// NewPositionRepository returns the GORM-backed implementation on the given connection.
+func NewPositionRepository(db *gorm.DB) PositionRepository {
+	return &gormPositionRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter PositionSettings declares as a company-level module.

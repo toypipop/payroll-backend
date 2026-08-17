@@ -6,28 +6,18 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// leaveRequestService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func leaveRequestService() *service.LeaveRequestService {
-	return service.NewLeaveRequestService(
-		repository.NewLeaveRequestRepository(),
-		repository.NewEmployeesRepository(),
-		repository.NewLeaveTypeSettingRepository(),
-	)
-}
-
-func GetLeaveRequests(c *gin.Context) {
+func (h *Handler) GetLeaveRequests(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	leaves, err := leaveRequestService().List(scope)
+	leaves, err := h.LeaveRequest.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -35,7 +25,7 @@ func GetLeaveRequests(c *gin.Context) {
 	c.JSON(http.StatusOK, leaves)
 }
 
-func CreateLeaveRequest(c *gin.Context) {
+func (h *Handler) CreateLeaveRequest(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -51,7 +41,7 @@ func CreateLeaveRequest(c *gin.Context) {
 		leaveTypeID = *input.LeaveTypeID
 	}
 
-	leave, err := leaveRequestService().Create(scope, service.LeaveInput{
+	leave, err := h.LeaveRequest.Create(scope, service.LeaveInput{
 		EmployeesID: input.EmployeesID,
 		CompaniesID: input.CompaniesID,
 		LeaveTypeID: leaveTypeID,
@@ -66,7 +56,7 @@ func CreateLeaveRequest(c *gin.Context) {
 	c.JSON(http.StatusCreated, leave)
 }
 
-func UpdateLeaveRequest(c *gin.Context) {
+func (h *Handler) UpdateLeaveRequest(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -88,7 +78,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	leave, err := leaveRequestService().Update(scope, id, service.LeaveInput{
+	leave, err := h.LeaveRequest.Update(scope, id, service.LeaveInput{
 		EmployeesID: input.EmployeesID,
 		CompaniesID: input.CompaniesID,
 		LeaveTypeID: input.LeaveTypeID,
@@ -103,7 +93,7 @@ func UpdateLeaveRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, leave)
 }
 
-func DeleteLeaveRequest(c *gin.Context) {
+func (h *Handler) DeleteLeaveRequest(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -113,7 +103,7 @@ func DeleteLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	if err := leaveRequestService().Delete(scope, id); err != nil {
+	if err := h.LeaveRequest.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}
@@ -128,13 +118,13 @@ type pendingLeaveResponse struct {
 	QuotaExceeded bool    `json:"quota_exceeded"`
 }
 
-func GetPendingLeaveRequests(c *gin.Context) {
+func (h *Handler) GetPendingLeaveRequests(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	pending, err := leaveRequestService().Pending(scope)
+	pending, err := h.LeaveRequest.Pending(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -153,7 +143,7 @@ func GetPendingLeaveRequests(c *gin.Context) {
 }
 
 // ApproveLeaveRequest records an approval or rejection.
-func ApproveLeaveRequest(c *gin.Context) {
+func (h *Handler) ApproveLeaveRequest(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -171,7 +161,7 @@ func ApproveLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	if err := leaveRequestService().Decide(scope, id, input.Status); err != nil {
+	if err := h.LeaveRequest.Decide(scope, id, input.Status); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

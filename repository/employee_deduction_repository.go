@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -30,9 +29,9 @@ type gormEmployeeDeductionRepository struct {
 	db *gorm.DB
 }
 
-// NewEmployeeDeductionRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewEmployeeDeductionRepository() EmployeeDeductionRepository {
-	return &gormEmployeeDeductionRepository{db: config.DB}
+// NewEmployeeDeductionRepository returns the GORM-backed implementation on the given connection.
+func NewEmployeeDeductionRepository(db *gorm.DB) EmployeeDeductionRepository {
+	return &gormEmployeeDeductionRepository{db: db}
 }
 
 // scoped filters by company and by employee: the table has a real employee column

@@ -5,28 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// employeeEarningService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func employeeEarningService() *service.EmployeeEarningService {
-	return service.NewEmployeeEarningService(
-		repository.NewEmployeeEarningRepository(),
-		repository.NewEmployeesRepository(),
-		repository.NewEarningTypeRepository(),
-	)
-}
-
-func GetEmployeeEarnings(c *gin.Context) {
+func (h *Handler) GetEmployeeEarnings(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	items, err := employeeEarningService().List(scope)
+	items, err := h.EmployeeEarning.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -34,7 +23,7 @@ func GetEmployeeEarnings(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
-func CreateEmployeeEarning(c *gin.Context) {
+func (h *Handler) CreateEmployeeEarning(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -45,7 +34,7 @@ func CreateEmployeeEarning(c *gin.Context) {
 		return
 	}
 
-	earning, err := employeeEarningService().Create(scope, input)
+	earning, err := h.EmployeeEarning.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -53,7 +42,7 @@ func CreateEmployeeEarning(c *gin.Context) {
 	c.JSON(http.StatusCreated, earning)
 }
 
-func UpdateEmployeeEarning(c *gin.Context) {
+func (h *Handler) UpdateEmployeeEarning(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -68,7 +57,7 @@ func UpdateEmployeeEarning(c *gin.Context) {
 		return
 	}
 
-	earning, err := employeeEarningService().Update(scope, id, input)
+	earning, err := h.EmployeeEarning.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -76,7 +65,7 @@ func UpdateEmployeeEarning(c *gin.Context) {
 	c.JSON(http.StatusOK, earning)
 }
 
-func DeleteEmployeeEarning(c *gin.Context) {
+func (h *Handler) DeleteEmployeeEarning(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -86,7 +75,7 @@ func DeleteEmployeeEarning(c *gin.Context) {
 		return
 	}
 
-	if err := employeeEarningService().Delete(scope, id); err != nil {
+	if err := h.EmployeeEarning.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

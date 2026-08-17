@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -34,9 +33,9 @@ type gormEarningTypeRepository struct {
 	db *gorm.DB
 }
 
-// NewEarningTypeRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewEarningTypeRepository() EarningTypeRepository {
-	return &gormEarningTypeRepository{db: config.DB}
+// NewEarningTypeRepository returns the GORM-backed implementation on the given connection.
+func NewEarningTypeRepository(db *gorm.DB) EarningTypeRepository {
+	return &gormEarningTypeRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter EarningTypesPage declares as a company-level module.

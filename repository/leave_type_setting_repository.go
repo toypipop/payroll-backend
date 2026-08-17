@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -27,9 +26,9 @@ type gormLeaveTypeSettingRepository struct {
 	db *gorm.DB
 }
 
-// NewLeaveTypeSettingRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewLeaveTypeSettingRepository() LeaveTypeSettingRepository {
-	return &gormLeaveTypeSettingRepository{db: config.DB}
+// NewLeaveTypeSettingRepository returns the GORM-backed implementation on the given connection.
+func NewLeaveTypeSettingRepository(db *gorm.DB) LeaveTypeSettingRepository {
+	return &gormLeaveTypeSettingRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter MasterLeaveTypePage declares as a company-level module.

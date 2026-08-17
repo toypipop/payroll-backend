@@ -4,24 +4,18 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// holidayService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func holidayService() *service.HolidayService {
-	return service.NewHolidayService(repository.NewHolidayRepository())
-}
-
-func GetHolidays(c *gin.Context) {
+func (h *Handler) GetHolidays(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	holidays, err := holidayService().List(scope)
+	holidays, err := h.Holiday.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -29,7 +23,7 @@ func GetHolidays(c *gin.Context) {
 	c.JSON(http.StatusOK, holidays)
 }
 
-func CreateHoliday(c *gin.Context) {
+func (h *Handler) CreateHoliday(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -45,7 +39,7 @@ func CreateHoliday(c *gin.Context) {
 		return
 	}
 
-	holiday, err := holidayService().Create(scope, service.HolidayInput{
+	holiday, err := h.Holiday.Create(scope, service.HolidayInput{
 		CompaniesID: input.CompaniesID,
 		Date:        input.Date,
 		Name:        input.Name,
@@ -58,7 +52,7 @@ func CreateHoliday(c *gin.Context) {
 	c.JSON(http.StatusCreated, holiday)
 }
 
-func UpdateHoliday(c *gin.Context) {
+func (h *Handler) UpdateHoliday(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -78,7 +72,7 @@ func UpdateHoliday(c *gin.Context) {
 		return
 	}
 
-	holiday, err := holidayService().Update(scope, id, service.HolidayInput{
+	holiday, err := h.Holiday.Update(scope, id, service.HolidayInput{
 		Date:   input.Date,
 		Name:   input.Name,
 		IsPaid: input.IsPaid,
@@ -90,7 +84,7 @@ func UpdateHoliday(c *gin.Context) {
 	c.JSON(http.StatusOK, holiday)
 }
 
-func DeleteHoliday(c *gin.Context) {
+func (h *Handler) DeleteHoliday(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -100,7 +94,7 @@ func DeleteHoliday(c *gin.Context) {
 		return
 	}
 
-	if err := holidayService().Delete(scope, id); err != nil {
+	if err := h.Holiday.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

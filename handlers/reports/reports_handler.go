@@ -4,21 +4,14 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// reportService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func reportService() *service.ReportService {
-	return service.NewReportService(repository.NewReportRepository())
-}
-
 // ─── Payslip ─────────────────────────────────────────────────────────────────
 
 // GetPayslipReport returns a single payslip for a closed cycle transaction.
-func GetPayslipReport(c *gin.Context) {
+func (h *Handler) GetPayslipReport(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -28,7 +21,7 @@ func GetPayslipReport(c *gin.Context) {
 		return
 	}
 
-	report, err := reportService().Payslip(scope, transactionID)
+	report, err := h.Report.Payslip(scope, transactionID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -51,7 +44,7 @@ type BankTransferRow struct {
 }
 
 // GetBankTransferReport returns aggregated Net Pay and bank account details for a closed cycle.
-func GetBankTransferReport(c *gin.Context) {
+func (h *Handler) GetBankTransferReport(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -61,7 +54,7 @@ func GetBankTransferReport(c *gin.Context) {
 		return
 	}
 
-	report, err := reportService().BankTransfer(scope, cycleID)
+	report, err := h.Report.BankTransfer(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -103,7 +96,7 @@ type PND1Row struct {
 }
 
 // GetTaxFormsPND1 returns monthly PND.1 income-tax withholding data for a closed cycle.
-func GetTaxFormsPND1(c *gin.Context) {
+func (h *Handler) GetTaxFormsPND1(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -113,7 +106,7 @@ func GetTaxFormsPND1(c *gin.Context) {
 		return
 	}
 
-	report, err := reportService().PND1(scope, cycleID)
+	report, err := h.Report.PND1(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -143,7 +136,7 @@ func GetTaxFormsPND1(c *gin.Context) {
 }
 
 // GetTax50Tawi returns data for a single employee's 50 Tawi withholding tax certificate.
-func GetTax50Tawi(c *gin.Context) {
+func (h *Handler) GetTax50Tawi(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -153,7 +146,7 @@ func GetTax50Tawi(c *gin.Context) {
 		return
 	}
 
-	certificate, err := reportService().TaxCertificate(scope, transactionID)
+	certificate, err := h.Report.TaxCertificate(scope, transactionID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -179,7 +172,7 @@ type SSORow struct {
 }
 
 // GetSSOReport returns SSO Form 1-10 data for a closed cycle.
-func GetSSOReport(c *gin.Context) {
+func (h *Handler) GetSSOReport(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -189,7 +182,7 @@ func GetSSOReport(c *gin.Context) {
 		return
 	}
 
-	report, err := reportService().SSO(scope, cycleID)
+	report, err := h.Report.SSO(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -229,7 +222,7 @@ type JournalEntry struct {
 }
 
 // GetPayrollAnalysis returns the full payroll register with line-items and an accounting journal summary.
-func GetPayrollAnalysis(c *gin.Context) {
+func (h *Handler) GetPayrollAnalysis(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -239,7 +232,7 @@ func GetPayrollAnalysis(c *gin.Context) {
 		return
 	}
 
-	report, err := reportService().Analysis(scope, cycleID)
+	report, err := h.Report.Analysis(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

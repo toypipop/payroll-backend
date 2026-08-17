@@ -9,7 +9,7 @@ import (
 )
 
 // CalculatePayroll reruns the payroll engine for every active employee in a cycle.
-func CalculatePayroll(c *gin.Context) {
+func (h *Handler) CalculatePayroll(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -19,7 +19,7 @@ func CalculatePayroll(c *gin.Context) {
 		return
 	}
 
-	cycle, result, err := payrollRunService().Recalculate(scope, cycleID)
+	cycle, result, err := h.PayrollRun.Recalculate(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -36,7 +36,7 @@ func CalculatePayroll(c *gin.Context) {
 }
 
 // GetPayrollTransactions returns a summary table of all transactions for a cycle.
-func GetPayrollTransactions(c *gin.Context) {
+func (h *Handler) GetPayrollTransactions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -46,7 +46,7 @@ func GetPayrollTransactions(c *gin.Context) {
 		return
 	}
 
-	cycle, transactions, err := payrollRunService().Transactions(scope, cycleID)
+	cycle, transactions, err := h.PayrollRun.Transactions(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +55,7 @@ func GetPayrollTransactions(c *gin.Context) {
 }
 
 // GetPayrollSlip returns one employee's payslip.
-func GetPayrollSlip(c *gin.Context) {
+func (h *Handler) GetPayrollSlip(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -65,7 +65,7 @@ func GetPayrollSlip(c *gin.Context) {
 		return
 	}
 
-	cycle, transaction, company, err := payrollRunService().Slip(scope, transactionID)
+	cycle, transaction, company, err := h.PayrollRun.Slip(scope, transactionID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

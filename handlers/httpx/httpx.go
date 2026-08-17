@@ -5,19 +5,56 @@ import (
 	"strconv"
 
 	"payroll-backend/apperr"
+	"payroll-backend/models"
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// RequestScope resolves the caller's authorization context, or answers 401 and reports false.
+// RequestScope resolves the caller's authorization context from what AuthMiddleware and CheckPermission stored, or answers 401 and reports false.
 func RequestScope(c *gin.Context) (repository.AccessScope, bool) {
-	scope, err := repository.NewAccessScope(c)
-	if err != nil {
+	val, ok := c.Get("scope_user")
+	user, isUser := val.(models.Employees)
+	if !ok || !isUser || user.ID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
 		return repository.AccessScope{}, false
 	}
-	return scope, true
+	_, dataScope := ContextAuth(c)
+	return repository.NewAccessScope(user, dataScope, AuthorizedCompanyIDs(c)), true
+}
+
+// ContextAuth reads the authenticated user id and the data scope CheckPermission resolved for this route.
+func ContextAuth(c *gin.Context) (uint, models.DataScope) {
+	valUser, _ := c.Get("user_id")
+	var userID uint
+	switch v := valUser.(type) {
+	case uint:
+		userID = v
+	case float64:
+		userID = uint(v)
+	case int:
+		userID = uint(v)
+	}
+
+	valScope, _ := c.Get("data_scope")
+	scope, _ := valScope.(models.DataScope)
+
+	return userID, scope
+}
+
+// AuthorizedCompanyIDs prefers the companies whose role grants this route's action, falling back to every company the caller can reach on routes with no permission gate.
+func AuthorizedCompanyIDs(c *gin.Context) []uint {
+	if val, ok := c.Get("authorized_company_ids"); ok {
+		if ids, ok := val.([]uint); ok {
+			return ids
+		}
+	}
+	if val, ok := c.Get("accessible_company_ids"); ok {
+		if ids, ok := val.([]uint); ok {
+			return ids
+		}
+	}
+	return nil
 }
 
 // ParseID reads a positive uint route param, or answers 400 and reports false.

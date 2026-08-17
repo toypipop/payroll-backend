@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// employmentTypeService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func employmentTypeService() *service.EmploymentTypeService {
-	return service.NewEmploymentTypeService(repository.NewEmploymentTypeRepository())
-}
-
-func GetEmploymentTypes(c *gin.Context) {
+func (h *Handler) GetEmploymentTypes(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	types, err := employmentTypeService().List(scope)
+	types, err := h.EmploymentType.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetEmploymentTypes(c *gin.Context) {
 }
 
 // GetEmploymentTypeOptions returns a minimal id/name list for dropdowns.
-func GetEmploymentTypeOptions(c *gin.Context) {
+func (h *Handler) GetEmploymentTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	types, err := employmentTypeService().Options(scope)
+	types, err := h.EmploymentType.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetEmploymentTypeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateEmploymentType(c *gin.Context) {
+func (h *Handler) CreateEmploymentType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreateEmploymentType(c *gin.Context) {
 		return
 	}
 
-	employmentType, err := employmentTypeService().Create(scope, input)
+	employmentType, err := h.EmploymentType.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreateEmploymentType(c *gin.Context) {
 	c.JSON(http.StatusCreated, employmentType)
 }
 
-func UpdateEmploymentType(c *gin.Context) {
+func (h *Handler) UpdateEmploymentType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -93,7 +86,7 @@ func UpdateEmploymentType(c *gin.Context) {
 		return
 	}
 
-	employmentType, err := employmentTypeService().Update(scope, id, input.Name, input.Description)
+	employmentType, err := h.EmploymentType.Update(scope, id, input.Name, input.Description)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -101,7 +94,7 @@ func UpdateEmploymentType(c *gin.Context) {
 	c.JSON(http.StatusOK, employmentType)
 }
 
-func DeleteEmploymentType(c *gin.Context) {
+func (h *Handler) DeleteEmploymentType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -111,7 +104,7 @@ func DeleteEmploymentType(c *gin.Context) {
 		return
 	}
 
-	if err := employmentTypeService().Delete(scope, id); err != nil {
+	if err := h.EmploymentType.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

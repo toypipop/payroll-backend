@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 
-	"payroll-backend/config"
 	authhandler "payroll-backend/handlers/auth"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -13,14 +12,19 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const (
-	appModuleDeletedAtColumn = `"AppModule"."deleted_at"`
-	appModuleIsActiveColumn  = `"AppModule"."is_active"`
-	appModuleModuleKeyColumn = `"AppModule"."module_key"`
-)
+// Guard holds the lookups the request-gating middleware needs, so no middleware reaches for a database handle of its own.
+type Guard struct {
+	access repository.AccessRepository
+	delete repository.DeleteGuardRepository
+}
 
-// AuthMiddleware validates JWT and extracts tenant
-func AuthMiddleware() gin.HandlerFunc {
+// NewGuard builds the middleware set from the repositories main composed.
+func NewGuard(access repository.AccessRepository, deleteGuard repository.DeleteGuardRepository) *Guard {
+	return &Guard{access: access, delete: deleteGuard}
+}
+
+// Auth validates the JWT cookie and puts the caller's identity and reachable companies on the request.
+func (g *Guard) Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString, err := c.Cookie(authhandler.GetAuthCookieName())
 		if err != nil || tokenString == "" {
@@ -54,8 +58,8 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// Set tenant data to context
 		c.Set("user_id", claims.UserID)
-		companyIDs := repository.AccessibleCompanyIDs(claims.UserID)
-		roleIDs := repository.AccessibleRoleIDs(claims.UserID)
+		companyIDs := g.access.AccessibleCompanyIDs(claims.UserID)
+		roleIDs := g.access.AccessibleRoleIDs(claims.UserID)
 		if len(companyIDs) == 0 || len(roleIDs) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No company access configured"})
 			c.Abort()
@@ -67,6 +71,15 @@ func AuthMiddleware() gin.HandlerFunc {
 		if len(roleIDs) > 0 {
 			c.Set("roles_id", roleIDs[0])
 		}
+
+		// The scoping columns are read once here so httpx.RequestScope can build an AccessScope without a query of its own.
+		user, err := g.access.FindScopeUser(claims.UserID)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+			c.Abort()
+			return
+		}
+		c.Set("scope_user", user)
 
 		c.Next()
 	}
@@ -143,60 +156,17 @@ func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses 
 	return companyIDs, bestScope, found
 }
 
-func CheckPermission(moduleKey string, action string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userID, ok := getContextUserID(c)
-		if !ok {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
-			c.Abort()
-			return
-		}
-
-		companyRoles := repository.AccessibleCompanyRoles(userID)
-		if len(companyRoles) == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
-			c.Abort()
-			return
-		}
-
-		roleIDs := make([]uint, 0, len(companyRoles))
-		for _, cr := range companyRoles {
-			roleIDs = append(roleIDs, cr.RoleID)
-		}
-
-		var accesses []models.RolesModuleAccess
-		// PostgreSQL does not support MySQL backtick quoting; the mixed-case GORM association alias must use double-quoted identifiers here.
-		err := config.DB.
-			InnerJoins("AppModule", config.DB.Where(appModuleDeletedAtColumn+" = ?", 0)).
-			Where("roles_module_access.roles_id IN ?", roleIDs).
-			Where(appModuleModuleKeyColumn+" = ?", moduleKey).
-			Where(appModuleIsActiveColumn+" = ?", true).
-			Find(&accesses).Error
-
-		if err != nil || len(accesses) == 0 {
-			log.Printf("[DEBUG] ModuleKey: %s, RoleIDs: %v, Error: %v", moduleKey, roleIDs, err)
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
-			c.Abort()
-			return
-		}
-
-		companyIDs, scope, found := resolveAuthorizedCompanies(companyRoles, accesses, action)
-		if !found {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error":  "Permission denied",
-				"action": action,
-			})
-			c.Abort()
-			return
-		}
-
-		c.Set("data_scope", scope)
-		c.Set("authorized_company_ids", companyIDs)
-		c.Next()
-	}
+// CheckPermission gates the request on a single module granting action.
+func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc {
+	return g.checkModuleAccess([]string{moduleKey}, action)
 }
 
-func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
+// CheckPermissionAny gates the request on any one of moduleKeys granting action.
+func (g *Guard) CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
+	return g.checkModuleAccess(moduleKeys, action)
+}
+
+func (g *Guard) checkModuleAccess(moduleKeys []string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if len(moduleKeys) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -211,7 +181,7 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 			return
 		}
 
-		companyRoles := repository.AccessibleCompanyRoles(userID)
+		companyRoles := g.access.AccessibleCompanyRoles(userID)
 		if len(companyRoles) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
 			c.Abort()
@@ -223,14 +193,7 @@ func CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
 			roleIDs = append(roleIDs, cr.RoleID)
 		}
 
-		var accesses []models.RolesModuleAccess
-		// PostgreSQL does not support MySQL backtick quoting; the mixed-case GORM association alias must use double-quoted identifiers here.
-		err := config.DB.
-			InnerJoins("AppModule", config.DB.Where(appModuleDeletedAtColumn+" = ?", 0)).
-			Where("roles_module_access.roles_id IN ?", roleIDs).
-			Where(appModuleModuleKeyColumn+" IN ?", moduleKeys).
-			Where(appModuleIsActiveColumn+" = ?", true).
-			Find(&accesses).Error
+		accesses, err := g.access.ModuleAccesses(roleIDs, moduleKeys)
 
 		if err != nil || len(accesses) == 0 {
 			log.Printf("[DEBUG] ModuleKeys: %v, RoleIDs: %v, Error: %v", moduleKeys, roleIDs, err)

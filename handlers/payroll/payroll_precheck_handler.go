@@ -15,7 +15,7 @@ type preCheckIssue struct {
 }
 
 // PreCheckPayroll reports what would be skipped or missing if the cycle were run now.
-func PreCheckPayroll(c *gin.Context) {
+func (h *Handler) PreCheckPayroll(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -25,7 +25,7 @@ func PreCheckPayroll(c *gin.Context) {
 		return
 	}
 
-	found, err := payrollRunService().PreCheck(scope, cycleID)
+	found, err := h.PayrollRun.PreCheck(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

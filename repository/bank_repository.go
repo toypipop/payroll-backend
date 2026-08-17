@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -26,9 +25,9 @@ type gormBankRepository struct {
 	db *gorm.DB
 }
 
-// NewBankRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewBankRepository() BankRepository {
-	return &gormBankRepository{db: config.DB}
+// NewBankRepository returns the GORM-backed implementation on the given connection.
+func NewBankRepository(db *gorm.DB) BankRepository {
+	return &gormBankRepository{db: db}
 }
 
 // List returns every bank by code. Banks carry no companies_id, so no scope filter exists to apply.

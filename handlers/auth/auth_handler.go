@@ -9,7 +9,6 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -20,11 +19,6 @@ const (
 	authCookieName = "auth_token"
 	authTokenTTL   = 24 * time.Hour
 )
-
-// authService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func authService() *service.AuthService {
-	return service.NewAuthService(repository.NewAuthRepository())
-}
 
 func GetJWTSecret() ([]byte, error) {
 	secret := os.Getenv("JWT_SECRET")
@@ -135,13 +129,13 @@ func issueToken(subject service.TokenSubject) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
 }
 
-func Login(c *gin.Context) {
+func (h *Handler) Login(c *gin.Context) {
 	var input models.LoginRequest
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	employee, err := authService().Authenticate(input.Email, input.Password)
+	employee, err := h.Auth.Authenticate(input.Email, input.Password)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -153,17 +147,17 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	tokenString, err := issueToken(authService().Subject(employee))
+	tokenString, err := issueToken(h.Auth.Subject(employee))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
 		return
 	}
 
 	SetAuthCookie(c, tokenString)
-	c.JSON(http.StatusOK, authService().Identity(employee))
+	c.JSON(http.StatusOK, h.Auth.Identity(employee))
 }
 
-func Me(c *gin.Context) {
+func (h *Handler) Me(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -175,7 +169,7 @@ func Me(c *gin.Context) {
 		return
 	}
 
-	identity, err := authService().IdentityByID(id)
+	identity, err := h.Auth.IdentityByID(id)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -183,14 +177,14 @@ func Me(c *gin.Context) {
 	c.JSON(http.StatusOK, identity)
 }
 
-func Logout(c *gin.Context) {
+func (h *Handler) Logout(c *gin.Context) {
 	ClearAuthCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
 // GetAppModules returns every active module, unfiltered.
-func GetAppModules(c *gin.Context) {
-	modules, err := authService().AllModules()
+func (h *Handler) GetAppModules(c *gin.Context) {
+	modules, err := h.Auth.AllModules()
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -199,7 +193,7 @@ func GetAppModules(c *gin.Context) {
 }
 
 // GetMyAppModules returns the active modules the caller can view, for the sidebar and route table.
-func GetMyAppModules(c *gin.Context) {
+func (h *Handler) GetMyAppModules(c *gin.Context) {
 	userIDVal, ok := c.Get("user_id")
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
@@ -211,7 +205,7 @@ func GetMyAppModules(c *gin.Context) {
 		return
 	}
 
-	modules, err := authService().MyModules(userID)
+	modules, err := h.Auth.MyModules(userID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

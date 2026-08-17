@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// positionService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func positionService() *service.PositionService {
-	return service.NewPositionService(repository.NewPositionRepository())
-}
-
-func GetPositions(c *gin.Context) {
+func (h *Handler) GetPositions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	positions, err := positionService().List(scope)
+	positions, err := h.Position.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetPositions(c *gin.Context) {
 }
 
 // GetPositionOptions returns a minimal id/name list for dropdowns.
-func GetPositionOptions(c *gin.Context) {
+func (h *Handler) GetPositionOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	positions, err := positionService().Options(scope)
+	positions, err := h.Position.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetPositionOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreatePosition(c *gin.Context) {
+func (h *Handler) CreatePosition(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreatePosition(c *gin.Context) {
 		return
 	}
 
-	position, err := positionService().Create(scope, input)
+	position, err := h.Position.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreatePosition(c *gin.Context) {
 	c.JSON(http.StatusCreated, position)
 }
 
-func UpdatePosition(c *gin.Context) {
+func (h *Handler) UpdatePosition(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -92,7 +85,7 @@ func UpdatePosition(c *gin.Context) {
 		return
 	}
 
-	position, err := positionService().Update(scope, id, input.PosName)
+	position, err := h.Position.Update(scope, id, input.PosName)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -100,7 +93,7 @@ func UpdatePosition(c *gin.Context) {
 	c.JSON(http.StatusOK, position)
 }
 
-func DeletePosition(c *gin.Context) {
+func (h *Handler) DeletePosition(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -110,7 +103,7 @@ func DeletePosition(c *gin.Context) {
 		return
 	}
 
-	if err := positionService().Delete(scope, id); err != nil {
+	if err := h.Position.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

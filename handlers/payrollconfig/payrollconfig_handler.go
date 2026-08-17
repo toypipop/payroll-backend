@@ -4,19 +4,12 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// payrollConfigService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func payrollConfigService() *service.PayrollConfigService {
-	return service.NewPayrollConfigService(repository.NewPayrollConfigRepository())
-}
-
 // GetConfigByPayrollCycle returns the configuration in force for a cycle's company.
-func GetConfigByPayrollCycle(c *gin.Context) {
+func (h *Handler) GetConfigByPayrollCycle(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -26,7 +19,7 @@ func GetConfigByPayrollCycle(c *gin.Context) {
 		return
 	}
 
-	result, err := payrollConfigService().ForCycle(scope, cycleID)
+	result, err := h.PayrollConfig.ForCycle(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

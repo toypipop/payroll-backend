@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// leaveTypeService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func leaveTypeService() *service.LeaveTypeSettingService {
-	return service.NewLeaveTypeSettingService(repository.NewLeaveTypeSettingRepository())
-}
-
-func GetLeaveTypeSettings(c *gin.Context) {
+func (h *Handler) GetLeaveTypeSettings(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	leaveTypes, err := leaveTypeService().List(scope)
+	leaveTypes, err := h.LeaveType.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetLeaveTypeSettings(c *gin.Context) {
 }
 
 // GetLeaveTypeOptions returns a minimal id/name list for dropdowns.
-func GetLeaveTypeOptions(c *gin.Context) {
+func (h *Handler) GetLeaveTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	leaveTypes, err := leaveTypeService().Options(scope)
+	leaveTypes, err := h.LeaveType.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetLeaveTypeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateLeaveTypeSetting(c *gin.Context) {
+func (h *Handler) CreateLeaveTypeSetting(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreateLeaveTypeSetting(c *gin.Context) {
 		return
 	}
 
-	leaveType, err := leaveTypeService().Create(scope, input)
+	leaveType, err := h.LeaveType.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreateLeaveTypeSetting(c *gin.Context) {
 	c.JSON(http.StatusCreated, leaveType)
 }
 
-func UpdateLeaveTypeSetting(c *gin.Context) {
+func (h *Handler) UpdateLeaveTypeSetting(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -90,7 +83,7 @@ func UpdateLeaveTypeSetting(c *gin.Context) {
 		return
 	}
 
-	leaveType, err := leaveTypeService().Update(scope, id, input)
+	leaveType, err := h.LeaveType.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -98,7 +91,7 @@ func UpdateLeaveTypeSetting(c *gin.Context) {
 	c.JSON(http.StatusOK, leaveType)
 }
 
-func DeleteLeaveTypeSetting(c *gin.Context) {
+func (h *Handler) DeleteLeaveTypeSetting(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -108,7 +101,7 @@ func DeleteLeaveTypeSetting(c *gin.Context) {
 		return
 	}
 
-	if err := leaveTypeService().Delete(scope, id); err != nil {
+	if err := h.LeaveType.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -28,9 +27,9 @@ type gormEmployeeCompanyAccessRepository struct {
 	db *gorm.DB
 }
 
-// NewEmployeeCompanyAccessRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewEmployeeCompanyAccessRepository() EmployeeCompanyAccessRepository {
-	return &gormEmployeeCompanyAccessRepository{db: config.DB}
+// NewEmployeeCompanyAccessRepository returns the GORM-backed implementation on the given connection.
+func NewEmployeeCompanyAccessRepository(db *gorm.DB) EmployeeCompanyAccessRepository {
+	return &gormEmployeeCompanyAccessRepository{db: db}
 }
 
 // scoped filters by company and by employee: the table has a real employee column

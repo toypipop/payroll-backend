@@ -4,16 +4,10 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
-
-// attendanceSummaryService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func attendanceSummaryService() *service.AttendanceSummaryService {
-	return service.NewAttendanceSummaryService(repository.NewAttendanceSummaryRepository())
-}
 
 type AttendanceSummaryRow struct {
 	EmployeesID   uint    `json:"employees_id"`
@@ -27,7 +21,7 @@ type AttendanceSummaryRow struct {
 	TotalAmount   float64 `json:"total_amount"`
 }
 
-func GetAttendanceSummary(c *gin.Context) {
+func (h *Handler) GetAttendanceSummary(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -39,7 +33,7 @@ func GetAttendanceSummary(c *gin.Context) {
 		return
 	}
 
-	rows, err := attendanceSummaryService().Deductions(scope, window)
+	rows, err := h.AttendanceSummary.Deductions(scope, window)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

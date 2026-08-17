@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// workLocationService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func workLocationService() *service.WorkLocationService {
-	return service.NewWorkLocationService(repository.NewWorkLocationRepository())
-}
-
-func GetWorkLocations(c *gin.Context) {
+func (h *Handler) GetWorkLocations(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	locations, err := workLocationService().List(scope)
+	locations, err := h.WorkLocation.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetWorkLocations(c *gin.Context) {
 }
 
 // GetWorkLocationOptions returns a minimal id/name list for dropdowns.
-func GetWorkLocationOptions(c *gin.Context) {
+func (h *Handler) GetWorkLocationOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	locations, err := workLocationService().Options(scope)
+	locations, err := h.WorkLocation.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetWorkLocationOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateWorkLocation(c *gin.Context) {
+func (h *Handler) CreateWorkLocation(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreateWorkLocation(c *gin.Context) {
 		return
 	}
 
-	location, err := workLocationService().Create(scope, input)
+	location, err := h.WorkLocation.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreateWorkLocation(c *gin.Context) {
 	c.JSON(http.StatusCreated, location)
 }
 
-func UpdateWorkLocation(c *gin.Context) {
+func (h *Handler) UpdateWorkLocation(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -91,7 +84,7 @@ func UpdateWorkLocation(c *gin.Context) {
 		return
 	}
 
-	location, err := workLocationService().Update(scope, id, input.Name)
+	location, err := h.WorkLocation.Update(scope, id, input.Name)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -99,7 +92,7 @@ func UpdateWorkLocation(c *gin.Context) {
 	c.JSON(http.StatusOK, location)
 }
 
-func DeleteWorkLocation(c *gin.Context) {
+func (h *Handler) DeleteWorkLocation(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -109,7 +102,7 @@ func DeleteWorkLocation(c *gin.Context) {
 		return
 	}
 
-	if err := workLocationService().Delete(scope, id); err != nil {
+	if err := h.WorkLocation.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

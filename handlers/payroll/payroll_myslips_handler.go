@@ -5,16 +5,15 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
 // GetMySlips returns the caller's own payslips.
-func GetMySlips(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+func (h *Handler) GetMySlips(c *gin.Context) {
+	userID, _ := httpx.ContextAuth(c)
 
-	slips, err := payrollRunService().MySlips(userID)
+	slips, err := h.PayrollRun.MySlips(userID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

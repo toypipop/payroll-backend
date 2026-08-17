@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -24,9 +23,9 @@ type gormAttendanceConfigRepository struct {
 	db *gorm.DB
 }
 
-// NewAttendanceConfigRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewAttendanceConfigRepository() AttendanceConfigRepository {
-	return &gormAttendanceConfigRepository{db: config.DB}
+// NewAttendanceConfigRepository returns the GORM-backed implementation on the given connection.
+func NewAttendanceConfigRepository(db *gorm.DB) AttendanceConfigRepository {
+	return &gormAttendanceConfigRepository{db: db}
 }
 
 // ListCompaniesWithConfig reads companies rather than configs so a company that has not been configured yet still appears on the page.

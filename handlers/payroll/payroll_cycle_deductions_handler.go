@@ -5,29 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// cycleDeductionService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func cycleDeductionService() *service.CycleDeductionService {
-	return service.NewCycleDeductionService(
-		repository.NewCycleDeductionRepository(),
-		repository.NewPayrollRunRepository(),
-		repository.NewEmployeesRepository(),
-		repository.NewDeductionTypeRepository(),
-	)
-}
-
-func GetCycleDeductions(c *gin.Context) {
+func (h *Handler) GetCycleDeductions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	items, err := cycleDeductionService().List(scope, queryCycleID(c))
+	items, err := h.CycleDeduction.List(scope, queryCycleID(c))
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -35,7 +23,7 @@ func GetCycleDeductions(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
-func CreateCycleDeduction(c *gin.Context) {
+func (h *Handler) CreateCycleDeduction(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -46,7 +34,7 @@ func CreateCycleDeduction(c *gin.Context) {
 		return
 	}
 
-	item, err := cycleDeductionService().Create(scope, input)
+	item, err := h.CycleDeduction.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -54,7 +42,7 @@ func CreateCycleDeduction(c *gin.Context) {
 	c.JSON(http.StatusCreated, item)
 }
 
-func UpdateCycleDeduction(c *gin.Context) {
+func (h *Handler) UpdateCycleDeduction(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -69,7 +57,7 @@ func UpdateCycleDeduction(c *gin.Context) {
 		return
 	}
 
-	item, err := cycleDeductionService().Update(scope, id, input)
+	item, err := h.CycleDeduction.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -77,7 +65,7 @@ func UpdateCycleDeduction(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
-func DeleteCycleDeduction(c *gin.Context) {
+func (h *Handler) DeleteCycleDeduction(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -87,7 +75,7 @@ func DeleteCycleDeduction(c *gin.Context) {
 		return
 	}
 
-	if err := cycleDeductionService().Delete(scope, id); err != nil {
+	if err := h.CycleDeduction.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

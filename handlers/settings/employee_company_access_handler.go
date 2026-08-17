@@ -4,19 +4,10 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
-
-// employeeCompanyAccessService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func employeeCompanyAccessService() *service.EmployeeCompanyAccessService {
-	return service.NewEmployeeCompanyAccessService(
-		repository.NewEmployeeCompanyAccessRepository(),
-		repository.NewRoleRepository(),
-	)
-}
 
 type employeeCompanyAccessInput struct {
 	EmployeeID uint `json:"employee_id"`
@@ -35,13 +26,13 @@ func (i employeeCompanyAccessInput) toServiceInput() service.EmployeeCompanyAcce
 	}
 }
 
-func GetEmployeeCompanyAccess(c *gin.Context) {
+func (h *Handler) GetEmployeeCompanyAccess(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	mappings, err := employeeCompanyAccessService().List(scope)
+	mappings, err := h.EmployeeCompanyAccess.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -49,7 +40,7 @@ func GetEmployeeCompanyAccess(c *gin.Context) {
 	c.JSON(http.StatusOK, mappings)
 }
 
-func CreateEmployeeCompanyAccess(c *gin.Context) {
+func (h *Handler) CreateEmployeeCompanyAccess(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -60,7 +51,7 @@ func CreateEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	mapping, err := employeeCompanyAccessService().Create(scope, input.toServiceInput())
+	mapping, err := h.EmployeeCompanyAccess.Create(scope, input.toServiceInput())
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -68,7 +59,7 @@ func CreateEmployeeCompanyAccess(c *gin.Context) {
 	c.JSON(http.StatusCreated, mapping)
 }
 
-func UpdateEmployeeCompanyAccess(c *gin.Context) {
+func (h *Handler) UpdateEmployeeCompanyAccess(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -83,7 +74,7 @@ func UpdateEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	mapping, err := employeeCompanyAccessService().Update(scope, id, input.toServiceInput())
+	mapping, err := h.EmployeeCompanyAccess.Update(scope, id, input.toServiceInput())
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -91,7 +82,7 @@ func UpdateEmployeeCompanyAccess(c *gin.Context) {
 	c.JSON(http.StatusOK, mapping)
 }
 
-func DeleteEmployeeCompanyAccess(c *gin.Context) {
+func (h *Handler) DeleteEmployeeCompanyAccess(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -101,7 +92,7 @@ func DeleteEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	if err := employeeCompanyAccessService().Delete(scope, id); err != nil {
+	if err := h.EmployeeCompanyAccess.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

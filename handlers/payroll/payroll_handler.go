@@ -5,25 +5,18 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// payrollConfigService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func payrollConfigService() *service.PayrollConfigService {
-	return service.NewPayrollConfigService(repository.NewPayrollConfigRepository())
-}
-
 // GetPayrollConfigs starts from companies so a company with no configuration yet still appears in the list.
-func GetPayrollConfigs(c *gin.Context) {
+func (h *Handler) GetPayrollConfigs(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	companies, err := payrollConfigService().List(scope)
+	companies, err := h.PayrollConfig.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -32,7 +25,7 @@ func GetPayrollConfigs(c *gin.Context) {
 }
 
 // UpdatePayrollConfig saves a company's configuration, updating the existing row when there is one: companies_id is unique, so a company has exactly one.
-func UpdatePayrollConfig(c *gin.Context) {
+func (h *Handler) UpdatePayrollConfig(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -43,7 +36,7 @@ func UpdatePayrollConfig(c *gin.Context) {
 		return
 	}
 
-	saved, err := payrollConfigService().Save(scope, input)
+	saved, err := h.PayrollConfig.Save(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

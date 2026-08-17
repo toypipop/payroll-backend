@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// departmentService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func departmentService() *service.DepartmentService {
-	return service.NewDepartmentService(repository.NewDepartmentRepository())
-}
-
-func GetDepartments(c *gin.Context) {
+func (h *Handler) GetDepartments(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	departments, err := departmentService().List(scope)
+	departments, err := h.Department.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetDepartments(c *gin.Context) {
 }
 
 // GetDepartmentOptions returns a minimal id/name list for dropdowns.
-func GetDepartmentOptions(c *gin.Context) {
+func (h *Handler) GetDepartmentOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	departments, err := departmentService().Options(scope)
+	departments, err := h.Department.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetDepartmentOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateDepartment(c *gin.Context) {
+func (h *Handler) CreateDepartment(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreateDepartment(c *gin.Context) {
 		return
 	}
 
-	department, err := departmentService().Create(scope, input)
+	department, err := h.Department.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreateDepartment(c *gin.Context) {
 	c.JSON(http.StatusCreated, department)
 }
 
-func UpdateDepartment(c *gin.Context) {
+func (h *Handler) UpdateDepartment(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -93,7 +86,7 @@ func UpdateDepartment(c *gin.Context) {
 		return
 	}
 
-	department, err := departmentService().Update(scope, id, input.DeptName, input.CategoryID)
+	department, err := h.Department.Update(scope, id, input.DeptName, input.CategoryID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -101,7 +94,7 @@ func UpdateDepartment(c *gin.Context) {
 	c.JSON(http.StatusOK, department)
 }
 
-func DeleteDepartment(c *gin.Context) {
+func (h *Handler) DeleteDepartment(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -111,7 +104,7 @@ func DeleteDepartment(c *gin.Context) {
 		return
 	}
 
-	if err := departmentService().Delete(scope, id); err != nil {
+	if err := h.Department.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

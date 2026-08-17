@@ -5,19 +5,12 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// bankService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func bankService() *service.BankService {
-	return service.NewBankService(repository.NewBankRepository())
-}
-
-func GetBanks(c *gin.Context) {
-	banks, err := bankService().List()
+func (h *Handler) GetBanks(c *gin.Context) {
+	banks, err := h.Bank.List()
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -26,8 +19,8 @@ func GetBanks(c *gin.Context) {
 }
 
 // GetBankOptions returns a minimal list for dropdowns.
-func GetBankOptions(c *gin.Context) {
-	banks, err := bankService().List()
+func (h *Handler) GetBankOptions(c *gin.Context) {
+	banks, err := h.Bank.List()
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -45,13 +38,13 @@ func GetBankOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateBank(c *gin.Context) {
+func (h *Handler) CreateBank(c *gin.Context) {
 	var input models.Bank
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	bank, err := bankService().Create(input)
+	bank, err := h.Bank.Create(input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -59,7 +52,7 @@ func CreateBank(c *gin.Context) {
 	c.JSON(http.StatusCreated, bank)
 }
 
-func UpdateBank(c *gin.Context) {
+func (h *Handler) UpdateBank(c *gin.Context) {
 	id, ok := httpx.ParseID(c, "id", "bank")
 	if !ok {
 		return
@@ -70,7 +63,7 @@ func UpdateBank(c *gin.Context) {
 		return
 	}
 
-	bank, err := bankService().Update(id, input)
+	bank, err := h.Bank.Update(id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -78,13 +71,13 @@ func UpdateBank(c *gin.Context) {
 	c.JSON(http.StatusOK, bank)
 }
 
-func DeleteBank(c *gin.Context) {
+func (h *Handler) DeleteBank(c *gin.Context) {
 	id, ok := httpx.ParseID(c, "id", "bank")
 	if !ok {
 		return
 	}
 
-	if err := bankService().Delete(id); err != nil {
+	if err := h.Bank.Delete(id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

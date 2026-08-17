@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -27,9 +26,9 @@ type gormDepartmentRepository struct {
 	db *gorm.DB
 }
 
-// NewDepartmentRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewDepartmentRepository() DepartmentRepository {
-	return &gormDepartmentRepository{db: config.DB}
+// NewDepartmentRepository returns the GORM-backed implementation on the given connection.
+func NewDepartmentRepository(db *gorm.DB) DepartmentRepository {
+	return &gormDepartmentRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter DepartmentSettings declares as a company-level module.

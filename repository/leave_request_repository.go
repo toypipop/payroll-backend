@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -35,9 +34,9 @@ type gormLeaveRequestRepository struct {
 	db *gorm.DB
 }
 
-// NewLeaveRequestRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewLeaveRequestRepository() LeaveRequestRepository {
-	return &gormLeaveRequestRepository{db: config.DB}
+// NewLeaveRequestRepository returns the GORM-backed implementation on the given connection.
+func NewLeaveRequestRepository(db *gorm.DB) LeaveRequestRepository {
+	return &gormLeaveRequestRepository{db: db}
 }
 
 // scoped filters by company and by employee: the table has a real employee column and LeaveRequestsPage is declared employee-level, so Own and Department bite.

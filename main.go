@@ -46,8 +46,8 @@ func main() {
 		log.Fatalf("Permission scope normalisation failed: %v", err)
 	}
 
-	// 3.
-	r := routes.SetupRouter()
+	// 3. Compose every repository, service and handler once. This is the only place that knows config.DB.
+	r := routes.SetupRouter(buildHandlers(config.DB), buildGuard(config.DB))
 
 	// 4. Start Web Server
 	port := os.Getenv("PORT")

@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// employeesService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func employeesService() *service.EmployeesService {
-	return service.NewEmployeesService(repository.NewEmployeesRepository())
-}
-
-func GetEmployees(c *gin.Context) {
+func (h *Handler) GetEmployees(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	employees, err := employeesService().List(scope)
+	employees, err := h.Employees.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,7 +24,7 @@ func GetEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, employees)
 }
 
-func CreateEmployees(c *gin.Context) {
+func (h *Handler) CreateEmployees(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -42,7 +35,7 @@ func CreateEmployees(c *gin.Context) {
 		return
 	}
 
-	created, err := employeesService().Create(scope, input)
+	created, err := h.Employees.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -51,7 +44,7 @@ func CreateEmployees(c *gin.Context) {
 	c.JSON(http.StatusCreated, created)
 }
 
-func UpdateEmployees(c *gin.Context) {
+func (h *Handler) UpdateEmployees(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func UpdateEmployees(c *gin.Context) {
 		return
 	}
 
-	updated, err := employeesService().Update(scope, id, patch)
+	updated, err := h.Employees.Update(scope, id, patch)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -75,7 +68,7 @@ func UpdateEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, updated)
 }
 
-func DeleteEmployees(c *gin.Context) {
+func (h *Handler) DeleteEmployees(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -85,7 +78,7 @@ func DeleteEmployees(c *gin.Context) {
 		return
 	}
 
-	if err := employeesService().Delete(scope, id); err != nil {
+	if err := h.Employees.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

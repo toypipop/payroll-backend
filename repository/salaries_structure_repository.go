@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -41,9 +40,9 @@ type gormSalariesStructureRepository struct {
 	db *gorm.DB
 }
 
-// NewSalariesStructureRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewSalariesStructureRepository() SalariesStructureRepository {
-	return &gormSalariesStructureRepository{db: config.DB}
+// NewSalariesStructureRepository returns the GORM-backed implementation on the given connection.
+func NewSalariesStructureRepository(db *gorm.DB) SalariesStructureRepository {
+	return &gormSalariesStructureRepository{db: db}
 }
 
 // ListEmployeesWithSalary lists the employees in scope with their current salary attached, so the page can show who still has none.

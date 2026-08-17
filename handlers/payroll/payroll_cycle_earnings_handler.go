@@ -6,21 +6,9 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
-
-// cycleEarningService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func cycleEarningService() *service.CycleEarningService {
-	return service.NewCycleEarningService(
-		repository.NewCycleEarningRepository(),
-		repository.NewPayrollRunRepository(),
-		repository.NewEmployeesRepository(),
-		repository.NewEarningTypeRepository(),
-	)
-}
 
 // queryCycleID reads the cycle_id query parameter, returning 0 when it is absent or unparseable so the service can answer with its own message.
 func queryCycleID(c *gin.Context) uint {
@@ -31,13 +19,13 @@ func queryCycleID(c *gin.Context) uint {
 	return uint(value)
 }
 
-func GetCycleEarnings(c *gin.Context) {
+func (h *Handler) GetCycleEarnings(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	items, err := cycleEarningService().List(scope, queryCycleID(c))
+	items, err := h.CycleEarning.List(scope, queryCycleID(c))
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -45,7 +33,7 @@ func GetCycleEarnings(c *gin.Context) {
 	c.JSON(http.StatusOK, items)
 }
 
-func CreateCycleEarning(c *gin.Context) {
+func (h *Handler) CreateCycleEarning(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -56,7 +44,7 @@ func CreateCycleEarning(c *gin.Context) {
 		return
 	}
 
-	item, err := cycleEarningService().Create(scope, input)
+	item, err := h.CycleEarning.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -64,7 +52,7 @@ func CreateCycleEarning(c *gin.Context) {
 	c.JSON(http.StatusCreated, item)
 }
 
-func UpdateCycleEarning(c *gin.Context) {
+func (h *Handler) UpdateCycleEarning(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -79,7 +67,7 @@ func UpdateCycleEarning(c *gin.Context) {
 		return
 	}
 
-	item, err := cycleEarningService().Update(scope, id, input)
+	item, err := h.CycleEarning.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -87,7 +75,7 @@ func UpdateCycleEarning(c *gin.Context) {
 	c.JSON(http.StatusOK, item)
 }
 
-func DeleteCycleEarning(c *gin.Context) {
+func (h *Handler) DeleteCycleEarning(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -97,7 +85,7 @@ func DeleteCycleEarning(c *gin.Context) {
 		return
 	}
 
-	if err := cycleEarningService().Delete(scope, id); err != nil {
+	if err := h.CycleEarning.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

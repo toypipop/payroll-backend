@@ -5,24 +5,17 @@ import (
 	"time"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// payrollRunService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func payrollRunService() *service.PayrollRunService {
-	return service.NewPayrollRunService(repository.NewPayrollRunRepository())
-}
-
-func GetPayrollCycles(c *gin.Context) {
+func (h *Handler) GetPayrollCycles(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	cycles, err := payrollRunService().Cycles(scope)
+	cycles, err := h.PayrollRun.Cycles(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -30,7 +23,7 @@ func GetPayrollCycles(c *gin.Context) {
 	c.JSON(http.StatusOK, cycles)
 }
 
-func CreatePayrollCycle(c *gin.Context) {
+func (h *Handler) CreatePayrollCycle(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -46,7 +39,7 @@ func CreatePayrollCycle(c *gin.Context) {
 		return
 	}
 
-	cycle, err := payrollRunService().CreateCycle(scope, input.CycleName, input.StartDate, input.EndDate, input.CompaniesID)
+	cycle, err := h.PayrollRun.CreateCycle(scope, input.CycleName, input.StartDate, input.EndDate, input.CompaniesID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func CreatePayrollCycle(c *gin.Context) {
 }
 
 // ClosePayrollCycle snapshots the cycle's transactions and then closes it, so a closed cycle always carries the figures it was closed on.
-func ClosePayrollCycle(c *gin.Context) {
+func (h *Handler) ClosePayrollCycle(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -65,7 +58,7 @@ func ClosePayrollCycle(c *gin.Context) {
 		return
 	}
 
-	cycle, result, err := payrollRunService().Close(scope, cycleID)
+	cycle, result, err := h.PayrollRun.Close(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

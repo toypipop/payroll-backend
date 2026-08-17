@@ -1,16 +1,10 @@
 package repository
 
 import (
-	"errors"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-// ErrNoAuthContext means the request reached a handler without a usable authenticated user — AuthMiddleware should have made this impossible.
-var ErrNoAuthContext = errors.New("no authenticated user in request context")
 
 // AccessScope is the request's resolved authorization context, lifted out of gin so lower layers never see a request.
 type AccessScope struct {
@@ -22,23 +16,13 @@ type AccessScope struct {
 	AuthorizedCompanyIDs []uint
 }
 
-// NewAccessScope resolves the caller's identity and authorization once, so handlers stop repeating the "load currentUser, then read data_scope" preamble.
-func NewAccessScope(c *gin.Context) (AccessScope, error) {
-	userID, dataScope := GetContextAuth(c)
-	if userID == 0 {
-		return AccessScope{}, ErrNoAuthContext
-	}
-
-	var user models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&user, userID).Error; err != nil {
-		return AccessScope{}, ErrNoAuthContext
-	}
-
+// NewAccessScope takes values the caller has already resolved, so building a scope needs neither a database handle nor a request.
+func NewAccessScope(user models.Employees, dataScope models.DataScope, authorizedCompanyIDs []uint) AccessScope {
 	return AccessScope{
 		User:                 user,
 		DataScope:            dataScope,
-		AuthorizedCompanyIDs: GetAuthorizedCompanyIDs(c, userID),
-	}, nil
+		AuthorizedCompanyIDs: authorizedCompanyIDs,
+	}
 }
 
 // ApplyCompany is the AccessScope equivalent of ApplyCompanyScopes: for tables whose rows belong to a company rather than a person.

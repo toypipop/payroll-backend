@@ -35,7 +35,7 @@ func toCycleSummary(totals service.CycleTotals) cycleSummary {
 }
 
 // GetPayrollDiff compares a cycle's totals against the company's previous closed cycle.
-func GetPayrollDiff(c *gin.Context) {
+func (h *Handler) GetPayrollDiff(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -45,7 +45,7 @@ func GetPayrollDiff(c *gin.Context) {
 		return
 	}
 
-	diff, err := payrollRunService().Diff(scope, cycleID)
+	diff, err := h.PayrollRun.Diff(scope, cycleID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

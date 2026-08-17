@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -35,9 +34,9 @@ type gormTimeLogRepository struct {
 	db *gorm.DB
 }
 
-// NewTimeLogRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewTimeLogRepository() TimeLogRepository {
-	return &gormTimeLogRepository{db: config.DB}
+// NewTimeLogRepository returns the GORM-backed implementation on the given connection.
+func NewTimeLogRepository(db *gorm.DB) TimeLogRepository {
+	return &gormTimeLogRepository{db: db}
 }
 
 // scoped filters by company and by employee: the table has a real employee column and TimelogsListPage is declared employee-level, so Own and Department bite.

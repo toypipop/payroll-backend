@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -27,9 +26,9 @@ type gormDayOffRepository struct {
 	db *gorm.DB
 }
 
-// NewDayOffRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewDayOffRepository() DayOffRepository {
-	return &gormDayOffRepository{db: config.DB}
+// NewDayOffRepository returns the GORM-backed implementation on the given connection.
+func NewDayOffRepository(db *gorm.DB) DayOffRepository {
+	return &gormDayOffRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter DayOffPage declares as a company-level module.

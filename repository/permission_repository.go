@@ -2,7 +2,6 @@ package repository
 
 import (
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -24,9 +23,9 @@ type gormPermissionRepository struct {
 	db *gorm.DB
 }
 
-// NewPermissionRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewPermissionRepository() PermissionRepository {
-	return &gormPermissionRepository{db: config.DB}
+// NewPermissionRepository returns the GORM-backed implementation on the given connection.
+func NewPermissionRepository(db *gorm.DB) PermissionRepository {
+	return &gormPermissionRepository{db: db}
 }
 
 // ListModulesOrdered returns the whole module tree in display order; the matrix shows every module regardless of which companies the caller administers.

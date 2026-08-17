@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// deductionTypeService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func deductionTypeService() *service.DeductionTypeService {
-	return service.NewDeductionTypeService(repository.NewDeductionTypeRepository())
-}
-
-func GetDeductionTypes(c *gin.Context) {
+func (h *Handler) GetDeductionTypes(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	deductions, err := deductionTypeService().List(scope)
+	deductions, err := h.DeductionType.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetDeductionTypes(c *gin.Context) {
 }
 
 // GetDeductionTypeOptions returns a minimal id/name list for dropdowns.
-func GetDeductionTypeOptions(c *gin.Context) {
+func (h *Handler) GetDeductionTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	deductions, err := deductionTypeService().Options(scope)
+	deductions, err := h.DeductionType.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetDeductionTypeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateDeductionType(c *gin.Context) {
+func (h *Handler) CreateDeductionType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreateDeductionType(c *gin.Context) {
 		return
 	}
 
-	deductionType, err := deductionTypeService().Create(scope, input)
+	deductionType, err := h.DeductionType.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreateDeductionType(c *gin.Context) {
 	c.JSON(http.StatusCreated, deductionType)
 }
 
-func UpdateDeductionType(c *gin.Context) {
+func (h *Handler) UpdateDeductionType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -90,7 +83,7 @@ func UpdateDeductionType(c *gin.Context) {
 		return
 	}
 
-	deductionType, err := deductionTypeService().Update(scope, id, input)
+	deductionType, err := h.DeductionType.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -98,7 +91,7 @@ func UpdateDeductionType(c *gin.Context) {
 	c.JSON(http.StatusOK, deductionType)
 }
 
-func DeleteDeductionType(c *gin.Context) {
+func (h *Handler) DeleteDeductionType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -108,7 +101,7 @@ func DeleteDeductionType(c *gin.Context) {
 		return
 	}
 
-	if err := deductionTypeService().Delete(scope, id); err != nil {
+	if err := h.DeductionType.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

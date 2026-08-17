@@ -5,24 +5,17 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// earningTypeService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func earningTypeService() *service.EarningTypeService {
-	return service.NewEarningTypeService(repository.NewEarningTypeRepository())
-}
-
-func GetEarningTypes(c *gin.Context) {
+func (h *Handler) GetEarningTypes(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	earnings, err := earningTypeService().List(scope)
+	earnings, err := h.EarningType.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,13 +24,13 @@ func GetEarningTypes(c *gin.Context) {
 }
 
 // GetEarningTypeOptions returns a minimal id/name list for dropdowns.
-func GetEarningTypeOptions(c *gin.Context) {
+func (h *Handler) GetEarningTypeOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	earnings, err := earningTypeService().Options(scope)
+	earnings, err := h.EarningType.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -55,7 +48,7 @@ func GetEarningTypeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateEarningType(c *gin.Context) {
+func (h *Handler) CreateEarningType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -66,7 +59,7 @@ func CreateEarningType(c *gin.Context) {
 		return
 	}
 
-	earningType, err := earningTypeService().Create(scope, input)
+	earningType, err := h.EarningType.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -74,7 +67,7 @@ func CreateEarningType(c *gin.Context) {
 	c.JSON(http.StatusCreated, earningType)
 }
 
-func UpdateEarningType(c *gin.Context) {
+func (h *Handler) UpdateEarningType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -90,7 +83,7 @@ func UpdateEarningType(c *gin.Context) {
 		return
 	}
 
-	earningType, err := earningTypeService().Update(scope, id, input)
+	earningType, err := h.EarningType.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -98,7 +91,7 @@ func UpdateEarningType(c *gin.Context) {
 	c.JSON(http.StatusOK, earningType)
 }
 
-func DeleteEarningType(c *gin.Context) {
+func (h *Handler) DeleteEarningType(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -108,7 +101,7 @@ func DeleteEarningType(c *gin.Context) {
 		return
 	}
 
-	if err := earningTypeService().Delete(scope, id); err != nil {
+	if err := h.EarningType.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

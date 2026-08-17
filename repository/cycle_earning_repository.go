@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -30,9 +29,9 @@ type gormCycleEarningRepository struct {
 	db *gorm.DB
 }
 
-// NewCycleEarningRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewCycleEarningRepository() CycleEarningRepository {
-	return &gormCycleEarningRepository{db: config.DB}
+// NewCycleEarningRepository returns the GORM-backed implementation on the given connection.
+func NewCycleEarningRepository(db *gorm.DB) CycleEarningRepository {
+	return &gormCycleEarningRepository{db: db}
 }
 
 // scoped filters by company and by employee: the table has a real employee column and CycleEarningsPage is declared employee-level, so Own and Department bite.

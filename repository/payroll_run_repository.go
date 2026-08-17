@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -85,9 +84,9 @@ type gormPayrollRunRepository struct {
 	db *gorm.DB
 }
 
-// NewPayrollRunRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewPayrollRunRepository() PayrollRunRepository {
-	return &gormPayrollRunRepository{db: config.DB}
+// NewPayrollRunRepository returns the GORM-backed implementation on the given connection.
+func NewPayrollRunRepository(db *gorm.DB) PayrollRunRepository {
+	return &gormPayrollRunRepository{db: db}
 }
 
 // FindCycleScoped resolves a cycle the caller's role authorizes.

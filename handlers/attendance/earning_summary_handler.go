@@ -21,7 +21,7 @@ type EarningSummaryRow struct {
 	TotalAmount          float64 `json:"total_amount"`
 }
 
-func GetEarningSummary(c *gin.Context) {
+func (h *Handler) GetEarningSummary(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -33,7 +33,7 @@ func GetEarningSummary(c *gin.Context) {
 		return
 	}
 
-	rows, err := attendanceSummaryService().Earnings(scope, window)
+	rows, err := h.AttendanceSummary.Earnings(scope, window)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

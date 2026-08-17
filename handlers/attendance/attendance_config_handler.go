@@ -4,24 +4,18 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// attendanceConfigService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func attendanceConfigService() *service.AttendanceConfigService {
-	return service.NewAttendanceConfigService(repository.NewAttendanceConfigRepository())
-}
-
-func GetAttendanceConfigs(c *gin.Context) {
+func (h *Handler) GetAttendanceConfigs(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	companies, err := attendanceConfigService().List(scope)
+	companies, err := h.AttendanceConfig.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -30,13 +24,13 @@ func GetAttendanceConfigs(c *gin.Context) {
 }
 
 // GetTimelogScheduleConfig returns a minimal, per-company work schedule for the Time Logs page.
-func GetTimelogScheduleConfig(c *gin.Context) {
+func (h *Handler) GetTimelogScheduleConfig(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	schedules, err := attendanceConfigService().Schedules(scope)
+	schedules, err := h.AttendanceConfig.Schedules(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -60,7 +54,7 @@ func GetTimelogScheduleConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-func UpdateAttendanceConfig(c *gin.Context) {
+func (h *Handler) UpdateAttendanceConfig(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -83,7 +77,7 @@ func UpdateAttendanceConfig(c *gin.Context) {
 		return
 	}
 
-	if _, err := attendanceConfigService().Save(scope, service.AttendanceConfigInput{
+	if _, err := h.AttendanceConfig.Save(scope, service.AttendanceConfigInput{
 		CompaniesID:               input.CompaniesID,
 		LateRatePerMinute:         input.LateRatePerMinute,
 		AbsentRatePerDay:          input.AbsentRatePerDay,

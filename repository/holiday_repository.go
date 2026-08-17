@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -26,9 +25,9 @@ type gormHolidayRepository struct {
 	db *gorm.DB
 }
 
-// NewHolidayRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewHolidayRepository() HolidayRepository {
-	return &gormHolidayRepository{db: config.DB}
+// NewHolidayRepository returns the GORM-backed implementation on the given connection.
+func NewHolidayRepository(db *gorm.DB) HolidayRepository {
+	return &gormHolidayRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter HolidayCalendarPage declares as a company-level module.

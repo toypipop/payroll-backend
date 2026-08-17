@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -37,9 +36,9 @@ type gormCompanyRepository struct {
 	db *gorm.DB
 }
 
-// NewCompanyRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewCompanyRepository() CompanyRepository {
-	return &gormCompanyRepository{db: config.DB}
+// NewCompanyRepository returns the GORM-backed implementation on the given connection.
+func NewCompanyRepository(db *gorm.DB) CompanyRepository {
+	return &gormCompanyRepository{db: db}
 }
 
 // ListScoped returns the companies the caller's role authorizes for the current action, lowest id first.
@@ -52,7 +51,7 @@ func (r *gormCompanyRepository) ListScoped(scope AccessScope) ([]models.Companie
 // ListAccessible returns the companies the caller can reach at all (home plus employee_company_access).
 func (r *gormCompanyRepository) ListAccessible(userID uint) ([]models.Companies, error) {
 	var companies []models.Companies
-	err := r.db.Where("id IN ?", AccessibleCompanyIDs(userID)).Order("id ASC").Find(&companies).Error
+	err := r.db.Where("id IN ?", newGormAccessRepository(r.db).AccessibleCompanyIDs(userID)).Order("id ASC").Find(&companies).Error
 	return companies, err
 }
 

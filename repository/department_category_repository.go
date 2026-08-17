@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -17,9 +16,9 @@ type gormDepartmentCategoryRepository struct {
 	db *gorm.DB
 }
 
-// NewDepartmentCategoryRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewDepartmentCategoryRepository() DepartmentCategoryRepository {
-	return &gormDepartmentCategoryRepository{db: config.DB}
+// NewDepartmentCategoryRepository returns the GORM-backed implementation on the given connection.
+func NewDepartmentCategoryRepository(db *gorm.DB) DepartmentCategoryRepository {
+	return &gormDepartmentCategoryRepository{db: db}
 }
 
 // List returns every category by name; the table is global so no scope filter applies here.

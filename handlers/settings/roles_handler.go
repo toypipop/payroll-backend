@@ -5,25 +5,18 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-// roleService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func roleService() *service.RoleService {
-	return service.NewRoleService(repository.NewRoleRepository())
-}
-
 // GetRoles returns the roles of the caller's authorized companies.
-func GetRoles(c *gin.Context) {
+func (h *Handler) GetRoles(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	roles, err := roleService().List(scope)
+	roles, err := h.Role.List(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -32,13 +25,13 @@ func GetRoles(c *gin.Context) {
 }
 
 // GetRoleOptions returns a minimal id/name list for dropdowns, scoped to the caller's accessible companies.
-func GetRoleOptions(c *gin.Context) {
+func (h *Handler) GetRoleOptions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	roles, err := roleService().Options(scope)
+	roles, err := h.Role.Options(scope)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -56,7 +49,7 @@ func GetRoleOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-func CreateRole(c *gin.Context) {
+func (h *Handler) CreateRole(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -67,7 +60,7 @@ func CreateRole(c *gin.Context) {
 		return
 	}
 
-	role, err := roleService().Create(scope, input)
+	role, err := h.Role.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -75,7 +68,7 @@ func CreateRole(c *gin.Context) {
 	c.JSON(http.StatusCreated, role)
 }
 
-func UpdateRole(c *gin.Context) {
+func (h *Handler) UpdateRole(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -93,7 +86,7 @@ func UpdateRole(c *gin.Context) {
 		return
 	}
 
-	role, err := roleService().Update(scope, id, input.RolesName)
+	role, err := h.Role.Update(scope, id, input.RolesName)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -101,7 +94,7 @@ func UpdateRole(c *gin.Context) {
 	c.JSON(http.StatusOK, role)
 }
 
-func DeleteRole(c *gin.Context) {
+func (h *Handler) DeleteRole(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -111,7 +104,7 @@ func DeleteRole(c *gin.Context) {
 		return
 	}
 
-	if err := roleService().Delete(scope, id); err != nil {
+	if err := h.Role.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

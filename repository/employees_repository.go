@@ -3,7 +3,6 @@ package repository
 import (
 	"errors"
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -34,9 +33,9 @@ type gormEmployeesRepository struct {
 	db *gorm.DB
 }
 
-// NewEmployeesRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewEmployeesRepository() EmployeesRepository {
-	return &gormEmployeesRepository{db: config.DB}
+// NewEmployeesRepository returns the GORM-backed implementation on the given connection.
+func NewEmployeesRepository(db *gorm.DB) EmployeesRepository {
+	return &gormEmployeesRepository{db: db}
 }
 
 func (r *gormEmployeesRepository) scoped(scope AccessScope) *gorm.DB {

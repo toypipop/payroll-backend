@@ -5,16 +5,10 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
-
-// permissionService is resolved lazily so the package never captures config.DB before ConnectDatabase runs.
-func permissionService() *service.PermissionService {
-	return service.NewPermissionService(repository.NewPermissionRepository(), repository.NewRoleRepository())
-}
 
 type UpdatePermissionRequest struct {
 	ModuleID  uint             `json:"module_id"`
@@ -25,7 +19,7 @@ type UpdatePermissionRequest struct {
 	DataScope models.DataScope `json:"data_scope"`
 }
 
-func GetRolesPermissions(c *gin.Context) {
+func (h *Handler) GetRolesPermissions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -35,7 +29,7 @@ func GetRolesPermissions(c *gin.Context) {
 		return
 	}
 
-	overview, err := permissionService().Overview(scope, rolesID)
+	overview, err := h.Permission.Overview(scope, rolesID)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -47,7 +41,7 @@ func GetRolesPermissions(c *gin.Context) {
 	})
 }
 
-func UpdateRolesPermissions(c *gin.Context) {
+func (h *Handler) UpdateRolesPermissions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
@@ -74,7 +68,7 @@ func UpdateRolesPermissions(c *gin.Context) {
 		})
 	}
 
-	if err := permissionService().Replace(scope, rolesID, entries); err != nil {
+	if err := h.Permission.Replace(scope, rolesID, entries); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

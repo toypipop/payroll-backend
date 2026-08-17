@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"payroll-backend/apperr"
-	"payroll-backend/config"
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
@@ -34,9 +33,9 @@ type gormDeductionTypeRepository struct {
 	db *gorm.DB
 }
 
-// NewDeductionTypeRepository returns the GORM-backed implementation bound to the process-wide connection.
-func NewDeductionTypeRepository() DeductionTypeRepository {
-	return &gormDeductionTypeRepository{db: config.DB}
+// NewDeductionTypeRepository returns the GORM-backed implementation on the given connection.
+func NewDeductionTypeRepository(db *gorm.DB) DeductionTypeRepository {
+	return &gormDeductionTypeRepository{db: db}
 }
 
 // scoped filters by authorized company, the filter DeductionTypesPage declares as a company-level module.

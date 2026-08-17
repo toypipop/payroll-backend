@@ -10,7 +10,7 @@ import (
 )
 
 // PreventDeleteIfReferenced blocks deletion
-func PreventDeleteIfReferenced(entity string) gin.HandlerFunc {
+func (g *Guard) PreventDeleteIfReferenced(entity string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request == nil || c.Request.Method != http.MethodDelete {
 			c.Next()
@@ -31,7 +31,7 @@ func PreventDeleteIfReferenced(entity string) gin.HandlerFunc {
 		id := uint(parsed)
 
 		// Resolve company from target record
-		blocked, reason, checkErr := repository.CheckDeleteBlocked(entity, id, 0)
+		blocked, reason, checkErr := g.delete.CheckDeleteBlocked(entity, id, 0)
 		if checkErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": checkErr.Error()})
 			c.Abort()
