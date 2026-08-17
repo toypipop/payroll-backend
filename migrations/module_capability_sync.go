@@ -9,6 +9,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // SyncModuleCapabilities rewrites every module's capability columns from the moduleCapabilities registry in models/module_capability.go.
@@ -75,7 +76,9 @@ func SyncModuleCapabilities(db *gorm.DB) error {
 // RemoveDashboardModule drops the DashboardPage module and its permission rows from databases seeded before Dashboard stopped being permission- controlled.
 func RemoveDashboardModule(db *gorm.DB) error {
 	var module models.AppModule
-	err := db.Where("module_key = ?", "DashboardPage").First(&module).Error
+	// A missing row is the expected result on any database seeded after Dashboard stopped being a module, so silence GORM's record-not-found log for this lookup only.
+	err := db.Session(&gorm.Session{Logger: db.Logger.LogMode(logger.Silent)}).
+		Where("module_key = ?", "DashboardPage").First(&module).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
