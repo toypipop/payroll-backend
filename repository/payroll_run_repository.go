@@ -17,8 +17,10 @@ var (
 	ErrPayrollCycleIsClosed      = apperr.Validation("Cannot recalculate a closed cycle")
 	ErrPayrollCycleAlreadyClosed = apperr.Validation("Cycle is already closed")
 	ErrPayrollTransactionMissing = apperr.NotFound("Transaction not found")
-	ErrPayrollSlipDenied         = apperr.Forbidden("Access denied")
-	ErrPayrollSlipCycleOpen      = apperr.Forbidden("Payslips are only available for closed payroll cycles")
+	// ErrPayrollSalaryMissing is the one lookup failure a run may treat as "skip this employee"; anything else is a real failure.
+	ErrPayrollSalaryMissing = apperr.NotFound("No salary structure found for this employee")
+	ErrPayrollSlipDenied    = apperr.Forbidden("Access denied")
+	ErrPayrollSlipCycleOpen = apperr.Forbidden("Payslips are only available for closed payroll cycles")
 )
 
 // TransactionSnapshot is the set of computed values a run writes onto one employee's transaction row.
@@ -176,7 +178,7 @@ func (r *gormPayrollRunRepository) FindActiveSalaryOnOrBefore(employeeID uint, d
 	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
 		Order("effective_date DESC, created_at DESC").
 		First(&record).Error
-	return record, err
+	return record, salaryLookupError(err)
 }
 
 // FindEarliestActiveSalaryOnOrBefore returns the employee's first salary record up to the given date, for a new hire whose first record lands mid-cycle.
@@ -185,7 +187,15 @@ func (r *gormPayrollRunRepository) FindEarliestActiveSalaryOnOrBefore(employeeID
 	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
 		Order("effective_date ASC, created_at ASC").
 		First(&record).Error
-	return record, err
+	return record, salaryLookupError(err)
+}
+
+// salaryLookupError names the "no such salary" case so a run can tell it apart from a database failure, which must never read as an employee with no salary.
+func salaryLookupError(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrPayrollSalaryMissing
+	}
+	return err
 }
 
 // DeleteTransactionForEmployee clears a transaction left by an earlier run that this run is skipping, so a stale figure does not keep appearing.

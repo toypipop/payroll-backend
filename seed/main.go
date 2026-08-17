@@ -15,7 +15,31 @@ func ptr(u uint) *uint {
 	return &u
 }
 
-// payrollSnapshotFields mirrors what runPayrollSnapshot captures on a real
+// Attendance rates every seeded company shares. The seeded payroll figures are priced from these same constants rather than from literals, so demo transactions agree with the AttendanceConfig rows the seed writes.
+const (
+	seedLateRatePerMinute     = 5.0
+	seedAbsentRatePerDay      = 300.0
+	seedOvertimeRatePerMinute = 5.0
+	seedExtraRatePerDay       = 300.0
+)
+
+// roundMoney rounds to the two decimal places a money column stores.
+func roundMoney(v float64) float64 { return math.Round(v*100) / 100 }
+
+// seedLateDeduction prices lateness the way service.lateDeduction does: each day is capped at the absence rate on its own, never the month's total against a single day's cap.
+func seedLateDeduction(lateMinutesPerDay []int) float64 {
+	total := 0.0
+	for _, minutes := range lateMinutesPerDay {
+		amount := roundMoney(float64(minutes) * seedLateRatePerMinute)
+		if amount > seedAbsentRatePerDay {
+			amount = seedAbsentRatePerDay
+		}
+		total += amount
+	}
+	return roundMoney(total)
+}
+
+// payrollSnapshotFields mirrors what service.snapshotFor captures on a real
 func payrollSnapshotFields(employeeID uint) (posName, deptName, empTypeName, bankName, accName, accNo string) {
 	var emp models.Employees
 	config.DB.
@@ -36,7 +60,7 @@ func payrollSnapshotFields(employeeID uint) (posName, deptName, empTypeName, ban
 	return posName, deptName, empTypeName, bankName, emp.AccountName, emp.AccountNo
 }
 
-// pickSalaryRecordForCycle mirrors runPayrollSnapshot's selection: the most
+// pickSalaryRecordForCycle mirrors service.salaryForCycle's selection: the most
 func pickSalaryRecordForCycle(employeeID uint, cycleStart time.Time) models.SalariesStructure {
 	var rec models.SalariesStructure
 	config.DB.Where("employees_id = ? AND deleted_at = 0 AND effective_date <= ?", employeeID, cycleStart).
@@ -136,12 +160,12 @@ func main() {
 
 	attConfigSys := models.AttendanceConfig{
 		CompaniesID:               sysComp.ID,
-		LateRatePerMinute:         5.0,
-		AbsentRatePerDay:          300.0,
+		LateRatePerMinute:         seedLateRatePerMinute,
+		AbsentRatePerDay:          seedAbsentRatePerDay,
 		WorkStartTime:             parseTime(9, 0),
 		WorkEndTime:               parseTime(17, 0),
-		OvertimeRatePerMinute:     5.0,
-		ExtraRatePerDay:           300.0,
+		OvertimeRatePerMinute:     seedOvertimeRatePerMinute,
+		ExtraRatePerDay:           seedExtraRatePerDay,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
@@ -150,12 +174,12 @@ func main() {
 
 	attConfigA := models.AttendanceConfig{
 		CompaniesID:               compA.ID,
-		LateRatePerMinute:         5.0,
-		AbsentRatePerDay:          300.0,
+		LateRatePerMinute:         seedLateRatePerMinute,
+		AbsentRatePerDay:          seedAbsentRatePerDay,
 		WorkStartTime:             parseTime(9, 0),
 		WorkEndTime:               parseTime(17, 0),
-		OvertimeRatePerMinute:     5.0,
-		ExtraRatePerDay:           300.0,
+		OvertimeRatePerMinute:     seedOvertimeRatePerMinute,
+		ExtraRatePerDay:           seedExtraRatePerDay,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
@@ -164,12 +188,12 @@ func main() {
 
 	attConfigB := models.AttendanceConfig{
 		CompaniesID:               compB.ID,
-		LateRatePerMinute:         5.0,
-		AbsentRatePerDay:          300.0,
+		LateRatePerMinute:         seedLateRatePerMinute,
+		AbsentRatePerDay:          seedAbsentRatePerDay,
 		WorkStartTime:             parseTime(9, 0),
 		WorkEndTime:               parseTime(17, 0),
-		OvertimeRatePerMinute:     5.0,
-		ExtraRatePerDay:           300.0,
+		OvertimeRatePerMinute:     seedOvertimeRatePerMinute,
+		ExtraRatePerDay:           seedExtraRatePerDay,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
@@ -1783,12 +1807,13 @@ func main() {
 		}
 	}
 
+	// lateMinutesPerDay keeps one entry per late day rather than a running total, because the late deduction is capped per day.
 	type attendanceTotals struct {
-		lateMinutes int
-		absentDays  int
-		leaveDays   int
-		otMinutes   int
-		holidayDays int
+		lateMinutesPerDay []int
+		absentDays        int
+		leaveDays         int
+		otMinutes         int
+		holidayDays       int
 	}
 	totals := map[string]map[time.Month]attendanceTotals{}
 	for _, p := range profiles {
@@ -1807,7 +1832,7 @@ func main() {
 	}
 	addTotals := func(email string, month time.Month, delta attendanceTotals) {
 		t := totals[email][month]
-		t.lateMinutes += delta.lateMinutes
+		t.lateMinutesPerDay = append(t.lateMinutesPerDay, delta.lateMinutesPerDay...)
 		t.absentDays += delta.absentDays
 		t.leaveDays += delta.leaveDays
 		t.otMinutes += delta.otMinutes
@@ -1874,7 +1899,12 @@ func main() {
 		}
 		checkIn := time.Date(day.Year(), day.Month(), day.Day(), 9, late, 0, 0, time.UTC)
 		checkOut := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, time.UTC).Add(time.Duration(ot) * time.Minute)
-		return status, &checkIn, &checkOut, remark, attendanceTotals{lateMinutes: late, otMinutes: ot}
+
+		totals := attendanceTotals{otMinutes: ot}
+		if late > 0 {
+			totals.lateMinutesPerDay = []int{late}
+		}
+		return status, &checkIn, &checkOut, remark, totals
 	}
 
 	for day := start2027; !day.After(end2027); day = day.AddDate(0, 0, 1) {
@@ -1916,7 +1946,6 @@ func main() {
 		}
 	}
 
-	roundMoney := func(v float64) float64 { return math.Round(v*100) / 100 }
 	monthlyTax := func(taxable float64) float64 {
 		annual := taxable*12 - 60000
 		if annual <= 150000 {
@@ -1962,10 +1991,10 @@ func main() {
 			if m == time.April && p.companyID != sysComp.ID {
 				bonus += 5000
 			}
-			otAmount := roundMoney(float64(t.otMinutes) * 5)
-			lateDeduction := roundMoney(float64(t.lateMinutes) * 5)
-			absentDeduction := roundMoney(float64(t.absentDays) * 1100)
-			holidayAmount := roundMoney(float64(t.holidayDays) * 700)
+			otAmount := roundMoney(float64(t.otMinutes) * seedOvertimeRatePerMinute)
+			lateDeduction := seedLateDeduction(t.lateMinutesPerDay)
+			absentDeduction := roundMoney(float64(t.absentDays) * seedAbsentRatePerDay)
+			holidayAmount := roundMoney(float64(t.holidayDays) * seedExtraRatePerDay)
 			loanExtra := 0.0
 			if p.loan > 0 && (m == time.March || m == time.May) {
 				loanExtra = 1500
