@@ -42,6 +42,13 @@ docker compose -f docker-compose.local.yml up -d    # local Docker
 docker compose -f docker-compose.uat.yml up -d      # UAT Docker
 ```
 
+## CI
+
+`.github/workflows/ci.yml` runs on every push and pull request. Beyond `go vet`, `go build`, `go test` and a
+`gofmt` check, it fails the build when a file under `handlers/`, `middleware/`, `repository/`, `routes/` or
+`service/` imports `config`, or when `repository/` imports gin. Those two greps are what keeps the layering
+rules below from being prose nobody runs — deploy is manual and has no gate of its own.
+
 ## Deploy
 
 - `.github/workflows/deploy.yml` (backend repo only) deploys **both** repos — it SSHes in and pulls `~/payroll-backend` and `~/payroll-frontend` at the same branch, then builds from the backend dir.
