@@ -131,8 +131,13 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 		api.GET("/payroll/pre-check/:cycle_id", g.CheckPermission("RunPayrollPage", "EDIT"), h.Payroll.PreCheckPayroll)
 		api.GET("/payroll/diff/:cycle_id", g.CheckPermission("RunPayrollPage", "VIEW"), h.Payroll.GetPayrollDiff)
 		api.POST("/payroll/calculate/:cycle_id", g.CheckPermission("RunPayrollPage", "EDIT"), h.Payroll.CalculatePayroll)
-		api.GET("/payroll/transactions/:cycle_id", g.CheckPermissionAny([]string{"TransactionsPage", "RunPayrollPage", "PayslipsReportPage", "TaxFormsReportPage"}, "VIEW"), h.Payroll.GetPayrollTransactions)
-		api.GET("/payroll/slip/:transaction_id", g.CheckPermissionAny([]string{"TransactionsPage", "RunPayrollPage"}, "VIEW"), h.Payroll.GetPayrollSlip)
+		// One cycle's transactions are read by four pages. Each gets its own route so the gate names the page that asked,
+		// rather than one route accepting whichever of four permissions the caller happens to hold.
+		api.GET("/payroll/transactions/:cycle_id", g.CheckPermission("TransactionsPage", "VIEW"), h.Payroll.GetPayrollTransactions)
+		api.GET("/payroll/run/transactions/:cycle_id", g.CheckPermission("RunPayrollPage", "VIEW"), h.Payroll.GetPayrollTransactions)
+		api.GET("/reports/payslips/transactions/:cycle_id", g.CheckPermission("PayslipsReportPage", "VIEW"), h.Payroll.GetPayrollTransactions)
+		api.GET("/reports/tax-forms/transactions/:cycle_id", g.CheckPermission("TaxFormsReportPage", "VIEW"), h.Payroll.GetPayrollTransactions)
+		api.GET("/payroll/slip/:transaction_id", g.CheckPermission("TransactionsPage", "VIEW"), h.Payroll.GetPayrollSlip)
 		api.GET("/payroll/my-slips", h.Payroll.GetMySlips)
 
 		api.GET("/cycle-earnings", g.CheckPermission("CycleEarningsPage", "VIEW"), h.Payroll.GetCycleEarnings)

@@ -19,7 +19,7 @@ type AccessRepository interface {
 	AccessibleCompanyRoles(userID uint) []CompanyRole
 	RoleNames(userID uint) []string
 	FindScopeUser(userID uint) (models.Employees, error)
-	ModuleAccesses(roleIDs []uint, moduleKeys []string) ([]models.RolesModuleAccess, error)
+	ModuleAccesses(roleIDs []uint, moduleKey string) ([]models.RolesModuleAccess, error)
 }
 
 type gormAccessRepository struct {
@@ -133,14 +133,14 @@ func (r *gormAccessRepository) RoleNames(userID uint) []string {
 	return names
 }
 
-// ModuleAccesses returns the permission rows any of the roles hold on any of the modules, for active, undeleted modules only.
-func (r *gormAccessRepository) ModuleAccesses(roleIDs []uint, moduleKeys []string) ([]models.RolesModuleAccess, error) {
+// ModuleAccesses returns the permission rows any of the roles hold on the module, for active, undeleted modules only.
+func (r *gormAccessRepository) ModuleAccesses(roleIDs []uint, moduleKey string) ([]models.RolesModuleAccess, error) {
 	var accesses []models.RolesModuleAccess
 	// PostgreSQL does not support MySQL backtick quoting; the mixed-case GORM association alias must use double-quoted identifiers here.
 	err := r.db.
 		InnerJoins("AppModule", r.db.Where(`"AppModule"."deleted_at" = ?`, 0)).
 		Where("roles_module_access.roles_id IN ?", roleIDs).
-		Where(`"AppModule"."module_key" IN ?`, moduleKeys).
+		Where(`"AppModule"."module_key" = ?`, moduleKey).
 		Where(`"AppModule"."is_active" = ?`, true).
 		Find(&accesses).Error
 	return accesses, err

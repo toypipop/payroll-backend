@@ -156,24 +156,9 @@ func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses 
 	return companyIDs, bestScope, found
 }
 
-// CheckPermission gates the request on a single module granting action.
+// CheckPermission gates the request on the module granting the action, and publishes the scope it resolved.
 func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc {
-	return g.checkModuleAccess([]string{moduleKey}, action)
-}
-
-// CheckPermissionAny gates the request on any one of moduleKeys granting action.
-func (g *Guard) CheckPermissionAny(moduleKeys []string, action string) gin.HandlerFunc {
-	return g.checkModuleAccess(moduleKeys, action)
-}
-
-func (g *Guard) checkModuleAccess(moduleKeys []string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if len(moduleKeys) == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
-			c.Abort()
-			return
-		}
-
 		userID, ok := getContextUserID(c)
 		if !ok {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
@@ -193,10 +178,9 @@ func (g *Guard) checkModuleAccess(moduleKeys []string, action string) gin.Handle
 			roleIDs = append(roleIDs, cr.RoleID)
 		}
 
-		accesses, err := g.access.ModuleAccesses(roleIDs, moduleKeys)
-
+		accesses, err := g.access.ModuleAccesses(roleIDs, moduleKey)
 		if err != nil || len(accesses) == 0 {
-			log.Printf("[DEBUG] ModuleKeys: %v, RoleIDs: %v, Error: %v", moduleKeys, roleIDs, err)
+			log.Printf("[DEBUG] ModuleKey: %s, RoleIDs: %v, Error: %v", moduleKey, roleIDs, err)
 			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 			c.Abort()
 			return
