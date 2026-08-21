@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	atthandler "payroll-backend/handlers/attendance"
 	authhandler "payroll-backend/handlers/auth"
 	emphandler "payroll-backend/handlers/employees"
@@ -23,6 +25,11 @@ func buildGuard(db *gorm.DB) *middleware.Guard {
 
 // buildHandlers is the composition root: repositories and services are built here so nothing below main needs a database handle of its own.
 func buildHandlers(db *gorm.DB) routes.Handlers {
+	// A unique-constraint failure must reach the client as a 409, not the generic 500 every untyped error becomes.
+	if err := repository.RegisterErrorTranslation(db); err != nil {
+		log.Fatalf("Database error translation setup failed: %v", err)
+	}
+
 	// Repositories shared by more than one service are built once and reused.
 	employeesRepo := repository.NewEmployeesRepository(db)
 	earningTypeRepo := repository.NewEarningTypeRepository(db)

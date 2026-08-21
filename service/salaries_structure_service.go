@@ -121,62 +121,72 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 		return SaveResult{}, ErrSalaryEmployeeTarget
 	}
 
-	existing, err := s.repo.ListAllRecordsUnscoped(input.EmployeesID, employee.CompaniesID)
+	// Every rule below is a check the write depends on, so the reads, the checks and the write share one transaction — and the cycle lock holds the closed/open state still for its duration.
+	result := SaveResult{}
+	err = s.repo.WithinTx(func(repo repository.SalariesStructureRepository) error {
+		if err := repo.LockCompanyCycles(employee.CompaniesID); err != nil {
+			return err
+		}
+
+		existing, err := repo.ListAllRecordsUnscoped(input.EmployeesID, employee.CompaniesID)
+		if err != nil {
+			return err
+		}
+
+		active := make([]models.SalariesStructure, 0, len(existing))
+		for _, record := range existing {
+			if record.IsActive {
+				active = append(active, record)
+			}
+		}
+
+		activeIDs := make([]uint, 0, len(active))
+		for _, record := range active {
+			activeIDs = append(activeIDs, record.ID)
+		}
+		usage, err := repo.ClosedCycleUsage(activeIDs)
+		if err != nil {
+			return err
+		}
+
+		if input.Disable {
+			if err := repo.ArchiveRecords(decisionsFor(active, usage)); err != nil {
+				return err
+			}
+			result = SaveResult{Disabled: true}
+			return nil
+		}
+
+		// Backdating into a period that has already been paid out and closed would change a figure someone has already been paid against.
+		closedCycles, err := repo.CountClosedCyclesCovering(employee.CompaniesID, effectiveDate)
+		if err != nil {
+			return err
+		}
+		if closedCycles > 0 {
+			return ErrSalaryDateInClosed
+		}
+
+		// The effective date must not move backward from the most recent record, erased ones included, so history stays in chronological order.
+		if len(existing) > 0 {
+			last := existing[len(existing)-1]
+			if effectiveDate.Before(last.EffectiveDate) {
+				return ErrSalaryDateBackward
+			}
+		}
+
+		next := models.SalariesStructure{
+			CompaniesID:   employee.CompaniesID,
+			EmployeesID:   input.EmployeesID,
+			BaseSalaries:  input.BaseSalaries,
+			EffectiveDate: effectiveDate,
+			IsActive:      true,
+		}
+		return repo.ArchiveAndCreate(decisionsFor(active, usage), &next)
+	})
 	if err != nil {
 		return SaveResult{}, err
 	}
-
-	active := make([]models.SalariesStructure, 0, len(existing))
-	for _, record := range existing {
-		if record.IsActive {
-			active = append(active, record)
-		}
-	}
-
-	activeIDs := make([]uint, 0, len(active))
-	for _, record := range active {
-		activeIDs = append(activeIDs, record.ID)
-	}
-	usage, err := s.repo.ClosedCycleUsage(activeIDs)
-	if err != nil {
-		return SaveResult{}, err
-	}
-
-	if input.Disable {
-		if err := s.repo.ArchiveRecords(decisionsFor(active, usage)); err != nil {
-			return SaveResult{}, err
-		}
-		return SaveResult{Disabled: true}, nil
-	}
-
-	// Backdating into a period that has already been paid out and closed would change a figure someone has already been paid against.
-	closedCycles, err := s.repo.CountClosedCyclesCovering(employee.CompaniesID, effectiveDate)
-	if err != nil {
-		return SaveResult{}, err
-	}
-	if closedCycles > 0 {
-		return SaveResult{}, ErrSalaryDateInClosed
-	}
-
-	// The effective date must not move backward from the most recent record, erased ones included, so history stays in chronological order.
-	if len(existing) > 0 {
-		last := existing[len(existing)-1]
-		if effectiveDate.Before(last.EffectiveDate) {
-			return SaveResult{}, ErrSalaryDateBackward
-		}
-	}
-
-	next := models.SalariesStructure{
-		CompaniesID:   employee.CompaniesID,
-		EmployeesID:   input.EmployeesID,
-		BaseSalaries:  input.BaseSalaries,
-		EffectiveDate: effectiveDate,
-		IsActive:      true,
-	}
-	if err := s.repo.ArchiveAndCreate(decisionsFor(active, usage), &next); err != nil {
-		return SaveResult{}, err
-	}
-	return SaveResult{}, nil
+	return result, nil
 }
 
 // DeleteRecord erases a salary record, but only one no closed cycle ever used.
@@ -189,21 +199,29 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 		return ErrSalaryCompanyDenied
 	}
 
-	usage, err := s.repo.ClosedCycleUsage([]uint{record.ID})
-	if err != nil {
-		return err
-	}
-	if usage[record.ID] > 0 {
-		return ErrSalaryRecordInUse
-	}
+	// The erase and the promotion that follows it are one unit: a failure between them would leave the employee with no active salary at all, which silently drops them from the next payroll run.
+	// The lock and the in-transaction usage check keep a cycle from closing between "this record was never used" and the delete.
+	return s.repo.WithinTx(func(repo repository.SalariesStructureRepository) error {
+		if err := repo.LockCompanyCycles(record.CompaniesID); err != nil {
+			return err
+		}
 
-	if err := s.repo.DeleteRecord(&record); err != nil {
-		return err
-	}
+		usage, err := repo.ClosedCycleUsage([]uint{record.ID})
+		if err != nil {
+			return err
+		}
+		if usage[record.ID] > 0 {
+			return ErrSalaryRecordInUse
+		}
 
-	// Erasing the current record should roll the employee back to the state before that mistake, not leave them with no active salary at all.
-	if record.IsActive {
-		return s.repo.ActivateLatest(record.EmployeesID)
-	}
-	return nil
+		if err := repo.DeleteRecord(&record); err != nil {
+			return err
+		}
+
+		// Erasing the current record should roll the employee back to the state before that mistake, not leave them with no active salary at all.
+		if record.IsActive {
+			return repo.ActivateLatest(record.EmployeesID)
+		}
+		return nil
+	})
 }

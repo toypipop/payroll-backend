@@ -8,6 +8,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Payroll-run failures.
@@ -42,6 +43,11 @@ type TransactionSnapshot struct {
 
 // PayrollRunRepository is the persistence boundary for calculating a payroll cycle.
 type PayrollRunRepository interface {
+	// WithinTx runs fn against a repository bound to a single database transaction, so a whole payroll run commits or rolls back as one unit.
+	WithinTx(fn func(PayrollRunRepository) error) error
+	// LockCycleForUpdate takes a row lock on the cycle for the rest of the transaction, so two concurrent runs on the same cycle serialise instead of racing.
+	LockCycleForUpdate(cycleID uint) (models.PayrollCycle, error)
+
 	FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	FindOpenCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	ListCyclesScoped(scope AccessScope) ([]models.PayrollCycle, error)
@@ -87,6 +93,26 @@ type gormPayrollRunRepository struct {
 // NewPayrollRunRepository returns the GORM-backed implementation on the given connection.
 func NewPayrollRunRepository(db *gorm.DB) PayrollRunRepository {
 	return &gormPayrollRunRepository{db: db}
+}
+
+// WithinTx runs fn against a repository bound to one transaction; any error rolls the whole thing back.
+func (r *gormPayrollRunRepository) WithinTx(fn func(PayrollRunRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&gormPayrollRunRepository{db: tx})
+	})
+}
+
+// LockCycleForUpdate reads the cycle with SELECT ... FOR UPDATE, holding the row until the surrounding transaction ends.
+func (r *gormPayrollRunRepository) LockCycleForUpdate(cycleID uint) (models.PayrollCycle, error) {
+	var cycle models.PayrollCycle
+	err := r.db.Clauses(clause.Locking{Strength: "UPDATE"}).First(&cycle, cycleID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.PayrollCycle{}, ErrPayrollCycleMissing
+	}
+	if err != nil {
+		return models.PayrollCycle{}, err
+	}
+	return cycle, nil
 }
 
 // FindCycleScoped resolves a cycle the caller's role authorizes.
@@ -255,54 +281,53 @@ func (r *gormPayrollRunRepository) ListApprovedLeavesInRange(employeeID uint, cy
 	return leaves, err
 }
 
-// SaveSnapshot writes one employee's computed transaction and replaces its detail lines, as a single transaction.
+// SaveSnapshot writes one employee's computed transaction and replaces its detail lines.
+// It upserts on idx_txn_cycle_employee rather than reading first and then deciding: find-then-create let two concurrent runs both miss the row and both insert, which is a duplicate payout.
+// It does not open a transaction of its own — the caller runs the whole cycle inside one, so a failure halfway through a run leaves no half-written cycle behind.
 func (r *gormPayrollRunRepository) SaveSnapshot(cycleID uint, employeeID uint, snapshot TransactionSnapshot, details []models.PayrollTransactionDetail) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		var transaction models.PayrollTransaction
-		err := tx.Where("cycle_id = ? AND employees_id = ?", cycleID, employeeID).First(&transaction).Error
-		isNew := errors.Is(err, gorm.ErrRecordNotFound)
-		if err != nil && !isNew {
-			return err
-		}
+	transaction := models.PayrollTransaction{
+		CycleID:             cycleID,
+		EmployeesID:         employeeID,
+		SalariesStructureID: snapshot.SalariesStructureID,
+		SalariesAtTime:      snapshot.SalariesAtTime,
+		TotalEarning:        snapshot.TotalEarning,
+		TotalDeduction:      snapshot.TotalDeduction,
+		SsoAmount:           snapshot.SsoAmount,
+		TaxableIncome:       snapshot.TaxableIncome,
+		TaxAmount:           snapshot.TaxAmount,
+		NetPay:              snapshot.NetPay,
+		PositionName:        snapshot.PositionName,
+		DepartmentName:      snapshot.DepartmentName,
+		EmploymentTypeName:  snapshot.EmploymentTypeName,
+		BankName:            snapshot.BankName,
+		BankAccountName:     snapshot.BankAccountName,
+		BankAccountNo:       snapshot.BankAccountNo,
+	}
 
-		transaction.CycleID = cycleID
-		transaction.EmployeesID = employeeID
-		transaction.SalariesStructureID = snapshot.SalariesStructureID
-		transaction.SalariesAtTime = snapshot.SalariesAtTime
-		transaction.TotalEarning = snapshot.TotalEarning
-		transaction.TotalDeduction = snapshot.TotalDeduction
-		transaction.SsoAmount = snapshot.SsoAmount
-		transaction.TaxableIncome = snapshot.TaxableIncome
-		transaction.TaxAmount = snapshot.TaxAmount
-		transaction.NetPay = snapshot.NetPay
-		transaction.PositionName = snapshot.PositionName
-		transaction.DepartmentName = snapshot.DepartmentName
-		transaction.EmploymentTypeName = snapshot.EmploymentTypeName
-		transaction.BankName = snapshot.BankName
-		transaction.BankAccountName = snapshot.BankAccountName
-		transaction.BankAccountNo = snapshot.BankAccountNo
+	if err := r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "cycle_id"}, {Name: "employees_id"}, {Name: "deleted_at"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"updated_at", "salaries_structure_id", "salaries_at_time",
+			"total_earning", "total_deduction", "sso_amount", "taxable_income", "tax_amount", "net_pay",
+			"position_name", "department_name", "employment_type_name",
+			"bank_name", "bank_account_name", "bank_account_no",
+		}),
+	}).Create(&transaction).Error; err != nil {
+		return err
+	}
 
-		if isNew {
-			if err := tx.Create(&transaction).Error; err != nil {
-				return err
-			}
-		} else {
-			if err := tx.Save(&transaction).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("transaction_id = ?", transaction.ID).Delete(&models.PayrollTransactionDetail{}).Error; err != nil {
-				return err
-			}
-		}
+	// Replacing the lines unconditionally covers both paths: on a fresh row there is nothing to delete.
+	if err := r.db.Where("transaction_id = ?", transaction.ID).Delete(&models.PayrollTransactionDetail{}).Error; err != nil {
+		return err
+	}
 
-		if len(details) == 0 {
-			return nil
-		}
-		for i := range details {
-			details[i].TransactionID = transaction.ID
-		}
-		return tx.Create(&details).Error
-	})
+	if len(details) == 0 {
+		return nil
+	}
+	for i := range details {
+		details[i].TransactionID = transaction.ID
+	}
+	return r.db.Create(&details).Error
 }
 
 // CycleAggregate totals one cycle's transactions, for the run-versus-previous comparison.

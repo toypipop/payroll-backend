@@ -3,6 +3,7 @@ package payroll
 import (
 	"net/http"
 
+	"payroll-backend/apperr"
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 
@@ -12,6 +13,11 @@ import (
 // GetMySlips returns the caller's own payslips.
 func (h *Handler) GetMySlips(c *gin.Context) {
 	userID, _ := httpx.ContextAuth(c)
+	// No caller identity is an authentication failure, not an employee with no payslips: answering an empty list would look like "you were never paid".
+	if userID == 0 {
+		httpx.RespondError(c, apperr.Unauthorized("Not authenticated"))
+		return
+	}
 
 	slips, err := h.PayrollRun.MySlips(userID)
 	if err != nil {

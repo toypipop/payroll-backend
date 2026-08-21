@@ -81,7 +81,7 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 		return models.Employees{}, err
 	}
 
-	delete(patch, "companies_id")
+	patch = pickEmployeeFields(patch)
 
 	companyID, ok := scope.ResolveCompanyID(employee.CompaniesID)
 	if !ok {
@@ -112,6 +112,35 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 		return models.Employees{}, err
 	}
 	return s.repo.FindDetail(id)
+}
+
+// employeeUpdatableFields is every column a client may patch on an employee.
+// It is an allowlist rather than a list of forbidden keys because the patch goes straight into an UPDATE: anything not named here — companies_id, id, created_at, deleted_at, or a column added later — is dropped instead of silently written.
+var employeeUpdatableFields = map[string]bool{
+	"employees_code":     true,
+	"email":              true,
+	"first_name":         true,
+	"last_name":          true,
+	"password":           true,
+	"dept_id":            true,
+	"pos_id":             true,
+	"roles_id":           true,
+	"employment_type_id": true,
+	"is_active":          true,
+	"bank_id":            true,
+	"account_name":       true,
+	"account_no":         true,
+}
+
+// pickEmployeeFields keeps only the patch keys an employee update is allowed to write.
+func pickEmployeeFields(patch map[string]any) map[string]any {
+	allowed := make(map[string]any, len(patch))
+	for key, value := range patch {
+		if employeeUpdatableFields[key] {
+			allowed[key] = value
+		}
+	}
+	return allowed
 }
 
 // normalizeBankID turns the shapes a JSON client can send for an optional bank into an id or a clear marker.
