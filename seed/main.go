@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"math"
 	"payroll-backend/config"
@@ -95,8 +96,21 @@ func syncAppModuleIDSequence() {
 }
 
 func main() {
+	// Opt-in only: without --reset the seed keeps merging onto whatever the database already holds, which is the long-standing behaviour.
+	reset := flag.Bool("reset", false, "delete every row in the database before seeding")
+	flag.Parse()
+
 	config.LoadDotEnv()
 	config.ConnectDatabase()
+
+	if *reset {
+		if isProduction() {
+			log.Fatal("Refusing to run --reset: this environment is marked as production")
+		}
+		if err := resetDatabase(config.DB); err != nil {
+			log.Fatalf("Database reset failed: %v", err)
+		}
+	}
 
 	if err := migrations.RunOnce(config.DB, "20260525_drop_legacy_indexes", migrations.DropLegacyIndexes); err != nil {
 		log.Fatalf("Legacy index cleanup failed: %v", err)

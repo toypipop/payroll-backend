@@ -35,6 +35,9 @@ type fakeRunRepo struct {
 	saved             []savedSnapshot
 	deletedEmployees  []uint
 	saveSnapshotError error
+	lockedCycle       models.PayrollCycle
+	txDepth           int
+	sawSaveOutsideTx  bool
 }
 
 // savedSnapshot is one call the run made to SaveSnapshot.
@@ -115,7 +118,21 @@ func (f *fakeRunRepo) ListApprovedLeavesInRange(uint, time.Time, time.Time) ([]m
 	return f.approvedLeaves, nil
 }
 
+// WithinTx runs the body inline and records that a transaction was open, so a test can assert the run wrote inside one.
+func (f *fakeRunRepo) WithinTx(fn func(repository.PayrollRunRepository) error) error {
+	f.txDepth++
+	defer func() { f.txDepth-- }()
+	return fn(f)
+}
+
+func (f *fakeRunRepo) LockCycleForUpdate(uint) (models.PayrollCycle, error) {
+	return f.lockedCycle, nil
+}
+
 func (f *fakeRunRepo) SaveSnapshot(_ uint, employeeID uint, snapshot repository.TransactionSnapshot, details []models.PayrollTransactionDetail) error {
+	if f.txDepth == 0 {
+		f.sawSaveOutsideTx = true
+	}
 	if f.saveSnapshotError != nil {
 		return f.saveSnapshotError
 	}
@@ -473,8 +490,8 @@ func TestSnapshotReportsSalaryLookupFailure(t *testing.T) {
 	}
 }
 
-// TestSnapshotReportsFailureAfterVisitingEveryEmployee pins the run's current behaviour: a save failure is reported, but the employees after it are still processed.
-func TestSnapshotReportsFailureAfterVisitingEveryEmployee(t *testing.T) {
+// TestSnapshotAbortsRunOnFirstSaveFailure pins the run's atomicity: a save failure stops the run there and is reported, instead of letting the employees after it write while the caller sees only an error.
+func TestSnapshotAbortsRunOnFirstSaveFailure(t *testing.T) {
 	cycle := models.PayrollCycle{
 		ID:          10,
 		CompaniesID: 1,
@@ -501,6 +518,41 @@ func TestSnapshotReportsFailureAfterVisitingEveryEmployee(t *testing.T) {
 		t.Fatalf("Snapshot error = %v, want %v", err, saveErr)
 	}
 	if result.ProcessedCount != 0 {
-		t.Errorf("ProcessedCount = %d, want 0 when every save fails", result.ProcessedCount)
+		t.Errorf("ProcessedCount = %d, want 0 when the run aborted", result.ProcessedCount)
+	}
+	if repo.sawSaveOutsideTx {
+		t.Error("SaveSnapshot ran outside a transaction; the whole run must commit or roll back as one unit")
+	}
+}
+
+// TestSnapshotWritesInsideOneTransaction guards the property the unique index and the row lock both rely on: every employee of a cycle is written inside a single transaction.
+func TestSnapshotWritesInsideOneTransaction(t *testing.T) {
+	cycle := models.PayrollCycle{
+		ID:          13,
+		CompaniesID: 1,
+		StartDate:   utcDay(2026, time.January, 1),
+		EndDate:     utcDay(2026, time.January, 31),
+	}
+
+	repo := &fakeRunRepo{
+		payrollConfig: models.PayrollConfig{SsoMinSalary: 999999, TaxCalculation: "None"},
+		employees: []models.Employees{
+			{ID: 101, CompaniesID: 1, FirstName: "First", LastName: "Employee"},
+			{ID: 102, CompaniesID: 1, FirstName: "Second", LastName: "Employee"},
+		},
+		activeSalary: map[uint]models.SalariesStructure{
+			101: {ID: 930, BaseSalaries: 20000, EffectiveDate: utcDay(2025, time.December, 1)},
+			102: {ID: 931, BaseSalaries: 20000, EffectiveDate: utcDay(2025, time.December, 1)},
+		},
+	}
+
+	if _, err := NewPayrollRunService(repo).Snapshot(cycle); err != nil {
+		t.Fatalf("Snapshot returned error: %v", err)
+	}
+	if len(repo.saved) != 2 {
+		t.Fatalf("SaveSnapshot called %d times, want 2", len(repo.saved))
+	}
+	if repo.sawSaveOutsideTx {
+		t.Error("SaveSnapshot ran outside a transaction")
 	}
 }

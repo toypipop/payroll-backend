@@ -8,6 +8,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Salary lookup failures.
@@ -24,6 +25,11 @@ type ArchiveDecision struct {
 
 // SalariesStructureRepository is the persistence boundary for the salary-structure domain.
 type SalariesStructureRepository interface {
+	// WithinTx runs fn against a repository bound to a single database transaction.
+	WithinTx(fn func(SalariesStructureRepository) error) error
+	// LockCompanyCycles takes a share lock on the company's payroll cycles for the rest of the transaction, so a cycle cannot be closed underneath a check that just read its state.
+	LockCompanyCycles(companyID uint) error
+
 	ListEmployeesWithSalary(scope AccessScope) ([]models.Employees, error)
 	ListRecordsForEmployee(employeesID uint) ([]models.SalariesStructure, error)
 	ListAllRecordsUnscoped(employeesID uint, companyID uint) ([]models.SalariesStructure, error)
@@ -43,6 +49,23 @@ type gormSalariesStructureRepository struct {
 // NewSalariesStructureRepository returns the GORM-backed implementation on the given connection.
 func NewSalariesStructureRepository(db *gorm.DB) SalariesStructureRepository {
 	return &gormSalariesStructureRepository{db: db}
+}
+
+// WithinTx runs fn against a repository bound to one transaction; any error rolls the whole thing back.
+func (r *gormSalariesStructureRepository) WithinTx(fn func(SalariesStructureRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&gormSalariesStructureRepository{db: tx})
+	})
+}
+
+// LockCompanyCycles locks the company's cycles in share mode, which conflicts with the FOR UPDATE a payroll close takes.
+// A salary rule that asks "is this date inside a closed cycle" is only meaningful if the answer cannot change between the check and the write; without this the check passes, a concurrent close commits, and the new record lands inside a cycle someone has already been paid against.
+func (r *gormSalariesStructureRepository) LockCompanyCycles(companyID uint) error {
+	var ids []uint
+	return r.db.Model(&models.PayrollCycle{}).
+		Clauses(clause.Locking{Strength: "SHARE"}).
+		Where("companies_id = ?", companyID).
+		Pluck("id", &ids).Error
 }
 
 // ListEmployeesWithSalary lists the employees in scope with their current salary attached, so the page can show who still has none.
@@ -140,23 +163,20 @@ func applyDecisions(db *gorm.DB, decisions []ArchiveDecision) error {
 }
 
 // ArchiveRecords retires records without adding a replacement, for the disable path.
+// Like the rest of the write path it runs on whatever handle it was given: the caller opens the transaction, so the checks that authorised the write are inside it too.
 func (r *gormSalariesStructureRepository) ArchiveRecords(decisions []ArchiveDecision) error {
 	if len(decisions) == 0 {
 		return nil
 	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		return applyDecisions(tx, decisions)
-	})
+	return applyDecisions(r.db, decisions)
 }
 
-// ArchiveAndCreate retires the outgoing records and inserts the new one as one transaction, so an employee is never left without an active salary.
+// ArchiveAndCreate retires the outgoing records and inserts the new one, so an employee is never left without an active salary.
 func (r *gormSalariesStructureRepository) ArchiveAndCreate(decisions []ArchiveDecision, next *models.SalariesStructure) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := applyDecisions(tx, decisions); err != nil {
-			return err
-		}
-		return tx.Create(next).Error
-	})
+	if err := applyDecisions(r.db, decisions); err != nil {
+		return err
+	}
+	return r.db.Create(next).Error
 }
 
 func (r *gormSalariesStructureRepository) DeleteRecord(record *models.SalariesStructure) error {

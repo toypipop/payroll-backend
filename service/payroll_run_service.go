@@ -65,9 +65,10 @@ func NewPayrollRunService(repo repository.PayrollRunRepository) *PayrollRunServi
 	return &PayrollRunService{repo: repo}
 }
 
-// dayOf truncates to the start of a stored calendar date.
+// dayOf is the start of a stored date's calendar day in the business timezone.
+// Truncate(24h) would round to a UTC-epoch boundary instead, which is 07:00 Bangkok — one day off for anything stored in the evening, and inconsistent with the time-log loop in this same file.
 func dayOf(value time.Time) time.Time {
-	return value.Truncate(24 * time.Hour)
+	return timeutil.DayStart(value)
 }
 
 // dateKey renders a stored calendar date as the map key both the log and the day-by-day loops use.
@@ -266,46 +267,89 @@ func (s *PayrollRunService) CreateCycle(scope repository.AccessScope, name strin
 	return cycle, nil
 }
 
-// Close snapshots the cycle's transactions and then marks it closed, so a closed cycle always has the figures it was closed on.
+// Close snapshots the cycle's transactions and marks it closed in one transaction, so a closed cycle always has the figures it was closed on — and a failure to close never leaves recalculated figures behind on a cycle that stayed open.
 func (s *PayrollRunService) Close(scope repository.AccessScope, cycleID uint) (models.PayrollCycle, RunResult, error) {
-	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
-	if err != nil {
+	// Authorization first, on the caller's scope; the run itself then re-reads the cycle under a row lock.
+	if _, err := s.repo.FindCycleScoped(scope, cycleID); err != nil {
 		return models.PayrollCycle{}, RunResult{}, err
-	}
-	if cycle.IsClosed {
-		return models.PayrollCycle{}, RunResult{}, ErrPayrollCycleAlreadyClosed
 	}
 
-	result, err := s.Snapshot(cycle)
+	var cycle models.PayrollCycle
+	var result RunResult
+	err := s.repo.WithinTx(func(repo repository.PayrollRunRepository) error {
+		locked, err := repo.LockCycleForUpdate(cycleID)
+		if err != nil {
+			return err
+		}
+		if locked.IsClosed {
+			return ErrPayrollCycleAlreadyClosed
+		}
+
+		result, err = (&PayrollRunService{repo: repo}).snapshot(locked)
+		if err != nil {
+			return err
+		}
+		if err := repo.MarkCycleClosed(&locked); err != nil {
+			return err
+		}
+		cycle = locked
+		return nil
+	})
 	if err != nil {
 		return models.PayrollCycle{}, RunResult{}, err
 	}
-	if err := s.repo.MarkCycleClosed(&cycle); err != nil {
-		return models.PayrollCycle{}, RunResult{}, err
-	}
+
 	cycle.IsClosed = true
 	return cycle, result, nil
 }
 
-// Recalculate reruns an open cycle. A closed cycle is immutable.
+// Recalculate reruns an open cycle under a row lock, so it cannot interleave with a concurrent Close. A closed cycle is immutable.
 func (s *PayrollRunService) Recalculate(scope repository.AccessScope, cycleID uint) (models.PayrollCycle, RunResult, error) {
-	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
-	if err != nil {
+	if _, err := s.repo.FindCycleScoped(scope, cycleID); err != nil {
 		return models.PayrollCycle{}, RunResult{}, err
 	}
-	if cycle.IsClosed {
-		return models.PayrollCycle{}, RunResult{}, ErrPayrollCycleIsClosed
-	}
 
-	result, err := s.Snapshot(cycle)
+	var cycle models.PayrollCycle
+	var result RunResult
+	err := s.repo.WithinTx(func(repo repository.PayrollRunRepository) error {
+		locked, err := repo.LockCycleForUpdate(cycleID)
+		if err != nil {
+			return err
+		}
+		if locked.IsClosed {
+			return ErrPayrollCycleIsClosed
+		}
+
+		result, err = (&PayrollRunService{repo: repo}).snapshot(locked)
+		if err != nil {
+			return err
+		}
+		cycle = locked
+		return nil
+	})
 	if err != nil {
 		return models.PayrollCycle{}, RunResult{}, err
 	}
 	return cycle, result, nil
 }
 
-// Snapshot recalculates and persists the transactions and detail lines for one cycle.
+// Snapshot recalculates and persists the transactions and detail lines for one cycle, as a single transaction.
 func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, error) {
+	var result RunResult
+	err := s.repo.WithinTx(func(repo repository.PayrollRunRepository) error {
+		var err error
+		result, err = (&PayrollRunService{repo: repo}).snapshot(cycle)
+		return err
+	})
+	if err != nil {
+		return RunResult{}, err
+	}
+	return result, nil
+}
+
+// snapshot is the body of a run. It must be called on a service bound to a transaction: it stops at the first failure so the caller can roll the whole cycle back.
+// Reporting an error while letting the employees after it commit anyway is what left a cycle half-recalculated with the client seeing only a 500.
+func (s *PayrollRunService) snapshot(cycle models.PayrollCycle) (RunResult, error) {
 	run, err := s.newRunContext(cycle)
 	if err != nil {
 		return RunResult{}, err
@@ -316,26 +360,23 @@ func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, erro
 	}
 
 	result := RunResult{}
-	var lastErr error
 	for _, employee := range employees {
 		outcome, err := s.snapshotEmployee(run, employee)
+		if err != nil {
+			return RunResult{}, err
+		}
 		if outcome.prorated != nil {
 			result.Prorated = append(result.Prorated, *outcome.prorated)
 		}
 		if outcome.skipped {
 			result.SkippedCount++
 			result.SkippedNames = append(result.SkippedNames, fullName(employee))
-		}
-		if err != nil {
-			lastErr = err
 			continue
 		}
-		if !outcome.skipped {
-			result.ProcessedCount++
-		}
+		result.ProcessedCount++
 	}
 
-	return result, lastErr
+	return result, nil
 }
 
 // newRunContext resolves the company-wide inputs a cycle's run shares across every employee.
