@@ -1,0 +1,85 @@
+package service
+
+import (
+	"strings"
+
+	"payroll-backend/apperr"
+	"payroll-backend/models"
+	"payroll-backend/repository"
+)
+
+// ErrEmploymentTypeNameRequired means the submitted name was empty or only whitespace.
+var ErrEmploymentTypeNameRequired = apperr.Validation("name is required")
+
+// ErrEmploymentTypeNotFound is re-exported so handlers import a single package.
+var ErrEmploymentTypeNotFound = repository.ErrEmploymentTypeNotFound
+
+// EmploymentTypeService owns the employment-type rules: which company a row may belong to, and that its company never changes afterwards.
+type EmploymentTypeService struct {
+	repo repository.EmploymentTypeRepository
+}
+
+// NewEmploymentTypeService wires the service to a repository implementation.
+func NewEmploymentTypeService(repo repository.EmploymentTypeRepository) *EmploymentTypeService {
+	return &EmploymentTypeService{repo: repo}
+}
+
+// List returns the employment types of the caller's authorized companies, with relations loaded.
+func (s *EmploymentTypeService) List(scope repository.AccessScope) ([]models.EmploymentType, error) {
+	return s.repo.ListScoped(scope)
+}
+
+// Options returns the same rows without relations, for cross-page dropdowns.
+func (s *EmploymentTypeService) Options(scope repository.AccessScope) ([]models.EmploymentType, error) {
+	return s.repo.ListMinimalScoped(scope)
+}
+
+// Create adds an employment type to an explicitly named company; this domain has never defaulted to the caller's home company.
+func (s *EmploymentTypeService) Create(scope repository.AccessScope, input models.EmploymentType) (models.EmploymentType, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return models.EmploymentType{}, ErrEmploymentTypeNameRequired
+	}
+	if !scope.CanAccessCompany(input.CompaniesID) {
+		return models.EmploymentType{}, ErrCompanyAccessDenied
+	}
+
+	employmentType := models.EmploymentType{
+		CompaniesID: input.CompaniesID,
+		Name:        name,
+		Description: strings.TrimSpace(input.Description),
+	}
+	if err := s.repo.Create(&employmentType); err != nil {
+		return models.EmploymentType{}, err
+	}
+	return employmentType, nil
+}
+
+// Update rewrites the name and description. The company is immutable after creation.
+func (s *EmploymentTypeService) Update(scope repository.AccessScope, id uint, name string, description string) (models.EmploymentType, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return models.EmploymentType{}, ErrEmploymentTypeNameRequired
+	}
+
+	employmentType, err := s.repo.FindScoped(scope, id)
+	if err != nil {
+		return models.EmploymentType{}, err
+	}
+
+	employmentType.Name = trimmed
+	employmentType.Description = strings.TrimSpace(description)
+	if err := s.repo.Save(&employmentType); err != nil {
+		return models.EmploymentType{}, err
+	}
+	return employmentType, nil
+}
+
+// Delete removes an employment type the caller is scoped to see; reference checks run in middleware before this.
+func (s *EmploymentTypeService) Delete(scope repository.AccessScope, id uint) error {
+	employmentType, err := s.repo.FindScoped(scope, id)
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&employmentType)
+}

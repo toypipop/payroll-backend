@@ -33,11 +33,21 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
+	if err := migrations.RunOnce(config.DB, "20260811_remove_dashboard_module", migrations.RemoveDashboardModule); err != nil {
+		log.Fatalf("Dashboard module removal failed: %v", err)
+	}
 	fmt.Println("Database Repair Migrations Successful!")
 
-	// 3. Initialize Router (Gin)
-	// SetupRouter contains all your API endpoints
-	r := routes.SetupRouter()
+	// Not RunOnce: the capability columns are a projection of the registry, re-synced on every boot.
+	if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
+		log.Fatalf("Module capability sync failed (run `go run ./migrate` if the capability columns are missing): %v", err)
+	}
+	if err := migrations.PruneStaleRoleScopes(config.DB); err != nil {
+		log.Fatalf("Permission scope normalisation failed: %v", err)
+	}
+
+	// 3. Compose every repository, service and handler once. This is the only place that knows config.DB.
+	r := routes.SetupRouter(buildHandlers(config.DB), buildGuard(config.DB))
 
 	// 4. Start Web Server
 	port := os.Getenv("PORT")
@@ -50,46 +60,4 @@ func main() {
 	}
 }
 
-// All Modules seeded by seed/main.go:
-// - Dashboard
-// - Employees
-//   - Employee List
-//   - Salaries
-//   - Employee Earnings
-//   - Employee Deductions
-// - Attendance
-//   - Timelogs
-//   - Leave Requests
-//   - Leave Approved
-//   - Earning Summary
-//   - Deduction Summary
-// - Payroll Processing
-//   - Payroll Cycles
-//   - Run Payroll
-//   - Cycle Earnings
-//   - Cycle Deductions
-//   - Transaction
-// - Payroll Config
-//   - Global Settings
-//   - Earning Types
-//   - Deduction Types
-// - Settings
-//   - Companies
-//   - Department
-//   - Position
-//   - Employment Types
-//   - Roles
-//   - Permission
-//   - Employee Company Access
-//   - Attendance Settings
-//   - Bank Master
-//   - Holiday Calendar
-//   - Day Off
-//   - Work Locations
-//   - Leave Types
-// - Reports
-//   - Payslips
-//   - Bank Transfer
-//   - Tax Forms
-//   - Social Security (SSO)
-//   - Payroll Analysis
+// All Modules seeded by seed/main.go.

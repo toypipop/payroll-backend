@@ -2,34 +2,38 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// GET: Fetch all roles within data scope (English Comment)
-func GetRoles(c *gin.Context) {
-	var roles []models.Roles
-	if err := config.DB.Preload("Companies").Find(&roles).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
+// GetRoles returns the roles of the caller's authorized companies.
+func (h *Handler) GetRoles(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
+	roles, err := h.Role.List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, roles)
 }
 
-// GetRoleOptions returns a minimal id/name list for dropdowns, scoped to the
-// caller's accessible companies. Ungated by page permission (mirrors
-// GetCompanies) so any role filling out an employee-linked form or granting
-// company access can see whether roles exist for a company.
-func GetRoleOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+// GetRoleOptions returns a minimal id/name list for dropdowns, scoped to the caller's accessible companies.
+func (h *Handler) GetRoleOptions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	roles, err := h.Role.Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -38,15 +42,6 @@ func GetRoleOptions(c *gin.Context) {
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var roles []models.Roles
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "unused"),
-	).Find(&roles).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
-		return
-	}
-
 	options := make([]option, 0, len(roles))
 	for _, r := range roles {
 		options = append(options, option{ID: r.ID, Name: r.RolesName, CompaniesID: r.CompaniesID})
@@ -54,90 +49,64 @@ func GetRoleOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-// POST: Create a new role (English Comment)
-func CreateRole(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
+func (h *Handler) CreateRole(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
 	var input models.Roles
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	// Validate if the user has permission to create role for this company (English Comment)
-	var targetCompany models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
-	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+	role, err := h.Role.Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
-	// Force safety constraints (English Comment)
-	input.ID = 0
-
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create role"})
-		return
-	}
-	c.JSON(http.StatusCreated, input)
+	c.JSON(http.StatusCreated, role)
 }
 
-// PUT: Update an existing role (English Comment)
-func UpdateRole(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var role models.Roles
-	// Ensure the role belongs to an authorized company.
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
-	).First(&role, id).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
+func (h *Handler) UpdateRole(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "role")
+	if !ok {
 		return
 	}
 
-	var input models.Roles
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// companies_id is accepted and ignored: the company is immutable after creation.
+	var input struct {
+		RolesName string `json:"roles_name"`
+	}
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	// Company is immutable after creation — ignore companies_id from the request.
-	updateData := map[string]interface{}{
-		"roles_name": input.RolesName,
-	}
-
-	if err := config.DB.Model(&role).Updates(updateData).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+	role, err := h.Role.Update(scope, id, input.RolesName)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, role)
 }
 
-// DELETE: Delete a role with scope protection (English Comment)
-func DeleteRole(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	// Protect against deleting roles outside scope.
-	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id"),
-	).Where("id = ?", id).Delete(&models.Roles{})
-
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+func (h *Handler) DeleteRole(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "role")
+	if !ok {
 		return
 	}
 
+	if err := h.Role.Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }

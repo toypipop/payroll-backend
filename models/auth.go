@@ -68,6 +68,12 @@ type AppModule struct {
 	ParentID   *uint                 `json:"parent_id"`
 	IsCategory bool                  `gorm:"default:false" json:"is_category"`
 	IsActive   bool                  `gorm:"default:true" json:"is_active"`
+
+	// Capability columns.
+	ScopeLevel     ModuleScopeLevel `gorm:"size:20;not null;default:'company'" json:"scope_level"`
+	AllowedActions []string         `gorm:"serializer:json" json:"allowed_actions"`
+	AllowedScopes  []string         `gorm:"serializer:json" json:"allowed_scopes"`
+	ActionsAtomic  bool             `gorm:"default:false" json:"actions_atomic"`
 }
 
 // RolesModuleAccess with composite index

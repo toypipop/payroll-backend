@@ -4,16 +4,15 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"payroll-backend/config"
-	"payroll-backend/models"
-	"payroll-backend/repository"
 	"strings"
 	"time"
 
+	"payroll-backend/handlers/httpx"
+	"payroll-backend/models"
+	"payroll-backend/service"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm/clause"
 )
 
 const (
@@ -111,119 +110,90 @@ func GetAuthCookieName() string {
 	return authCookieName
 }
 
-func buildLoginResponse(employee models.Employees) models.LoginResponse {
-	companyID := repository.DefaultCompanyID(employee)
-	companyIDs := repository.AccessibleCompanyIDs(employee.ID)
-	if len(companyIDs) == 0 && companyID != 0 {
-		companyIDs = []uint{companyID}
-	}
-
-	return models.LoginResponse{
-		ID:                   employee.ID,
-		FullName:             employee.FirstName + " " + employee.LastName,
-		Roles:                repository.RoleNames(employee.ID),
-		CompaniesID:          companyID,
-		AccessibleCompanyIDs: companyIDs,
-	}
-}
-
-func Login(c *gin.Context) {
-	var input models.LoginRequest
-	var Employees models.Employees
-
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
-		return
-	}
-
-	if err := config.DB.Where("email = ?", input.Email).First(&Employees).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email"})
-		return
-	}
-
-	// Verify password
-	err := bcrypt.CompareHashAndPassword([]byte(Employees.Password), []byte(input.Password))
+// issueToken signs a token for an authenticated employee.
+func issueToken(subject service.TokenSubject) (string, error) {
+	secret, err := GetJWTSecret()
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
-		return
+		return "", err
 	}
 
-	jwtSecret, err := GetJWTSecret()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication service is not configured"})
-		return
-	}
-
-	// Create JWT token with claims
-	defaultCompanyID, defaultRoleID := repository.DefaultCompanyAccess(Employees)
 	claims := TokenClaims{
-		UserID:      Employees.ID,
-		CompaniesID: defaultCompanyID,
-		RolesID:     defaultRoleID,
+		UserID:      subject.UserID,
+		CompaniesID: subject.CompaniesID,
+		RolesID:     subject.RolesID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(authTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
+}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtSecret)
+func (h *Handler) Login(c *gin.Context) {
+	var input models.LoginRequest
+	if !httpx.BindJSON(c, &input) {
+		return
+	}
 
+	employee, err := h.Auth.Authenticate(input.Email, input.Password)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+
+	secret, err := GetJWTSecret()
+	if err != nil || len(secret) == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication service is not configured"})
+		return
+	}
+
+	tokenString, err := issueToken(h.Auth.Subject(employee))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
 		return
 	}
 
 	SetAuthCookie(c, tokenString)
-	c.JSON(http.StatusOK, buildLoginResponse(Employees))
+	c.JSON(http.StatusOK, h.Auth.Identity(employee))
 }
 
-func Me(c *gin.Context) {
+func (h *Handler) Me(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
-
-	var employee models.Employees
-	if err := config.DB.First(&employee, userID).Error; err != nil {
+	id, ok := userID.(uint)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
-	c.JSON(http.StatusOK, buildLoginResponse(employee))
+	identity, err := h.Auth.IdentityByID(id)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, identity)
 }
 
-func Logout(c *gin.Context) {
+func (h *Handler) Logout(c *gin.Context) {
 	ClearAuthCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }
 
-func GetAppModules(c *gin.Context) {
-	// AppModule is global master data
-	var modules []models.AppModule
-
-	// Fetch active modules sorted
-	if err := config.DB.
-		Where("is_active = ?", true).
-		// Let GORM quote the reserved column name for PostgreSQL instead of hand-writing SQL.
-		Order(clause.OrderByColumn{Column: clause.Column{Name: "order"}}).
-		Find(&modules).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch app modules"})
+// GetAppModules returns every active module, unfiltered.
+func (h *Handler) GetAppModules(c *gin.Context) {
+	modules, err := h.Auth.AllModules()
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, modules)
 }
 
-// GetMyAppModules returns the same active module list as GetAppModules, but
-// filtered to what the requesting user can actually VIEW: a leaf module is
-// kept only if one of the user's roles (across every company they can
-// reach) grants CanView on it, and a category is kept only if at least one
-// of its children survived that filter. Unlike GetAppModules (which stays
-// unfiltered for the Permission Settings admin UI, which must list every
-// module regardless of the admin's own access), this is what the Sidebar,
-// route table, and "Set it up" links should use.
-func GetMyAppModules(c *gin.Context) {
+// GetMyAppModules returns the active modules the caller can view, for the sidebar and route table.
+func (h *Handler) GetMyAppModules(c *gin.Context) {
 	userIDVal, ok := c.Get("user_id")
 	if !ok {
 		c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
@@ -235,55 +205,10 @@ func GetMyAppModules(c *gin.Context) {
 		return
 	}
 
-	var modules []models.AppModule
-	if err := config.DB.
-		Where("is_active = ?", true).
-		Order(clause.OrderByColumn{Column: clause.Column{Name: "order"}}).
-		Find(&modules).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch app modules"})
+	modules, err := h.Auth.MyModules(userID)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
-	companyRoles := repository.AccessibleCompanyRoles(userID)
-	roleIDs := make([]uint, 0, len(companyRoles))
-	for _, cr := range companyRoles {
-		roleIDs = append(roleIDs, cr.RoleID)
-	}
-
-	viewableModuleIDs := map[uint]bool{}
-	if len(roleIDs) > 0 {
-		var accesses []models.RolesModuleAccess
-		if err := config.DB.
-			Where("roles_id IN ?", roleIDs).
-			Where("can_view = ?", true).
-			Find(&accesses).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch module access"})
-			return
-		}
-		for _, access := range accesses {
-			viewableModuleIDs[access.ModuleID] = true
-		}
-	}
-
-	viewableParents := map[uint]bool{}
-	for _, m := range modules {
-		if !m.IsCategory && viewableModuleIDs[m.ID] && m.ParentID != nil {
-			viewableParents[*m.ParentID] = true
-		}
-	}
-
-	filtered := make([]models.AppModule, 0, len(modules))
-	for _, m := range modules {
-		if m.IsCategory {
-			if viewableParents[m.ID] {
-				filtered = append(filtered, m)
-			}
-			continue
-		}
-		if viewableModuleIDs[m.ID] {
-			filtered = append(filtered, m)
-		}
-	}
-
-	c.JSON(http.StatusOK, filtered)
+	c.JSON(http.StatusOK, modules)
 }

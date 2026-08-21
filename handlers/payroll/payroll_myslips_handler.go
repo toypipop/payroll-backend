@@ -2,24 +2,20 @@ package payroll
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-func GetMySlips(c *gin.Context) {
-	userID, _ := repository.GetContextAuth(c)
+// GetMySlips returns the caller's own payslips.
+func (h *Handler) GetMySlips(c *gin.Context) {
+	userID, _ := httpx.ContextAuth(c)
 
-	var transactions []models.PayrollTransaction
-	if err := config.DB.
-		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id AND payroll_cycle.is_closed = true AND payroll_cycle.deleted_at = 0").
-		Where("payroll_transaction.employees_id = ? AND payroll_transaction.deleted_at = 0", userID).
-		Preload("Details").
-		Order("payroll_transaction.id DESC").
-		Find(&transactions).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	slips, err := h.PayrollRun.MySlips(userID)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -29,33 +25,14 @@ func GetMySlips(c *gin.Context) {
 		StartDate string `json:"start_date"`
 		EndDate   string `json:"end_date"`
 	}
-
-	cycleIDs := make([]uint, 0, len(transactions))
-	for _, t := range transactions {
-		cycleIDs = append(cycleIDs, t.CycleID)
+	result := make([]slipRow, 0, len(slips))
+	for _, slip := range slips {
+		result = append(result, slipRow{
+			PayrollTransaction: slip.Transaction,
+			CycleName:          slip.CycleName,
+			StartDate:          slip.StartDate,
+			EndDate:            slip.EndDate,
+		})
 	}
-
-	var cycles []models.PayrollCycle
-	if len(cycleIDs) > 0 {
-		config.DB.Where("id IN ?", cycleIDs).Find(&cycles)
-	}
-	cycleMap := make(map[uint]models.PayrollCycle, len(cycles))
-	for _, cy := range cycles {
-		cycleMap[cy.ID] = cy
-	}
-
-	result := make([]slipRow, 0, len(transactions))
-	for _, t := range transactions {
-		cy := cycleMap[t.CycleID]
-		row := slipRow{PayrollTransaction: t, CycleName: cy.CycleName}
-		if !cy.StartDate.IsZero() {
-			row.StartDate = cy.StartDate.Format("2006-01-02")
-		}
-		if !cy.EndDate.IsZero() {
-			row.EndDate = cy.EndDate.Format("2006-01-02")
-		}
-		result = append(result, row)
-	}
-
 	c.JSON(http.StatusOK, result)
 }

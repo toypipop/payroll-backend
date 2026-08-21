@@ -58,9 +58,7 @@ func DropLegacyIndexes(db *gorm.DB) error {
 	return nil
 }
 
-// RecreateTaxIDPartialIndex drops the old unconditional unique index on
-// (tax_id, deleted_at) so AutoMigrate can recreate it as a partial index that
-// skips empty tax_id — multiple companies without a tax id must not collide.
+// RecreateTaxIDPartialIndex replaces the unconditional unique index on tax_id with a partial one.
 func RecreateTaxIDPartialIndex(db *gorm.DB) error {
 	if db.Migrator().HasIndex(&models.Companies{}, "idx_taxid_deleted") {
 		return db.Migrator().DropIndex(&models.Companies{}, "idx_taxid_deleted")

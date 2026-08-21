@@ -2,44 +2,37 @@ package payrollconfig
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// GET: Fetch all deduction types based on data scope (English Comment)
-func GetDeductionTypes(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+func (h *Handler) GetDeductionTypes(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var deductions []models.DeductionType
-	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
-	).Preload("Companies").Find(&deductions).Error
-
+	deductions, err := h.DeductionType.List(scope)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, deductions)
 }
 
 // GetDeductionTypeOptions returns a minimal id/name list for dropdowns.
-// Ungated by page permission (mirrors GetCompanies) so any role assigning
-// employee/cycle deductions can see whether deduction types exist for a company.
-func GetDeductionTypeOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
+func (h *Handler) GetDeductionTypeOptions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	deductions, err := h.DeductionType.Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -48,17 +41,6 @@ func GetDeductionTypeOptions(c *gin.Context) {
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var deductions []models.DeductionType
-	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
-	).Find(&deductions).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	options := make([]option, 0, len(deductions))
 	for _, d := range deductions {
 		options = append(options, option{ID: d.ID, Name: d.Name, CompaniesID: d.CompaniesID})
@@ -66,97 +48,62 @@ func GetDeductionTypeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-// POST: Create a new deduction type (English Comment)
-func CreateDeductionType(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var input models.DeductionType
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Validate if the user has permission to create for the target company (English Comment)
-	var targetCompany models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
-	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-
-	input.ID = 0
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create record"})
-		return
-	}
-	c.JSON(http.StatusCreated, input)
-}
-
-// PUT: Update deduction type using map to handle boolean false (English Comment)
-func UpdateDeductionType(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var deduction models.DeductionType
-	// Apply scope to verify record ownership before update (English Comment)
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
-	).First(&deduction, id).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
+func (h *Handler) CreateDeductionType(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
 	var input models.DeductionType
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	// Company is immutable after creation — ignore companies_id from the request
-	updateData := map[string]interface{}{
-		"name":              input.Name,
-		"is_tax_deductible": input.IsTaxDeductible,
-		"is_sso_deductible": input.IsSsoDeductible,
-	}
-
-	if err := config.DB.Model(&deduction).Updates(updateData).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+	deductionType, err := h.DeductionType.Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, deduction)
+	c.JSON(http.StatusCreated, deductionType)
 }
 
-// DELETE: Soft delete with Scope protection (English Comment)
-func DeleteDeductionType(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	// Use Scopes and Where to ensure only authorized records are deleted (English Comment)
-	var deduction models.DeductionType
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
-	).Where("id = ?", id).First(&deduction).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+func (h *Handler) UpdateDeductionType(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "deduction type")
+	if !ok {
 		return
 	}
 
-	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "deduction_type.companies_id", "unused"),
-	).Where("id = ?", id).Delete(&models.DeductionType{})
-
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+	// companies_id is accepted and ignored: the company is immutable after creation.
+	var input models.DeductionType
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
+	deductionType, err := h.DeductionType.Update(scope, id, input)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, deductionType)
+}
+
+func (h *Handler) DeleteDeductionType(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "deduction type")
+	if !ok {
+		return
+	}
+
+	if err := h.DeductionType.Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }

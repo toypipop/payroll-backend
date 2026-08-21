@@ -2,44 +2,37 @@ package payrollconfig
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
-// GET: Fetch all earning types with data scope (English Comment)
-func GetEarningTypes(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+func (h *Handler) GetEarningTypes(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var earnings []models.EarningType
-	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
-	).Preload("Companies").Find(&earnings).Error
-
+	earnings, err := h.EarningType.List(scope)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, earnings)
 }
 
 // GetEarningTypeOptions returns a minimal id/name list for dropdowns.
-// Ungated by page permission (mirrors GetCompanies) so any role assigning
-// employee/cycle earnings can see whether earning types exist for a company.
-func GetEarningTypeOptions(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
+func (h *Handler) GetEarningTypeOptions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
-	if err := config.DB.Select("id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	earnings, err := h.EarningType.Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
@@ -48,17 +41,6 @@ func GetEarningTypeOptions(c *gin.Context) {
 		Name        string `json:"name"`
 		CompaniesID uint   `json:"companies_id"`
 	}
-
-	var earnings []models.EarningType
-	err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
-	).Find(&earnings).Error
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	options := make([]option, 0, len(earnings))
 	for _, e := range earnings {
 		options = append(options, option{ID: e.ID, Name: e.Name, CompaniesID: e.CompaniesID})
@@ -66,99 +48,62 @@ func GetEarningTypeOptions(c *gin.Context) {
 	c.JSON(http.StatusOK, options)
 }
 
-// POST: Create a new earning type (English Comment)
-func CreateEarningType(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var input models.EarningType
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Validate if the user has permission to create for the target company (English Comment)
-	var targetCompany models.Companies
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "id", "unused"),
-	).Where("id = ?", input.CompaniesID).First(&targetCompany).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-
-	input.ID = 0
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create earning type"})
-		return
-	}
-	c.JSON(http.StatusCreated, input)
-}
-
-// PUT: Update an existing earning type by ID with Scope (English Comment)
-func UpdateEarningType(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	var earning models.EarningType
-	// Apply scope to ensure user can only find records they are authorized to edit (English Comment)
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
-	).First(&earning, id).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied or record not found"})
+func (h *Handler) CreateEarningType(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
 	var input models.EarningType
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	// Company is immutable after creation — ignore companies_id from the request
-	updateData := map[string]interface{}{
-		"name":         input.Name,
-		"is_taxable":   input.IsTaxable,
-		"is_sso":       input.IsSso,
-		"is_permanent": input.IsPermanent,
-	}
-
-	if err := config.DB.Model(&earning).Updates(updateData).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+	earningType, err := h.EarningType.Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
-
-	c.JSON(http.StatusOK, earning)
+	c.JSON(http.StatusCreated, earningType)
 }
 
-// DELETE: Soft delete an earning type with Scope (English Comment)
-func DeleteEarningType(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	config.DB.Select("id, companies_id").First(&currentUser, userID)
-
-	// Ensure the delete operation only affects authorized records (English Comment)
-	var earning models.EarningType
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
-	).Where("id = ?", id).First(&earning).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+func (h *Handler) UpdateEarningType(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "earning type")
+	if !ok {
 		return
 	}
 
-	result := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "earning_type.companies_id", "unused"),
-	).Where("id = ?", id).Delete(&models.EarningType{})
-
-	if result.RowsAffected == 0 {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Delete failed or unauthorized"})
+	// companies_id is accepted and ignored: the company is immutable after creation.
+	var input models.EarningType
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
+	earningType, err := h.EarningType.Update(scope, id, input)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, earningType)
+}
+
+func (h *Handler) DeleteEarningType(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "earning type")
+	if !ok {
+		return
+	}
+
+	if err := h.EarningType.Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
 }

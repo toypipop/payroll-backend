@@ -6,6 +6,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/models"
+	"payroll-backend/timeutil"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -15,9 +16,31 @@ func ptr(u uint) *uint {
 	return &u
 }
 
-// payrollSnapshotFields mirrors what runPayrollSnapshot captures on a real
-// calculation, so mock transactions look the same as real ones instead of
-// showing blank position/department/bank on historical payslip views.
+// Attendance rates every seeded company shares. The seeded payroll figures are priced from these same constants rather than from literals, so demo transactions agree with the AttendanceConfig rows the seed writes.
+const (
+	seedLateRatePerMinute     = 5.0
+	seedAbsentRatePerDay      = 300.0
+	seedOvertimeRatePerMinute = 5.0
+	seedExtraRatePerDay       = 300.0
+)
+
+// roundMoney rounds to the two decimal places a money column stores.
+func roundMoney(v float64) float64 { return math.Round(v*100) / 100 }
+
+// seedLateDeduction prices lateness the way service.lateDeduction does: each day is capped at the absence rate on its own, never the month's total against a single day's cap.
+func seedLateDeduction(lateMinutesPerDay []int) float64 {
+	total := 0.0
+	for _, minutes := range lateMinutesPerDay {
+		amount := roundMoney(float64(minutes) * seedLateRatePerMinute)
+		if amount > seedAbsentRatePerDay {
+			amount = seedAbsentRatePerDay
+		}
+		total += amount
+	}
+	return roundMoney(total)
+}
+
+// payrollSnapshotFields mirrors what service.snapshotFor captures on a real
 func payrollSnapshotFields(employeeID uint) (posName, deptName, empTypeName, bankName, accName, accNo string) {
 	var emp models.Employees
 	config.DB.
@@ -38,11 +61,7 @@ func payrollSnapshotFields(employeeID uint) (posName, deptName, empTypeName, ban
 	return posName, deptName, empTypeName, bankName, emp.AccountName, emp.AccountNo
 }
 
-// pickSalaryRecordForCycle mirrors runPayrollSnapshot's selection: the most
-// recent non-deleted salary record whose effective_date is on or before the
-// cycle's start date. Mock transactions must reference the same record real
-// payroll would have used for that cycle, not just whichever record happens
-// to have the lowest ID.
+// pickSalaryRecordForCycle mirrors service.salaryForCycle's selection: the most
 func pickSalaryRecordForCycle(employeeID uint, cycleStart time.Time) models.SalariesStructure {
 	var rec models.SalariesStructure
 	config.DB.Where("employees_id = ? AND deleted_at = 0 AND effective_date <= ?", employeeID, cycleStart).
@@ -135,19 +154,21 @@ func main() {
 	config.DB.Where(models.PayrollConfig{CompaniesID: compB.ID}).Assign(configB).FirstOrCreate(&configB)
 
 	// Initialize attendance configs
+	// A wall-clock time is only meaningful in the business timezone: writing 09:00 as UTC stores 16:00 Bangkok,
+	// which is how the seeded shift used to read as 4:00 PM on a screen that converts correctly.
 	parseTime := func(h, m int) *time.Time {
-		t := time.Date(2026, 1, 1, h, m, 0, 0, time.UTC)
+		t := time.Date(2026, 1, 1, h, m, 0, 0, timeutil.BangkokLocation)
 		return &t
 	}
 
 	attConfigSys := models.AttendanceConfig{
 		CompaniesID:               sysComp.ID,
-		LateRatePerMinute:         5.0,
-		AbsentRatePerDay:          300.0,
+		LateRatePerMinute:         seedLateRatePerMinute,
+		AbsentRatePerDay:          seedAbsentRatePerDay,
 		WorkStartTime:             parseTime(9, 0),
 		WorkEndTime:               parseTime(17, 0),
-		OvertimeRatePerMinute:     5.0,
-		ExtraRatePerDay:           300.0,
+		OvertimeRatePerMinute:     seedOvertimeRatePerMinute,
+		ExtraRatePerDay:           seedExtraRatePerDay,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
@@ -156,12 +177,12 @@ func main() {
 
 	attConfigA := models.AttendanceConfig{
 		CompaniesID:               compA.ID,
-		LateRatePerMinute:         5.0,
-		AbsentRatePerDay:          300.0,
+		LateRatePerMinute:         seedLateRatePerMinute,
+		AbsentRatePerDay:          seedAbsentRatePerDay,
 		WorkStartTime:             parseTime(9, 0),
 		WorkEndTime:               parseTime(17, 0),
-		OvertimeRatePerMinute:     5.0,
-		ExtraRatePerDay:           300.0,
+		OvertimeRatePerMinute:     seedOvertimeRatePerMinute,
+		ExtraRatePerDay:           seedExtraRatePerDay,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
@@ -170,12 +191,12 @@ func main() {
 
 	attConfigB := models.AttendanceConfig{
 		CompaniesID:               compB.ID,
-		LateRatePerMinute:         5.0,
-		AbsentRatePerDay:          300.0,
+		LateRatePerMinute:         seedLateRatePerMinute,
+		AbsentRatePerDay:          seedAbsentRatePerDay,
 		WorkStartTime:             parseTime(9, 0),
 		WorkEndTime:               parseTime(17, 0),
-		OvertimeRatePerMinute:     5.0,
-		ExtraRatePerDay:           300.0,
+		OvertimeRatePerMinute:     seedOvertimeRatePerMinute,
+		ExtraRatePerDay:           seedExtraRatePerDay,
 		IsOvertimeEarningsEnabled: true,
 		IsExtraEarningsEnabled:    true,
 	}
@@ -292,8 +313,7 @@ func main() {
 		}
 	}
 
-	// --- Earning Types ---
-	// Base Salary is NOT listed here — it is managed via the Salaries module (SalariesStructure)
+	// --- Earning Types --- Base Salary is NOT listed here — it is managed via the Salaries module (SalariesStructure)
 	earnings := []models.EarningType{
 		{CompaniesID: sysComp.ID, Name: "Overtime (OT)", IsTaxable: true, IsSso: false, IsPermanent: false},
 		{CompaniesID: compA.ID, Name: "Position Allowance", IsTaxable: true, IsSso: true, IsPermanent: true},
@@ -327,8 +347,7 @@ func main() {
 	sysStaffRole := models.Roles{RolesName: "STAFF", Description: "System Staff", CompaniesID: sysComp.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: sysComp.ID}).Assign(sysStaffRole).FirstOrCreate(&sysStaffRole)
 
-	// Five business roles per operating company, least-privilege. Exact
-	// module/action grants are defined by the permission matrix further down.
+	// Five business roles per operating company, least-privilege.
 	adminRoleA := models.Roles{RolesName: "ADMIN", Description: "Company admin - full access to every module in the company (except cross-company Companies management)", CompaniesID: compA.ID}
 	config.DB.Where(models.Roles{RolesName: "ADMIN", CompaniesID: compA.ID}).Assign(adminRoleA).FirstOrCreate(&adminRoleA)
 	hrRoleA := models.Roles{RolesName: "HR", Description: "Employees, attendance, leave and HR master-data; payroll view-only, no pay approval", CompaniesID: compA.ID}
@@ -351,10 +370,7 @@ func main() {
 	staffRoleB := models.Roles{RolesName: "STAFF", Description: "Self-service only - own profile, payslip data, time logs and leave requests", CompaniesID: compB.ID}
 	config.DB.Where(models.Roles{RolesName: "STAFF", CompaniesID: compB.ID}).Assign(staffRoleB).FirstOrCreate(&staffRoleB)
 
-	// --- Department Categories, Departments & Positions ---
-	// One category per distinct historical dept name — departments sharing a
-	// name across companies (e.g. "Engineering") share one category so a
-	// Department-scoped role can match employees in both.
+	// --- Department Categories, Departments & Positions --- One category per distinct historical dept name — departments sharing a name across companies (e.g.
 	categoryByName := func(name string) models.DepartmentCategory {
 		cat := models.DepartmentCategory{Name: name}
 		config.DB.Where(models.DepartmentCategory{Name: name}).Assign(cat).FirstOrCreate(&cat)
@@ -386,7 +402,6 @@ func main() {
 	// --- Modules ---
 	modules := []models.AppModule{
 		// --- Level 1: Main Categories ---
-		{ID: 1, ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, IsCategory: false},
 		{ID: 8, ModuleName: "Help Center", ModuleKey: "HelpPage", RoutePath: "/help", Icon: "HelpOutline", Order: 2, IsCategory: false},
 		{ID: 2, ModuleName: "Employees", ModuleKey: "ModuleEmployees", RoutePath: "", Icon: "People", Order: 3, IsCategory: true},
 		{ID: 3, ModuleName: "Attendance", ModuleKey: "ModuleAttendance", RoutePath: "", Icon: "Event", Order: 4, IsCategory: true},
@@ -395,8 +410,7 @@ func main() {
 		{ID: 6, ModuleName: "Settings", ModuleKey: "ModuleSettings", RoutePath: "", Icon: "Settings", Order: 7, IsCategory: true},
 		{ID: 5, ModuleName: "Payroll Config", ModuleKey: "ModulePayrollConfig", RoutePath: "", Icon: "SettingsSuggest", Order: 8, IsCategory: true},
 
-		// Sub-Menus
-		// Level 2: Sub-Menus under Employees
+		// Sub-Menus Level 2: Sub-Menus under Employees
 		{ModuleName: "Employee List", ModuleKey: "EmployeesListPage", RoutePath: "/employees", Icon: "Badge", Order: 1, ParentID: ptr(2)},
 		{ModuleName: "Salaries", ModuleKey: "SalariesStructurePage", RoutePath: "/salaries", Icon: "Payments", Order: 2, ParentID: ptr(2)},
 		{ModuleName: "Employee Earnings", ModuleKey: "EmployeeEarningsPage", RoutePath: "/employee-earnings", Icon: "AddCard", Order: 3, ParentID: ptr(2)},
@@ -444,8 +458,7 @@ func main() {
 		{ModuleName: "Payroll Analysis", ModuleKey: "PayrollAnalysisPage", RoutePath: "/reports/payroll-analysis", Icon: "Analytics", Order: 5, ParentID: ptr(7)},
 	}
 
-	// Upsert every module and record its ID by key so the permission matrix
-	// below can fail loudly if it ever references a module that no longer exists.
+	// Upsert every module and record its ID by key so the permission matrix below can fail loudly if it ever references a module that no longer exists.
 	moduleIDByKey := map[models.ModuleKey]uint{}
 	for _, m := range modules {
 		m.IsActive = true
@@ -461,33 +474,19 @@ func main() {
 		moduleIDByKey[existingModule.ModuleKey] = existingModule.ID
 	}
 
-	// ─── Permission Matrix (least-privilege) ──────────────────────────────────
-	// One row per (role, module) the role may VIEW. A module NOT listed for a
-	// role is invisible to it — /modules/mine hides it from the sidebar and
-	// routes entirely, not just 403 on click. "Approve" actions (leave, time
-	// logs) map to CanEdit; there is no separate approve flag.
-	//
-	// Report modules (Payslips/BankTransfer/Tax/SSO/Analysis) are view-only in
-	// the API (GET-only routes), company-scoped, and rendered as a single
-	// on/off toggle in Permission Settings (ALL_OR_NOTHING_MODULES) — grant
-	// them full CRUD=true so that toggle reads as "on". They cannot be Own-
-	// scoped, so STAFF gets no reports; staff see their own pay via the
-	// Own-scoped Salaries / Employee Earnings / Employee Deductions pages.
+	// ─── Permission Matrix (least-privilege) ────────────────────────────────── One row per (role, module) the role may VIEW.
 	type modAcc struct {
 		view, create, edit, del bool
 		scope                   models.DataScope
 	}
 	coScope := models.ScopeCompanies
-	// V = view-only, VE = view+approve/edit, VCE = view+create+edit (no delete),
-	// F = full CRUD. Scope is baked in per builder call.
+	// V = view-only, VE = view+approve/edit, VCE = view+create+edit (no delete), F = full CRUD.
 	V := func(s models.DataScope) modAcc { return modAcc{true, false, false, false, s} }
 	VE := func(s models.DataScope) modAcc { return modAcc{true, false, true, false, s} }
 	VCE := func(s models.DataScope) modAcc { return modAcc{true, true, true, false, s} }
 	F := func(s models.DataScope) modAcc { return modAcc{true, true, true, true, s} }
 
-	// Report pages have GET-only APIs (no create/edit/delete), so they are
-	// granted view-only everywhere — their scope stays adjustable in Permission
-	// Settings, unlike the all-or-nothing Companies/Bank pages.
+	// Report pages have GET-only APIs, so they are granted View alone.
 	reportKeys := map[models.ModuleKey]bool{
 		"PayslipsReportPage":     true,
 		"BankTransferReportPage": true,
@@ -509,8 +508,7 @@ func main() {
 		sysAdminGrants[m.ModuleKey] = F(coScope)
 	}
 
-	// ADMIN: full access to every module in its own company EXCEPT the
-	// cross-company Companies page (SYSTEM_ADMIN only).
+	// ADMIN: full access to every module in its own company EXCEPT the cross-company Companies page (SYSTEM_ADMIN only).
 	adminGrants := map[models.ModuleKey]modAcc{}
 	for _, m := range modules {
 		if m.IsCategory || m.ModuleKey == "CompaniesPage" {
@@ -524,10 +522,7 @@ func main() {
 	}
 
 	// HR: employees + attendance + leave + HR master-data (full); payroll
-	// processing view-only (no pay approval); no payroll config; HR-relevant
-	// reports view-only; no roles/permission/company-access/bank/finance reports.
 	hrGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":          V(coScope),
 		"EmployeesListPage":      F(coScope),
 		"SalariesStructurePage":  F(coScope),
 		"EmployeeEarningsPage":   F(coScope),
@@ -557,10 +552,7 @@ func main() {
 	}
 
 	// FINANCE: payroll processing + payroll config + all financial reports +
-	// bank master (full); employee/salary/summary read-only for payroll; no
-	// attendance/leave, no HR master-data, no roles/permission/company-access.
 	financeGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":             V(coScope),
 		"EmployeesListPage":         V(coScope),
 		"SalariesStructurePage":     V(coScope),
 		"EmployeeEarningsPage":      V(coScope),
@@ -584,11 +576,9 @@ func main() {
 		"HelpPage":                  F(coScope),
 	}
 
-	// MANAGER: own team only (Department scope). Approve team time logs and
-	// leave; employee list read-only. No payroll amounts, no settings.
+	// MANAGER: own team only (Department scope).
 	mgrScope := models.ScopeDepartment
 	managerGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":     V(mgrScope),
 		"EmployeesListPage": V(mgrScope),
 		"TimelogsListPage":  VE(mgrScope),
 		"LeaveRequestsPage": VE(mgrScope),
@@ -596,12 +586,9 @@ func main() {
 		"HelpPage":          F(coScope),
 	}
 
-	// STAFF: self only (Own scope). Own profile/pay data (read), own time logs
-	// (log/edit), own leave requests (full — only Pending is editable per
-	// business rules). No visibility of anyone else, payroll, or settings.
+	// STAFF: self only (Own scope).
 	ownScope := models.ScopeOwn
 	staffGrants := map[models.ModuleKey]modAcc{
-		"DashboardPage":          V(ownScope),
 		"EmployeesListPage":      V(ownScope),
 		"SalariesStructurePage":  V(ownScope),
 		"EmployeeEarningsPage":   V(ownScope),
@@ -712,8 +699,7 @@ func main() {
 	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL AND companies_id = ?", compA.ID).Update("employment_type_id", fullTimeEmpTypeA.ID)
 	config.DB.Model(&models.Employees{}).Where("employment_type_id IS NULL AND companies_id = ?", compB.ID).Update("employment_type_id", fullTimeEmpTypeB.ID)
 
-	// --- TimeLogs for March & April 2026 (payroll cycle test data with identical data) ---
-	// Fetch employees by email so we can reference their IDs
+	// --- TimeLogs for March & April 2026 (payroll cycle test data with identical data) --- Fetch employees by email so we can reference their IDs
 	var alice, bob, carol, david, eve, frank, staff models.Employees
 	config.DB.Unscoped().Where("email = ?", "alice@techa.com").First(&alice)
 	config.DB.Unscoped().Where("email = ?", "bob@techa.com").First(&bob)
@@ -725,8 +711,8 @@ func main() {
 
 	tp := func(t time.Time) *time.Time { return &t }
 	d := func(month time.Month, day, checkInHour, checkInMin, checkOutHour, checkOutMin int) (ci, co *time.Time) {
-		ci = tp(time.Date(2026, month, day, checkInHour, checkInMin, 0, 0, time.UTC))
-		co = tp(time.Date(2026, month, day, checkOutHour, checkOutMin, 0, 0, time.UTC))
+		ci = tp(time.Date(2026, month, day, checkInHour, checkInMin, 0, 0, timeutil.BangkokLocation))
+		co = tp(time.Date(2026, month, day, checkOutHour, checkOutMin, 0, 0, timeutil.BangkokLocation))
 		return
 	}
 
@@ -740,15 +726,6 @@ func main() {
 	}
 
 	// Alice (Tech Corp MANAGER): perfect attendance — on time every day, heavy OT
-	// Bob   (Tech Corp STAFF):  some OT, late every Thu
-	// Carol (Tech Corp STAFF):  mostly late check-ins, no OT
-	// David (Biz Group MANAGER): normal + OT on Tue/Thu/Sat
-	// Eve   (Biz Group STAFF):   mixed late + OT
-	// staff@admin.com:           clean, on time, no OT
-	//
-	// === FEBRUARY 2026 ===
-	// Day-offs: Sunday (0) + Monday (1)
-	// Working days (Tue–Sat): 3,4,5,6,7 / 10,11,12,13,14 / 17,18,19,20,21 / 24,25,26,27,28
 
 	// Alice — all 20 working days, perfect attendance (9-5, no OT, no late)
 	ciA4, coA4 := d(time.February, 4, 9, 0, 17, 0)    // Wed w1  normal
@@ -903,8 +880,7 @@ func main() {
 	ciFkFebExtra3, coFkFebExtra3 := d(time.February, 22, 9, 0, 17, 0) // Sun Feb 22 — Frank holiday work
 
 	timelogs := []tlSeed{
-		// === FEBRUARY 2026 ===
-		// Alice — perfect attendance, OT every working day (0 absent, 0 late)
+		// === FEBRUARY 2026 === Alice — perfect attendance, OT every working day (0 absent, 0 late)
 		{alice.ID, compA.ID, ciA4, coA4, models.StatusOnTime, "Sprint deadline"},
 		{alice.ID, compA.ID, ciA5, coA5, models.StatusOnTime, ""},
 		{alice.ID, compA.ID, ciA6, coA6, models.StatusOnTime, "Client meeting"},
@@ -1097,8 +1073,7 @@ func main() {
 			Assign(log).FirstOrCreate(&log)
 	}
 
-	// --- Employee Earning Assignments ---
-	// Fetch earning types by name + company
+	// --- Employee Earning Assignments --- Fetch earning types by name + company
 	var etPosA, etPosB models.EarningType
 	config.DB.Where("companies_id = ? AND name = ?", compA.ID, "Position Allowance").First(&etPosA)
 	config.DB.Where("companies_id = ? AND name = ?", compB.ID, "Position Allowance").First(&etPosB)
@@ -1110,8 +1085,8 @@ func main() {
 		companiesID   uint
 	}
 	eeSeeds := []eeSeed{
-		{alice, etPosA.ID, 5000, compA.ID}, // Alice: Position Allowance ฿5,000
-		{david, etPosB.ID, 6000, compB.ID}, // David: Position Allowance ฿6,000
+		{alice, etPosA.ID, 5000, compA.ID}, // Alice: Position Allowance THB 5,000
+		{david, etPosB.ID, 6000, compB.ID}, // David: Position Allowance THB 6,000
 	}
 	for _, s := range eeSeeds {
 		if s.emp.ID == 0 || s.earningTypeID == 0 {
@@ -1140,15 +1115,15 @@ func main() {
 		companiesID     uint
 	}
 	edSeeds := []edSeed{
-		{alice, dtPfA.ID, 1800, compA.ID},     // Alice: Provident Fund ฿1,800
-		{bob, dtPfA.ID, 1200, compA.ID},       // Bob: Provident Fund ฿1,200
-		{bob, dtLoanA.ID, 3000, compA.ID},     // Bob: Loan Repayment ฿3,000
-		{carol, dtPfA.ID, 1120, compA.ID},     // Carol: Provident Fund ฿1,120
-		{david, dtPfB.ID, 2000, compB.ID},     // David: Provident Fund ฿2,000
-		{eve, dtPfB.ID, 1280, compB.ID},       // Eve: Provident Fund ฿1,280
-		{eve, dtLoanB.ID, 2000, compB.ID},     // Eve: Loan Repayment ฿2,000
-		{frank, dtPfB.ID, 1400, compB.ID},     // Frank: Provident Fund ฿1,400
-		{staff, dtPfSys.ID, 1600, sysComp.ID}, // staff@admin.com: Provident Fund ฿1,600
+		{alice, dtPfA.ID, 1800, compA.ID},     // Alice: Provident Fund THB 1,800
+		{bob, dtPfA.ID, 1200, compA.ID},       // Bob: Provident Fund THB 1,200
+		{bob, dtLoanA.ID, 3000, compA.ID},     // Bob: Loan Repayment THB 3,000
+		{carol, dtPfA.ID, 1120, compA.ID},     // Carol: Provident Fund THB 1,120
+		{david, dtPfB.ID, 2000, compB.ID},     // David: Provident Fund THB 2,000
+		{eve, dtPfB.ID, 1280, compB.ID},       // Eve: Provident Fund THB 1,280
+		{eve, dtLoanB.ID, 2000, compB.ID},     // Eve: Loan Repayment THB 2,000
+		{frank, dtPfB.ID, 1400, compB.ID},     // Frank: Provident Fund THB 1,400
+		{staff, dtPfSys.ID, 1600, sysComp.ID}, // staff@admin.com: Provident Fund THB 1,600
 	}
 	for _, s := range edSeeds {
 		if s.emp.ID == 0 || s.deductionTypeID == 0 {
@@ -1169,20 +1144,20 @@ func main() {
 	}
 	cycleSeeds := []cycleSeed{
 		// System company
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, sysComp.ID},
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, sysComp.ID},
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, sysComp.ID},
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, sysComp.ID},
 		// Tech Corp (compA)
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, compA.ID},
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, compA.ID},
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, compA.ID},
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compA.ID},
 		// Biz Group (compB)
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, compB.ID},
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, compB.ID},
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, compB.ID},
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compB.ID},
 	}
 	for _, s := range cycleSeeds {
 		config.DB.Where(models.PayrollCycle{CompaniesID: s.companiesID, CycleName: s.cycle.CycleName}).
@@ -1211,14 +1186,14 @@ func main() {
 	}
 	ceSeeds := []ceSeed{
 		// Tech Corp — Jan 2026 bonuses
-		{cycleAJan.ID, compA.ID, alice, etBonusA.ID, 10000}, // Alice: ฿10,000 year-start bonus
-		{cycleAJan.ID, compA.ID, bob, etBonusA.ID, 5000},    // Bob: ฿5,000
-		{cycleAJan.ID, compA.ID, carol, etBonusA.ID, 5000},  // Carol: ฿5,000
+		{cycleAJan.ID, compA.ID, alice, etBonusA.ID, 10000}, // Alice: THB 10,000 year-start bonus
+		{cycleAJan.ID, compA.ID, bob, etBonusA.ID, 5000},    // Bob: THB 5,000
+		{cycleAJan.ID, compA.ID, carol, etBonusA.ID, 5000},  // Carol: THB 5,000
 		// Tech Corp — Feb 2026 bonuses
 		{cycleAFeb.ID, compA.ID, alice, etBonusA.ID, 8000}, // Alice: performance bonus
 		// Biz Group — Jan 2026 bonuses
-		{cycleBJan.ID, compB.ID, david, etBonusB.ID, 12000}, // David: ฿12,000 year-start bonus
-		{cycleBJan.ID, compB.ID, eve, etBonusB.ID, 6000},    // Eve: ฿6,000
+		{cycleBJan.ID, compB.ID, david, etBonusB.ID, 12000}, // David: THB 12,000 year-start bonus
+		{cycleBJan.ID, compB.ID, eve, etBonusB.ID, 6000},    // Eve: THB 6,000
 		// Biz Group — Feb 2026 bonuses
 		{cycleBFeb.ID, compB.ID, david, etBonusB.ID, 7000}, // David: performance bonus
 		{cycleBFeb.ID, compB.ID, eve, etBonusB.ID, 3500},   // Eve: performance bonus
@@ -1543,8 +1518,9 @@ func main() {
 		}
 	}
 
-	// --- Realistic 2027 Mock Baseline ---
-	// Passwords intentionally match emails for local demo/dev convenience only.
+	// --- Realistic 2027 Mock Baseline --- Passwords intentionally match emails for local demo/dev convenience only.
+	// The roles_id here overwrites the one the employee was created with above, so it has to agree with it:
+	// bob and eve are the MANAGER accounts, which is the only way ScopeDepartment gets exercised at all.
 	devUsers := []struct {
 		emp     *models.Employees
 		email   string
@@ -1557,10 +1533,10 @@ func main() {
 		{&admin, "admin@admin.com", sysComp.ID, sysRole.ID, 0, &bankTTB.ID, "Payroll Pro Admin"},
 		{&staff, "staff@admin.com", sysComp.ID, sysStaffRole.ID, 42000, &bankTTB.ID, "Test Staff"},
 		{&alice, "alice@techa.com", compA.ID, adminRoleA.ID, 78000, &bankKBANK.ID, "Alice Johnson"},
-		{&bob, "bob@techa.com", compA.ID, staffRoleA.ID, 52000, &bankSCB.ID, "Bob Smith"},
+		{&bob, "bob@techa.com", compA.ID, managerRoleA.ID, 52000, &bankSCB.ID, "Bob Smith"},
 		{&carol, "carol@techa.com", compA.ID, staffRoleA.ID, 32500, &bankBBL.ID, "Carol Davis"},
 		{&david, "david@bizgroup.com", compB.ID, adminRoleB.ID, 86000, &bankKTB.ID, "David Wilson"},
-		{&eve, "eve@bizgroup.com", compB.ID, staffRoleB.ID, 47000, &bankBAY.ID, "Eve Brown"},
+		{&eve, "eve@bizgroup.com", compB.ID, managerRoleB.ID, 47000, &bankBAY.ID, "Eve Brown"},
 		{&frank, "frank@bizgroup.com", compB.ID, staffRoleB.ID, 29500, &bankBBL.ID, "Frank Garcia"},
 	}
 
@@ -1586,18 +1562,32 @@ func main() {
 			}
 			config.DB.Where(models.SalariesStructure{EmployeesID: u.emp.ID, EffectiveDate: salary.EffectiveDate}).
 				Assign(salary).FirstOrCreate(&salary)
-			// Only one record can be "current" at a time — retire whatever was
-			// active before this one so history matches the real update flow.
+			// Only one record can be "current" at a time — retire whatever was active before this one so history matches the real update flow.
 			config.DB.Model(&models.SalariesStructure{}).
 				Where("employees_id = ? AND id <> ? AND is_active = ?", u.emp.ID, salary.ID, true).
 				Update("is_active", false)
 		}
 	}
 
+	// Every seeded account signs in with its own email as the password, including the ones outside devUsers
+	// (hr@techa.com, finance@techa.com), which were left on the shared hash and were effectively unusable.
+	var seededAccounts []models.Employees
+	config.DB.Unscoped().Select("id", "email").Find(&seededAccounts)
+	for _, acc := range seededAccounts {
+		if acc.Email == "" {
+			continue
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(acc.Email), 10)
+		if err != nil {
+			continue
+		}
+		config.DB.Model(&models.Employees{}).Where("id = ?", acc.ID).Update("password", string(hashed))
+	}
+
 	companies := []models.Companies{sysComp, compA, compB}
 	companyIDs := []uint{sysComp.ID, compA.ID, compB.ID}
-	start2027 := time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
-	end2027 := time.Date(2027, time.June, 30, 23, 59, 59, 0, time.UTC)
+	start2027 := time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)
+	end2027 := time.Date(2027, time.June, 30, 23, 59, 59, 0, timeutil.BangkokLocation)
 
 	// Remove the older 2026 demo payroll/time-log rows from this seed so local data focuses on Jan-Jun 2027.
 	config.DB.Exec(`DELETE FROM payroll_transaction_detail AS ptd
@@ -1617,7 +1607,7 @@ func main() {
 		USING payroll_cycle AS pc
 		WHERE pc.id = pcd.cycle_id
 			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
-	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027).Delete(&models.PayrollCycle{})
+	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027).Delete(&models.PayrollCycle{})
 	config.DB.Unscoped().Where("companies_id IN ? AND ((check_in >= ? AND check_in <= ?) OR (created_at >= ? AND created_at <= ?))", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027).Delete(&models.TimeLog{})
 
 	holidaySeeds2027 := []models.Holiday{
@@ -1837,12 +1827,13 @@ func main() {
 		}
 	}
 
+	// lateMinutesPerDay keeps one entry per late day rather than a running total, because the late deduction is capped per day.
 	type attendanceTotals struct {
-		lateMinutes int
-		absentDays  int
-		leaveDays   int
-		otMinutes   int
-		holidayDays int
+		lateMinutesPerDay []int
+		absentDays        int
+		leaveDays         int
+		otMinutes         int
+		holidayDays       int
 	}
 	totals := map[string]map[time.Month]attendanceTotals{}
 	for _, p := range profiles {
@@ -1861,7 +1852,7 @@ func main() {
 	}
 	addTotals := func(email string, month time.Month, delta attendanceTotals) {
 		t := totals[email][month]
-		t.lateMinutes += delta.lateMinutes
+		t.lateMinutesPerDay = append(t.lateMinutesPerDay, delta.lateMinutesPerDay...)
 		t.absentDays += delta.absentDays
 		t.leaveDays += delta.leaveDays
 		t.otMinutes += delta.otMinutes
@@ -1926,9 +1917,14 @@ func main() {
 		if late > 0 {
 			status = models.StatusLate
 		}
-		checkIn := time.Date(day.Year(), day.Month(), day.Day(), 9, late, 0, 0, time.UTC)
-		checkOut := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, time.UTC).Add(time.Duration(ot) * time.Minute)
-		return status, &checkIn, &checkOut, remark, attendanceTotals{lateMinutes: late, otMinutes: ot}
+		checkIn := time.Date(day.Year(), day.Month(), day.Day(), 9, late, 0, 0, timeutil.BangkokLocation)
+		checkOut := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, timeutil.BangkokLocation).Add(time.Duration(ot) * time.Minute)
+
+		totals := attendanceTotals{otMinutes: ot}
+		if late > 0 {
+			totals.lateMinutesPerDay = []int{late}
+		}
+		return status, &checkIn, &checkOut, remark, totals
 	}
 
 	for day := start2027; !day.After(end2027); day = day.AddDate(0, 0, 1) {
@@ -1943,8 +1939,8 @@ func main() {
 					continue
 				}
 				status = models.StatusHoliday
-				checkInTime := time.Date(day.Year(), day.Month(), day.Day(), 10, 0, 0, 0, time.UTC)
-				checkOutTime := time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+				checkInTime := time.Date(day.Year(), day.Month(), day.Day(), 10, 0, 0, 0, timeutil.BangkokLocation)
+				checkOutTime := time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, timeutil.BangkokLocation)
 				checkIn, checkOut = &checkInTime, &checkOutTime
 				remark = "Approved holiday work"
 				delta = attendanceTotals{holidayDays: 1, otMinutes: 360}
@@ -1970,7 +1966,6 @@ func main() {
 		}
 	}
 
-	roundMoney := func(v float64) float64 { return math.Round(v*100) / 100 }
 	monthlyTax := func(taxable float64) float64 {
 		annual := taxable*12 - 60000
 		if annual <= 150000 {
@@ -2016,10 +2011,10 @@ func main() {
 			if m == time.April && p.companyID != sysComp.ID {
 				bonus += 5000
 			}
-			otAmount := roundMoney(float64(t.otMinutes) * 5)
-			lateDeduction := roundMoney(float64(t.lateMinutes) * 5)
-			absentDeduction := roundMoney(float64(t.absentDays) * 1100)
-			holidayAmount := roundMoney(float64(t.holidayDays) * 700)
+			otAmount := roundMoney(float64(t.otMinutes) * seedOvertimeRatePerMinute)
+			lateDeduction := seedLateDeduction(t.lateMinutesPerDay)
+			absentDeduction := roundMoney(float64(t.absentDays) * seedAbsentRatePerDay)
+			holidayAmount := roundMoney(float64(t.holidayDays) * seedExtraRatePerDay)
 			loanExtra := 0.0
 			if p.loan > 0 && (m == time.March || m == time.May) {
 				loanExtra = 1500
@@ -2092,6 +2087,16 @@ func main() {
 			}
 			config.DB.Create(&details)
 		}
+	}
+
+	// Seed only creates and updates module rows, so a database seeded before Dashboard stopped being permission-controlled still carries that row.
+	if err := migrations.RemoveDashboardModule(config.DB); err != nil {
+		log.Fatalf("Dashboard module removal failed: %v", err)
+	}
+
+	// Project the capability registry onto the freshly seeded module rows, so the permission UI works immediately without waiting for a server restart.
+	if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
+		log.Fatalf("Module capability sync failed: %v", err)
 	}
 
 	log.Println("Migration & Setup completed with realistic Jan-Jun 2027 mock data!")

@@ -2,179 +2,84 @@ package employees
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
-func GetEmployees(c *gin.Context) {
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+func (h *Handler) GetEmployees(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
 		return
 	}
 
-	var employees []models.Employees
-	if err := config.DB.
-		Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id")).
-		Preload("Department").
-		Preload("Position").
-		Preload("Companies").
-		Preload("Roles").
-		Preload("SalariesStructure", "is_active = ?", true).
-		Preload("Bank").
-		Preload("EmploymentType").
-		Find(&employees).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	employees, err := h.Employees.List(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, employees)
 }
 
-func CreateEmployees(c *gin.Context) {
+func (h *Handler) CreateEmployees(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
 	var input models.Employees
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	if input.Password != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
-		input.Password = string(hashedPassword)
-	}
-
-	userID, dataScope := repository.GetContextAuth(c)
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Companies context not found"})
+	created, err := h.Employees.Create(scope, input)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, input.CompaniesID)
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
-		return
-	}
-	input.CompaniesID = companyID
-
-	var roles models.Roles
-	if err := config.DB.First(&roles, input.RolesID).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Role not found"})
-		return
-	}
-	if roles.CompaniesID != input.CompaniesID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
-		return
-	}
-
-	if err := config.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, input)
+	c.JSON(http.StatusCreated, created)
 }
 
-func UpdateEmployees(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
-		return
-	}
-
-	var emp models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).First(&emp, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Employees not found or access denied"})
-		return
-	}
-
-	var data map[string]interface{}
-	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Company is immutable after creation — ignore any companies_id sent in the request
-	delete(data, "companies_id")
-	companyID, ok := repository.ResolveCompanyID(c, currentUser, dataScope, emp.CompaniesID)
+func (h *Handler) UpdateEmployees(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
 	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this company"})
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "employee")
+	if !ok {
 		return
 	}
 
-	nextRoleID := emp.RolesID
-	if rolesID, ok := data["roles_id"].(float64); ok {
-		nextRoleID = uint(rolesID)
-	}
-	var role models.Roles
-	if err := config.DB.First(&role, nextRoleID).Error; err != nil || role.CompaniesID != companyID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Role does not belong to selected company"})
+	var patch map[string]any
+	if !httpx.BindJSON(c, &patch) {
 		return
 	}
 
-	if pwd, ok := data["password"].(string); ok && pwd != "" {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(pwd), 12)
-		data["password"] = string(hashedPassword)
-	} else {
-		delete(data, "password")
-	}
-
-	// Handle bank_id: convert float64 (from JSON) to *uint, or explicit null → nil
-	switch v := data["bank_id"].(type) {
-	case float64:
-		bankIDUint := uint(v)
-		if bankIDUint == 0 {
-			data["bank_id"] = gorm.Expr("NULL")
-		} else {
-			data["bank_id"] = bankIDUint
-		}
-	case nil:
-		if _, exists := data["bank_id"]; exists {
-			data["bank_id"] = gorm.Expr("NULL")
-		}
-	}
-
-	if err := config.DB.Model(&emp).Updates(data).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Update failed"})
+	updated, err := h.Employees.Update(scope, id, patch)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 
-	config.DB.Preload("Department").Preload("Position").Preload("SalariesStructure", "is_active = ?", true).Preload("Bank").First(&emp, id)
-	c.JSON(http.StatusOK, emp)
+	c.JSON(http.StatusOK, updated)
 }
 
-func DeleteEmployees(c *gin.Context) {
-	id := c.Param("id")
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+func (h *Handler) DeleteEmployees(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "employee")
+	if !ok {
 		return
 	}
 
-	var employees models.Employees
-	if err := config.DB.Scopes(
-		repository.ApplyContextScopes(c, currentUser, dataScope, "employees.companies_id", "employees.id"),
-	).First(&employees, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Record not found or access denied"})
-		return
-	}
-
-	if err := config.DB.Delete(&employees).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
+	if err := h.Employees.Delete(scope, id); err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 

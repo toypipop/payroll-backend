@@ -6,10 +6,7 @@ import (
 	"gorm.io/plugin/soft_delete"
 )
 
-// DepartmentCategory is a company-agnostic classification (e.g. "HR",
-// "Engineering") used to scope Department-level roles across companies —
-// two companies' "HR" departments share one category so a Department-scoped
-// role can match both, instead of only the user's own literal department row.
+// DepartmentCategory is a company-agnostic classification (e.g.
 type DepartmentCategory struct {
 	ID        uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time             `json:"created_at"`
@@ -119,7 +116,6 @@ type WorkLocation struct {
 }
 
 // LeaveTypeSetting categorises leave requests per company (Sick, Annual, etc.)
-// Named LeaveTypeSetting to avoid conflict with the LeaveType string-enum in attendance.go
 type LeaveTypeSetting struct {
 	ID        uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time             `json:"created_at"`

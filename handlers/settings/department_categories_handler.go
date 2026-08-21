@@ -2,36 +2,32 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
-	"payroll-backend/models"
+
+	"payroll-backend/handlers/httpx"
 
 	"github.com/gin-gonic/gin"
 )
 
-// --- DEPARTMENT CATEGORIES ---
-// Global classification shared by every company — no company scoping.
-
-func GetDepartmentCategories(c *gin.Context) {
-	var categories []models.DepartmentCategory
-	if err := config.DB.Order("name").Find(&categories).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch department categories"})
+func (h *Handler) GetDepartmentCategories(c *gin.Context) {
+	categories, err := h.DepartmentCategory.List()
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, categories)
 }
 
-func CreateDepartmentCategory(c *gin.Context) {
+func (h *Handler) CreateDepartmentCategory(c *gin.Context) {
 	var input struct {
-		Name string `json:"name" binding:"required"`
+		Name string `json:"name"`
 	}
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	category := models.DepartmentCategory{Name: input.Name}
-	if err := config.DB.Create(&category).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create department category"})
+	category, err := h.DepartmentCategory.Create(input.Name)
+	if err != nil {
+		httpx.RespondError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, category)

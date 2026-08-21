@@ -12,7 +12,6 @@ type Employees struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// Use Composite Unique Index with DeletedAt for both EmployeesCode and Email
-	// Set default:0 to ensure unique index works correctly with soft delete (English Comment)
 	DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:idx_emp_code_companies_deleted;uniqueIndex:idx_email_companies_deleted;not null;default:0" json:"-"`
 
 	// Primary/home tenant. App access is stored in EmployeeCompanyAccess.
@@ -49,11 +48,7 @@ type Employees struct {
 	Bank              *Bank                   `gorm:"foreignKey:BankID" json:"bank"`
 }
 
-// SalariesStructure defines the base pay for each Employees
-// IsActive marks the single record currently in force for an employee.
-// A record can be superseded (IsActive=false) yet kept forever (DeletedAt=0)
-// once it has been used in a real payroll calculation — DeletedAt is reserved
-// for records that were never actually used, which are safe to erase outright.
+// SalariesStructure defines the base pay for each Employees IsActive marks the single record currently in force for an employee.
 type SalariesStructure struct {
 	ID            uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt     time.Time             `json:"created_at"`

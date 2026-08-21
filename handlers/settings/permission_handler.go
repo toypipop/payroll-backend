@@ -2,121 +2,75 @@ package settings
 
 import (
 	"net/http"
-	"payroll-backend/config"
+
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
-	"payroll-backend/repository"
-	"strconv"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
-func parseUint(s string) uint {
-	val, _ := strconv.ParseUint(s, 10, 32)
-	return uint(val)
-}
-
-func GetRolesPermissions(c *gin.Context) {
-	rolesID := c.Param("id")
-
-	// Use GetContextAuth to retrieve userID and dataScope
-	userID, dataScope := repository.GetContextAuth(c)
-
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
-		return
-	}
-
-	var modules []models.AppModule
-	// Let GORM quote the reserved column name for PostgreSQL instead of hand-writing SQL.
-	config.DB.Order(clause.OrderByColumn{Column: clause.Column{Name: "order"}}).Find(&modules)
-
-	var access []models.RolesModuleAccess
-	// Apply composite scopes for tenant and data access
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles_module_access.companies_id", "unused")).
-		Where("roles_id = ?", rolesID).
-		Find(&access).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch access"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"modules": modules,
-		"access":  access,
-	})
-}
-
 type UpdatePermissionRequest struct {
-	ModuleID  uint             `json:"module_id" binding:"required"`
+	ModuleID  uint             `json:"module_id"`
 	CanView   bool             `json:"can_view"`
 	CanCreate bool             `json:"can_create"`
 	CanEdit   bool             `json:"can_edit"`
 	CanDelete bool             `json:"can_delete"`
-	DataScope models.DataScope `json:"data_scope" binding:"required,oneof=Own Department Companies All"`
+	DataScope models.DataScope `json:"data_scope"`
 }
 
-func UpdateRolesPermissions(c *gin.Context) {
-	rolesID := c.Param("id")
+func (h *Handler) GetRolesPermissions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	rolesID, ok := httpx.ParseID(c, "id", "role")
+	if !ok {
+		return
+	}
 
-	// Use GetContextAuth to retrieve core info
-	userID, dataScope := repository.GetContextAuth(c)
+	overview, err := h.Permission.Overview(scope, rolesID)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 
-	var currentUser models.Employees
-	if err := config.DB.Select("id, dept_id, companies_id").First(&currentUser, userID).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
+	c.JSON(http.StatusOK, gin.H{
+		"modules": overview.Modules,
+		"access":  overview.Access,
+	})
+}
+
+func (h *Handler) UpdateRolesPermissions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	rolesID, ok := httpx.ParseID(c, "id", "role")
+	if !ok {
 		return
 	}
 
 	var input []UpdatePermissionRequest
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	rID := parseUint(rolesID)
-	var role models.Roles
-	if err := config.DB.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles.companies_id", "roles.id")).
-		First(&role, rID).Error; err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied for this role"})
+	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	err := config.DB.Transaction(func(tx *gorm.DB) error {
-		// Apply Scopes to ensure the user only deletes permissions within their authorized companies/access
-		if err := tx.Scopes(repository.ApplyContextScopes(c, currentUser, dataScope, "roles_module_access.companies_id", "unused")).
-			Where("roles_id = ?", rolesID).
-			Delete(&models.RolesModuleAccess{}).Error; err != nil {
-			return err
-		}
-
-		if len(input) > 0 {
-			var newPermissions []models.RolesModuleAccess
-
-			for _, item := range input {
-				newPermissions = append(newPermissions, models.RolesModuleAccess{
-					RolesID:     rID,
-					CompaniesID: role.CompaniesID,
-					ModuleID:    item.ModuleID,
-					CanView:     item.CanView,
-					CanCreate:   item.CanCreate,
-					CanEdit:     item.CanEdit,
-					CanDelete:   item.CanDelete,
-					DataScope:   item.DataScope,
-				})
-			}
-
-			if err := tx.Create(&newPermissions).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
-		return
+	entries := make([]service.PermissionEntry, 0, len(input))
+	for _, item := range input {
+		entries = append(entries, service.PermissionEntry{
+			ModuleID:  item.ModuleID,
+			CanView:   item.CanView,
+			CanCreate: item.CanCreate,
+			CanEdit:   item.CanEdit,
+			CanDelete: item.CanDelete,
+			DataScope: item.DataScope,
+		})
 	}
 
+	if err := h.Permission.Replace(scope, rolesID, entries); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Permissions updated successfully"})
 }
