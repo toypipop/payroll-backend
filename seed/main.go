@@ -6,6 +6,7 @@ import (
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/models"
+	"payroll-backend/timeutil"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -153,8 +154,10 @@ func main() {
 	config.DB.Where(models.PayrollConfig{CompaniesID: compB.ID}).Assign(configB).FirstOrCreate(&configB)
 
 	// Initialize attendance configs
+	// A wall-clock time is only meaningful in the business timezone: writing 09:00 as UTC stores 16:00 Bangkok,
+	// which is how the seeded shift used to read as 4:00 PM on a screen that converts correctly.
 	parseTime := func(h, m int) *time.Time {
-		t := time.Date(2026, 1, 1, h, m, 0, 0, time.UTC)
+		t := time.Date(2026, 1, 1, h, m, 0, 0, timeutil.BangkokLocation)
 		return &t
 	}
 
@@ -708,8 +711,8 @@ func main() {
 
 	tp := func(t time.Time) *time.Time { return &t }
 	d := func(month time.Month, day, checkInHour, checkInMin, checkOutHour, checkOutMin int) (ci, co *time.Time) {
-		ci = tp(time.Date(2026, month, day, checkInHour, checkInMin, 0, 0, time.UTC))
-		co = tp(time.Date(2026, month, day, checkOutHour, checkOutMin, 0, 0, time.UTC))
+		ci = tp(time.Date(2026, month, day, checkInHour, checkInMin, 0, 0, timeutil.BangkokLocation))
+		co = tp(time.Date(2026, month, day, checkOutHour, checkOutMin, 0, 0, timeutil.BangkokLocation))
 		return
 	}
 
@@ -1141,20 +1144,20 @@ func main() {
 	}
 	cycleSeeds := []cycleSeed{
 		// System company
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, sysComp.ID},
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, sysComp.ID},
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, sysComp.ID},
-		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, sysComp.ID},
+		{models.PayrollCycle{CompaniesID: sysComp.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, sysComp.ID},
 		// Tech Corp (compA)
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, compA.ID},
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, compA.ID},
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, compA.ID},
-		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compA.ID},
+		{models.PayrollCycle{CompaniesID: compA.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compA.ID},
 		// Biz Group (compB)
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, time.UTC), IsClosed: true}, compB.ID},
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC), IsClosed: true}, compB.ID},
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, time.UTC), IsClosed: false}, compB.ID},
-		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, time.UTC), IsClosed: false}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "January 2026", StartDate: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 1, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "February 2026", StartDate: time.Date(2026, 2, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 2, 28, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: true}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "March 2026", StartDate: time.Date(2026, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 3, 31, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compB.ID},
+		{models.PayrollCycle{CompaniesID: compB.ID, CycleName: "April 2026", StartDate: time.Date(2026, 4, 1, 0, 0, 0, 0, timeutil.BangkokLocation), EndDate: time.Date(2026, 4, 30, 23, 59, 59, 0, timeutil.BangkokLocation), IsClosed: false}, compB.ID},
 	}
 	for _, s := range cycleSeeds {
 		config.DB.Where(models.PayrollCycle{CompaniesID: s.companiesID, CycleName: s.cycle.CycleName}).
@@ -1516,6 +1519,8 @@ func main() {
 	}
 
 	// --- Realistic 2027 Mock Baseline --- Passwords intentionally match emails for local demo/dev convenience only.
+	// The roles_id here overwrites the one the employee was created with above, so it has to agree with it:
+	// bob and eve are the MANAGER accounts, which is the only way ScopeDepartment gets exercised at all.
 	devUsers := []struct {
 		emp     *models.Employees
 		email   string
@@ -1528,10 +1533,10 @@ func main() {
 		{&admin, "admin@admin.com", sysComp.ID, sysRole.ID, 0, &bankTTB.ID, "Payroll Pro Admin"},
 		{&staff, "staff@admin.com", sysComp.ID, sysStaffRole.ID, 42000, &bankTTB.ID, "Test Staff"},
 		{&alice, "alice@techa.com", compA.ID, adminRoleA.ID, 78000, &bankKBANK.ID, "Alice Johnson"},
-		{&bob, "bob@techa.com", compA.ID, staffRoleA.ID, 52000, &bankSCB.ID, "Bob Smith"},
+		{&bob, "bob@techa.com", compA.ID, managerRoleA.ID, 52000, &bankSCB.ID, "Bob Smith"},
 		{&carol, "carol@techa.com", compA.ID, staffRoleA.ID, 32500, &bankBBL.ID, "Carol Davis"},
 		{&david, "david@bizgroup.com", compB.ID, adminRoleB.ID, 86000, &bankKTB.ID, "David Wilson"},
-		{&eve, "eve@bizgroup.com", compB.ID, staffRoleB.ID, 47000, &bankBAY.ID, "Eve Brown"},
+		{&eve, "eve@bizgroup.com", compB.ID, managerRoleB.ID, 47000, &bankBAY.ID, "Eve Brown"},
 		{&frank, "frank@bizgroup.com", compB.ID, staffRoleB.ID, 29500, &bankBBL.ID, "Frank Garcia"},
 	}
 
@@ -1564,10 +1569,25 @@ func main() {
 		}
 	}
 
+	// Every seeded account signs in with its own email as the password, including the ones outside devUsers
+	// (hr@techa.com, finance@techa.com), which were left on the shared hash and were effectively unusable.
+	var seededAccounts []models.Employees
+	config.DB.Unscoped().Select("id", "email").Find(&seededAccounts)
+	for _, acc := range seededAccounts {
+		if acc.Email == "" {
+			continue
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(acc.Email), 10)
+		if err != nil {
+			continue
+		}
+		config.DB.Model(&models.Employees{}).Where("id = ?", acc.ID).Update("password", string(hashed))
+	}
+
 	companies := []models.Companies{sysComp, compA, compB}
 	companyIDs := []uint{sysComp.ID, compA.ID, compB.ID}
-	start2027 := time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
-	end2027 := time.Date(2027, time.June, 30, 23, 59, 59, 0, time.UTC)
+	start2027 := time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)
+	end2027 := time.Date(2027, time.June, 30, 23, 59, 59, 0, timeutil.BangkokLocation)
 
 	// Remove the older 2026 demo payroll/time-log rows from this seed so local data focuses on Jan-Jun 2027.
 	config.DB.Exec(`DELETE FROM payroll_transaction_detail AS ptd
@@ -1587,7 +1607,7 @@ func main() {
 		USING payroll_cycle AS pc
 		WHERE pc.id = pcd.cycle_id
 			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
-	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027).Delete(&models.PayrollCycle{})
+	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027).Delete(&models.PayrollCycle{})
 	config.DB.Unscoped().Where("companies_id IN ? AND ((check_in >= ? AND check_in <= ?) OR (created_at >= ? AND created_at <= ?))", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027).Delete(&models.TimeLog{})
 
 	holidaySeeds2027 := []models.Holiday{
@@ -1897,8 +1917,8 @@ func main() {
 		if late > 0 {
 			status = models.StatusLate
 		}
-		checkIn := time.Date(day.Year(), day.Month(), day.Day(), 9, late, 0, 0, time.UTC)
-		checkOut := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, time.UTC).Add(time.Duration(ot) * time.Minute)
+		checkIn := time.Date(day.Year(), day.Month(), day.Day(), 9, late, 0, 0, timeutil.BangkokLocation)
+		checkOut := time.Date(day.Year(), day.Month(), day.Day(), 17, 0, 0, 0, timeutil.BangkokLocation).Add(time.Duration(ot) * time.Minute)
 
 		totals := attendanceTotals{otMinutes: ot}
 		if late > 0 {
@@ -1919,8 +1939,8 @@ func main() {
 					continue
 				}
 				status = models.StatusHoliday
-				checkInTime := time.Date(day.Year(), day.Month(), day.Day(), 10, 0, 0, 0, time.UTC)
-				checkOutTime := time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+				checkInTime := time.Date(day.Year(), day.Month(), day.Day(), 10, 0, 0, 0, timeutil.BangkokLocation)
+				checkOutTime := time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, timeutil.BangkokLocation)
 				checkIn, checkOut = &checkInTime, &checkOutTime
 				remark = "Approved holiday work"
 				delta = attendanceTotals{holidayDays: 1, otMinutes: 360}
