@@ -482,7 +482,7 @@ func (s *PayrollRunService) resolvePay(cycle models.PayrollCycle, employee model
 
 // salaryForCycle picks the salary a cycle should be paid on, reporting whether it only took effect mid-cycle. Only a genuinely missing record reads as "no salary"; a database failure is returned, so a run never silently drops an employee it could not read.
 func (s *PayrollRunService) salaryForCycle(employeeID uint, cycle models.PayrollCycle) (models.SalariesStructure, bool, bool, error) {
-	record, err := s.repo.FindActiveSalaryOnOrBefore(employeeID, cycle.StartDate)
+	record, err := s.repo.FindSalaryOnOrBefore(employeeID, cycle.StartDate)
 	if err == nil {
 		return record, false, true, nil
 	}
@@ -490,7 +490,7 @@ func (s *PayrollRunService) salaryForCycle(employeeID uint, cycle models.Payroll
 		return models.SalariesStructure{}, false, false, err
 	}
 
-	record, err = s.repo.FindEarliestActiveSalaryOnOrBefore(employeeID, cycle.EndDate)
+	record, err = s.repo.FindEarliestSalaryOnOrBefore(employeeID, cycle.EndDate)
 	if err == nil {
 		return record, true, true, nil
 	}

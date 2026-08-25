@@ -2,6 +2,8 @@ package repository
 
 import (
 	"errors"
+	"time"
+
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 
@@ -49,7 +51,7 @@ func (r *gormEmployeesRepository) ListScoped(scope AccessScope) ([]models.Employ
 		Preload("Position").
 		Preload("Companies").
 		Preload("Roles").
-		Preload("SalariesStructure", "is_active = ?", true).
+		Preload("SalariesStructure", currentSalaryCondition).
 		Preload("Bank").
 		Preload("EmploymentType").
 		Find(&employees).Error
@@ -110,8 +112,19 @@ func (r *gormEmployeesRepository) UpdateFields(employee *models.Employees, field
 	return r.db.Model(employee).Updates(patch).Error
 }
 
+// Delete retires the employee and the salary records that belong to them, in one transaction.
+// A salary record outlives nothing: it exists to say what this person was paid, so leaving it behind when the
+// person is gone leaves a row no page can reach and no rule can maintain. `is_active` is cleared with the same
+// statement, since a deleted record that still reads as current is the state every write path refuses to touch.
 func (r *gormEmployeesRepository) Delete(employee *models.Employees) error {
-	return r.db.Delete(employee).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.SalariesStructure{}).
+			Where("employees_id = ?", employee.ID).
+			Updates(map[string]any{"is_active": false, "deleted_at": time.Now().UnixNano()}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(employee).Error
+	})
 }
 
 func (r *gormEmployeesRepository) FindDetail(id uint) (models.Employees, error) {
@@ -119,7 +132,7 @@ func (r *gormEmployeesRepository) FindDetail(id uint) (models.Employees, error) 
 	err := r.db.
 		Preload("Department").
 		Preload("Position").
-		Preload("SalariesStructure", "is_active = ?", true).
+		Preload("SalariesStructure", currentSalaryCondition).
 		Preload("Bank").
 		First(&employee, id).Error
 	if err != nil {

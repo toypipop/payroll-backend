@@ -12,6 +12,7 @@ const (
 	KindNotFound
 	KindForbidden
 	KindConflict
+	KindPrecondition
 	KindUnauthorized
 )
 
@@ -41,6 +42,13 @@ func Forbidden(message string) error {
 // Conflict reports a request that contradicts existing state.
 func Conflict(message string) error {
 	return &Error{Kind: KindConflict, Message: message}
+}
+
+// Precondition reports that the state the caller wrote against is no longer the state on the server: the
+// optimistic-lock answer. It is deliberately not Conflict, because a client reacts differently — a precondition
+// failure means "your screen is stale, reload", while a conflict means "what you asked for contradicts the data".
+func Precondition(message string) error {
+	return &Error{Kind: KindPrecondition, Message: message}
 }
 
 // Unauthorized reports a missing or unusable authentication context.

@@ -60,8 +60,8 @@ type PayrollRunRepository interface {
 	ListHolidaysInRange(companiesID uint, from time.Time, to time.Time) ([]models.Holiday, error)
 	ListDayOffs(companiesID uint) ([]models.DayOff, error)
 
-	FindActiveSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
-	FindEarliestActiveSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
+	FindSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
+	FindEarliestSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
 	DeleteTransactionForEmployee(cycleID uint, employeeID uint) error
 
 	ListEmployeeEarnings(employeeID uint) ([]models.EmployeeEarning, error)
@@ -198,7 +198,15 @@ func (r *gormPayrollRunRepository) ListDayOffs(companiesID uint) ([]models.DayOf
 }
 
 // FindActiveSalaryOnOrBefore returns the salary in force at the given date, newest first.
-func (r *gormPayrollRunRepository) FindActiveSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
+// FindSalaryOnOrBefore returns the salary that was in force on the given date: the latest record whose effective
+// date has already arrived by then.
+//
+// Which record applies is a question about the cycle's dates, so the effective date decides it. `is_active` is
+// in the filter for a different reason: it marks a record as switched on, and disabling a salary switches every
+// one of the employee's records off, which is what makes a run find nothing to pay them from. It does not mark
+// which record is current — that would price every run at today's figure.
+// Deleted records are excluded by soft delete, as everywhere else.
+func (r *gormPayrollRunRepository) FindSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
 	var record models.SalariesStructure
 	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
 		Order("effective_date DESC, created_at DESC").
@@ -207,7 +215,9 @@ func (r *gormPayrollRunRepository) FindActiveSalaryOnOrBefore(employeeID uint, d
 }
 
 // FindEarliestActiveSalaryOnOrBefore returns the employee's first salary record up to the given date, for a new hire whose first record lands mid-cycle.
-func (r *gormPayrollRunRepository) FindEarliestActiveSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
+// FindEarliestSalaryOnOrBefore is the fallback for someone whose first salary record only starts partway through
+// the cycle — a new hire — so the run can pro-rate from the day it takes effect.
+func (r *gormPayrollRunRepository) FindEarliestSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
 	var record models.SalariesStructure
 	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
 		Order("effective_date ASC, created_at ASC").

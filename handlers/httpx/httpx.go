@@ -94,6 +94,8 @@ func statusFor(kind apperr.Kind) int {
 		return http.StatusNotFound
 	case apperr.KindConflict:
 		return http.StatusConflict
+	case apperr.KindPrecondition:
+		return http.StatusPreconditionFailed
 	default:
 		return http.StatusInternalServerError
 	}

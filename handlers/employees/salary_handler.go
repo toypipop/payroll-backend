@@ -5,6 +5,7 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,6 +51,39 @@ func (h *Handler) GetSalaryHistory(c *gin.Context) {
 		rows = append(rows, historyRow{SalariesStructure: entry.Record, CanDelete: entry.CanDelete})
 	}
 	c.JSON(http.StatusOK, rows)
+}
+
+// UpdateSalaryRecord moves one record along the timeline and re-prices it — the edit behind the history page's
+// Edit button. A save is addressed by effective date, so this is the only way an existing date changes.
+func (h *Handler) UpdateSalaryRecord(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	id, ok := httpx.ParseID(c, "id", "salary record")
+	if !ok {
+		return
+	}
+
+	var input struct {
+		EffectiveDate string  `json:"effective_date"`
+		BaseSalaries  float64 `json:"base_salaries"`
+		Version       uint    `json:"version"`
+	}
+	if !httpx.BindJSON(c, &input) {
+		return
+	}
+
+	if err := h.SalariesStructure.UpdateRecord(scope, id, service.SalaryRecordEdit{
+		EffectiveDate: input.EffectiveDate,
+		BaseSalaries:  input.BaseSalaries,
+		Version:       input.Version,
+	}); err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Salary record updated successfully"})
 }
 
 // DeleteSalaryRecord erases a salary record, but only one that no closed cycle ever used.

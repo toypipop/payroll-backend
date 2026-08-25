@@ -236,3 +236,37 @@ func RemoveLegacyElevatedRole(db *gorm.DB) error {
 
 	return nil
 }
+
+// NormalizeSalaryActiveFlags rewrites `is_active` from its old meaning to its current one.
+//
+// It used to mark the single record in force, so every superseded record was switched off. It now marks a record
+// as switched on — which record is in force is read from the effective dates — so those superseded records must
+// come back on, or a run would price the periods they cover as if the employee had no salary then.
+//
+// An employee whose records are *all* off was deliberately disabled, and stays that way: the rewrite only touches
+// employees who still have something switched on.
+func NormalizeSalaryActiveFlags(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&models.SalariesStructure{}) {
+		return nil
+	}
+
+	result := db.Exec(`
+		UPDATE salaries_structure AS target
+		SET is_active = true
+		WHERE target.deleted_at = 0
+		  AND target.is_active = false
+		  AND EXISTS (
+			SELECT 1 FROM salaries_structure AS live
+			WHERE live.employees_id = target.employees_id
+			  AND live.deleted_at = 0
+			  AND live.is_active = true
+		  )
+	`)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("Switched %d superseded salary record(s) back on for the timeline-based lookup", result.RowsAffected)
+	}
+	return nil
+}

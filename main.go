@@ -36,6 +36,9 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260811_remove_dashboard_module", migrations.RemoveDashboardModule); err != nil {
 		log.Fatalf("Dashboard module removal failed: %v", err)
 	}
+	if err := migrations.RunOnce(config.DB, "20260824_normalize_salary_active_flags", migrations.NormalizeSalaryActiveFlags); err != nil {
+		log.Fatalf("Salary active-flag normalisation failed: %v", err)
+	}
 	fmt.Println("Database Repair Migrations Successful!")
 
 	// Not RunOnce: the capability columns are a projection of the registry, re-synced on every boot.

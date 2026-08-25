@@ -67,7 +67,7 @@ func (f *fakeRunRepo) ListDayOffs(uint) ([]models.DayOff, error) {
 	return f.dayOffs, nil
 }
 
-func (f *fakeRunRepo) FindActiveSalaryOnOrBefore(employeeID uint, _ time.Time) (models.SalariesStructure, error) {
+func (f *fakeRunRepo) FindSalaryOnOrBefore(employeeID uint, _ time.Time) (models.SalariesStructure, error) {
 	if f.activeSalaryErr != nil {
 		return models.SalariesStructure{}, f.activeSalaryErr
 	}
@@ -78,7 +78,7 @@ func (f *fakeRunRepo) FindActiveSalaryOnOrBefore(employeeID uint, _ time.Time) (
 	return record, nil
 }
 
-func (f *fakeRunRepo) FindEarliestActiveSalaryOnOrBefore(employeeID uint, _ time.Time) (models.SalariesStructure, error) {
+func (f *fakeRunRepo) FindEarliestSalaryOnOrBefore(employeeID uint, _ time.Time) (models.SalariesStructure, error) {
 	if f.earliestSalaryErr != nil {
 		return models.SalariesStructure{}, f.earliestSalaryErr
 	}

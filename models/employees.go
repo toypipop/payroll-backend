@@ -58,9 +58,16 @@ type SalariesStructure struct {
 	EmployeesID   uint                  `gorm:"not null;index;uniqueIndex:idx_emp_sal_eff_deleted" json:"employees_id"`
 	BaseSalaries  float64               `gorm:"type:decimal(15,2)" json:"base_salaries"`
 	EffectiveDate time.Time             `gorm:"not null;uniqueIndex:idx_emp_sal_eff_deleted" json:"effective_date"`
-	IsActive      bool                  `gorm:"not null;default:true" json:"is_active"`
-	Companies     Companies             `gorm:"foreignKey:CompaniesID" json:"companies"`
-	Employees     *Employees            `gorm:"foreignKey:EmployeesID" json:"employees,omitempty"`
+	// IsActive says this record is switched on, not that it is the one in force: which record is in force is the
+	// latest effective date among the switched-on ones, read from the timeline. A flag that meant "current" had to
+	// be recalculated on every add, correction, move and delete, and the moment it was not, the page and the
+	// payroll run disagreed about what someone earns. Disabling a salary switches every record off at once.
+	IsActive bool `gorm:"not null;default:true" json:"is_active"`
+	// Version is the optimistic lock: every write carries the version it read, and the row only moves if it still holds that version.
+	// Two people editing the same employee's salary is a real scenario, and without this the second save silently overwrites the first.
+	Version   uint       `gorm:"not null;default:1" json:"version"`
+	Companies Companies  `gorm:"foreignKey:CompaniesID" json:"companies"`
+	Employees *Employees `gorm:"foreignKey:EmployeesID" json:"employees,omitempty"`
 }
 
 // EmployeeEarning assigns an additional earning type + fixed monthly amount to an employee

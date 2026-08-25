@@ -14,6 +14,22 @@ func AutoMigrateSchema(db *gorm.DB) error {
 		return err
 	}
 
+	if err := autoMigrateTables(db); err != nil {
+		return err
+	}
+
+	// A row added before the optimistic lock existed would carry version 0, and every write guarded by
+	// `version = <what was read>` would then compare against a value the client never saw.
+	if err := db.Exec(`UPDATE salaries_structure SET version = 1 WHERE version = 0`).Error; err != nil {
+		return err
+	}
+
+	// Erasing a salary record used to set `deleted_at` and leave `is_active = true`. Those rows still read as
+	// current to anything that lists records unscoped, while soft delete keeps every UPDATE away from them.
+	return db.Exec(`UPDATE salaries_structure SET is_active = false WHERE deleted_at <> 0 AND is_active = true`).Error
+}
+
+func autoMigrateTables(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.Companies{},
 		&models.Roles{},

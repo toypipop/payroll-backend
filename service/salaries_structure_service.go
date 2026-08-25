@@ -6,6 +6,7 @@ import (
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 )
 
 // salaryDateLayout is the only date shape the API accepts for an effective date.
@@ -15,11 +16,19 @@ const salaryDateLayout = "2006-01-02"
 var (
 	ErrSalaryDateInvalid    = apperr.Validation("Invalid date format. Expected YYYY-MM-DD")
 	ErrSalaryEmployeeTarget = apperr.NotFound("Employees not found or access denied")
-	ErrSalaryDateInClosed   = apperr.Validation("Effective date falls within an already-closed payroll cycle and cannot be used")
-	ErrSalaryDateBackward   = apperr.Validation("Effective date cannot be before the most recent salary record's effective date")
-	ErrSalaryCompanyDenied  = apperr.Forbidden("Access denied")
-	ErrSalaryRecordInUse    = apperr.Validation("Cannot delete — this record was already used in a closed payroll cycle's calculation. Disable it instead if it should no longer apply.")
+	// Both of these are the request contradicting stored state rather than malformed input, so they answer 409:
+	// the same request would be accepted against a different salary history.
+	ErrSalaryDateInClosed  = apperr.Conflict("Effective date falls within an already-closed payroll cycle and cannot be used")
+	ErrSalaryCompanyDenied = apperr.Forbidden("Access denied")
+	ErrSalaryRecordInUse   = apperr.Validation("Cannot delete — this record was already used in a closed payroll cycle's calculation. Disable it instead if it should no longer apply.")
+	// One effective date holds one record, so a move onto a date already taken has to say so rather than fail on the index.
+	ErrSalaryDateTaken = apperr.Conflict("Another salary record already uses that effective date. Delete it first, or pick another date.")
+	// Correcting a record a closed cycle was calculated from would rewrite the basis of a payslip already paid out.
+	ErrSalaryRecordPaid = apperr.Conflict("This effective date was already used in a closed payroll cycle's calculation and cannot be changed. Add the new amount on a later effective date instead.")
 )
+
+// Re-exported so a handler maps one package's errors.
+var ErrSalaryVersionConflict = repository.ErrSalaryVersionConflict
 
 // Re-exported so handlers import a single package.
 var (
@@ -34,6 +43,17 @@ type SalaryInput struct {
 	BaseSalaries  float64
 	EffectiveDate string
 	Disable       bool
+	// Version is what the form was seeded from. Zero means the client sent none, which is how a create behaves.
+	Version uint
+}
+
+// SalaryRecordEdit is what a caller may change on a record that already exists: where it sits on the timeline and
+// what it pays while it is there.
+type SalaryRecordEdit struct {
+	EffectiveDate string
+	BaseSalaries  float64
+	// Version is the record's own version as the row was read; the edit is refused if it has moved since.
+	Version uint
 }
 
 // SalaryHistoryEntry is one row of an employee's salary history plus whether it can still be erased.
@@ -93,13 +113,55 @@ func (s *SalariesStructureService) History(scope repository.AccessScope, employe
 	return entries, nil
 }
 
-// decisionsFor turns usage counts into per-record archive decisions: a record a closed cycle relied on is kept for audit, anything else is erased.
-func decisionsFor(records []models.SalariesStructure, usage map[uint]int64) []repository.ArchiveDecision {
-	decisions := make([]repository.ArchiveDecision, 0, len(records))
+// currentRecord is the record in force: the one with the latest effective date among the records that are
+// switched on. It is derived from the dates every time rather than marked with a flag, so it cannot fall out of
+// step with the timeline the payroll run reads.
+func currentRecord(records []models.SalariesStructure) (models.SalariesStructure, bool) {
+	var current models.SalariesStructure
+	found := false
 	for _, record := range records {
-		decisions = append(decisions, repository.ArchiveDecision{ID: record.ID, Keep: usage[record.ID] > 0})
+		if record.DeletedAt != 0 || !record.IsActive {
+			continue
+		}
+		if !found || record.EffectiveDate.After(current.EffectiveDate) {
+			current, found = record, true
+		}
 	}
-	return decisions
+	return current, found
+}
+
+// currentVersion is the version the page was seeded with: the one carried by the record in force, or zero when
+// the employee has no salary at all. It is what a save is checked against, so it has to be the number the page
+// showed — not the highest number on the timeline, which a record added to the past would have moved.
+func currentVersion(records []models.SalariesStructure) uint {
+	if record, ok := currentRecord(records); ok {
+		return record.Version
+	}
+	return 0
+}
+
+// nextVersion is the number a newly added record takes: one past the highest this employee has ever used, deleted
+// records included. Counting from the record in force instead would hand out the same number twice — a record
+// added to the past does not change what is in force, so the next one added would start from the same place.
+func nextVersion(records []models.SalariesStructure) uint {
+	var highest uint
+	for _, record := range records {
+		if record.Version > highest {
+			highest = record.Version
+		}
+	}
+	return highest + 1
+}
+
+// isLatestOn reports whether the given date is at or past every record still on the timeline, which is what makes
+// a record the one in force once it is switched on.
+func isLatestOn(records []models.SalariesStructure, date time.Time) bool {
+	for _, record := range records {
+		if record.DeletedAt == 0 && record.EffectiveDate.After(date) {
+			return false
+		}
+	}
+	return true
 }
 
 // Save either disables an employee's current salary or supersedes it with a new one.
@@ -133,24 +195,14 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 			return err
 		}
 
-		active := make([]models.SalariesStructure, 0, len(existing))
-		for _, record := range existing {
-			if record.IsActive {
-				active = append(active, record)
-			}
-		}
-
-		activeIDs := make([]uint, 0, len(active))
-		for _, record := range active {
-			activeIDs = append(activeIDs, record.ID)
-		}
-		usage, err := repo.ClosedCycleUsage(activeIDs)
-		if err != nil {
-			return err
+		// A form seeded from an older version of this employee's salary is refused outright, so the user is
+		// told their screen is stale rather than having their edit silently replace whatever landed in between.
+		if input.Version > 0 && input.Version != currentVersion(existing) {
+			return ErrSalaryVersionConflict
 		}
 
 		if input.Disable {
-			if err := repo.ArchiveRecords(decisionsFor(active, usage)); err != nil {
+			if err := repo.SwitchOffAll(input.EmployeesID); err != nil {
 				return err
 			}
 			result = SaveResult{Disabled: true}
@@ -166,27 +218,124 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 			return ErrSalaryDateInClosed
 		}
 
-		// The effective date must not move backward from the most recent record, erased ones included, so history stays in chronological order.
-		if len(existing) > 0 {
-			last := existing[len(existing)-1]
-			if effectiveDate.Before(last.EffectiveDate) {
-				return ErrSalaryDateBackward
+		// One effective date is one step in the salary's history, so a save that reuses a date already on the
+		// timeline corrects that record rather than adding a second one for the same day.
+		for _, record := range existing {
+			if record.DeletedAt != 0 || timeutil.DateKey(record.EffectiveDate) != timeutil.DateKey(effectiveDate) {
+				continue
 			}
+
+			// Correcting the figure a closed cycle was calculated from would rewrite the basis of a payslip
+			// already paid against it, so that record is fixed for good and the change belongs on a later date.
+			usage, err := repo.ClosedCycleUsage([]uint{record.ID})
+			if err != nil {
+				return err
+			}
+			if usage[record.ID] > 0 {
+				return ErrSalaryRecordPaid
+			}
+			// Correcting the record with the latest date brings it back into use — that is how a disabled salary
+			// is switched back on. Correcting an earlier one only changes what that period pays.
+			return repo.UpdateAmount(record, input.BaseSalaries, isLatestOn(existing, effectiveDate))
 		}
 
-		next := models.SalariesStructure{
+		// A record may be added anywhere on the timeline, not only after the last one: a run prices each cycle
+		// from the record in force on that cycle's dates, so one slotted into the past is the rate that period is
+		// meant to be paid at. Which record is in force now follows from the dates, so nothing else is touched.
+		return repo.CreateRecord(&models.SalariesStructure{
 			CompaniesID:   employee.CompaniesID,
 			EmployeesID:   input.EmployeesID,
 			BaseSalaries:  input.BaseSalaries,
 			EffectiveDate: effectiveDate,
 			IsActive:      true,
-		}
-		return repo.ArchiveAndCreate(decisionsFor(active, usage), &next)
+			Version:       nextVersion(existing),
+		})
 	})
 	if err != nil {
 		return SaveResult{}, err
 	}
 	return result, nil
+}
+
+// UpdateRecord moves a record along the timeline and re-prices it. It is the one path that changes an effective
+// date: a save is addressed by date and so can only ever reach the record already sitting on that date.
+//
+// Moving a record changes what two periods pay — the one it leaves and the one it lands in — so both sides are
+// checked against the cycles that have already been closed and paid out.
+func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id uint, input SalaryRecordEdit) error {
+	effectiveDate, err := time.Parse(salaryDateLayout, input.EffectiveDate)
+	if err != nil {
+		return ErrSalaryDateInvalid
+	}
+
+	record, err := s.repo.FindRecord(id)
+	if err != nil {
+		return err
+	}
+	if !scope.CanAccessCompany(record.CompaniesID) {
+		return ErrSalaryCompanyDenied
+	}
+
+	return s.repo.WithinTx(func(repo repository.SalariesStructureRepository) error {
+		if err := repo.LockCompanyCycles(record.CompaniesID); err != nil {
+			return err
+		}
+
+		existing, err := repo.ListAllRecordsUnscoped(record.EmployeesID, record.CompaniesID)
+		if err != nil {
+			return err
+		}
+
+		current, found := recordByID(existing, id)
+		if !found {
+			return ErrSalaryRecordNotFound
+		}
+		if input.Version > 0 && input.Version != current.Version {
+			return ErrSalaryVersionConflict
+		}
+
+		// A record a closed cycle was calculated from is the basis of a payslip already paid against it: neither
+		// the date it covers nor the figure it carries may move.
+		usage, err := repo.ClosedCycleUsage([]uint{current.ID})
+		if err != nil {
+			return err
+		}
+		if usage[current.ID] > 0 {
+			return ErrSalaryRecordPaid
+		}
+
+		// Landing inside a period that has been closed and paid would change a figure someone was already paid.
+		closedCycles, err := repo.CountClosedCyclesCovering(record.CompaniesID, effectiveDate)
+		if err != nil {
+			return err
+		}
+		if closedCycles > 0 {
+			return ErrSalaryDateInClosed
+		}
+
+		// One date holds one record.
+		for _, other := range existing {
+			if other.ID == current.ID || other.DeletedAt != 0 {
+				continue
+			}
+			if timeutil.DateKey(other.EffectiveDate) == timeutil.DateKey(effectiveDate) {
+				return ErrSalaryDateTaken
+			}
+		}
+
+		return repo.MoveRecord(current, effectiveDate, input.BaseSalaries)
+	})
+}
+
+// recordByID finds one record in a list the caller has already read, so a check and the write that follows it read
+// the same row rather than two separate queries with a gap between them.
+func recordByID(records []models.SalariesStructure, id uint) (models.SalariesStructure, bool) {
+	for _, record := range records {
+		if record.ID == id && record.DeletedAt == 0 {
+			return record, true
+		}
+	}
+	return models.SalariesStructure{}, false
 }
 
 // DeleteRecord erases a salary record, but only one no closed cycle ever used.
@@ -199,8 +348,8 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 		return ErrSalaryCompanyDenied
 	}
 
-	// The erase and the promotion that follows it are one unit: a failure between them would leave the employee with no active salary at all, which silently drops them from the next payroll run.
-	// The lock and the in-transaction usage check keep a cycle from closing between "this record was never used" and the delete.
+	// The lock and the in-transaction usage check keep a cycle from closing between "this record was never used"
+	// and the delete. Nothing is promoted afterwards: the record before it is the latest one by simply still being there.
 	return s.repo.WithinTx(func(repo repository.SalariesStructureRepository) error {
 		if err := repo.LockCompanyCycles(record.CompaniesID); err != nil {
 			return err
@@ -218,10 +367,6 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 			return err
 		}
 
-		// Erasing the current record should roll the employee back to the state before that mistake, not leave them with no active salary at all.
-		if record.IsActive {
-			return repo.ActivateLatest(record.EmployeesID)
-		}
 		return nil
 	})
 }
