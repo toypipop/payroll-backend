@@ -11,11 +11,19 @@ import (
 // ErrUnknownModule marks a payload naming a module row that does not exist, or one with no capability declaration.
 var ErrUnknownModule = apperr.Validation("Permission payload references an unknown module")
 
+// ModuleCapabilities is the capability lookup for one permission payload. A category module is a
+// heading in the tree rather than a page: it has no routes, so it has no capability and no permission
+// row, and it must not be mistaken for an unknown id.
+type ModuleCapabilities struct {
+	ByModule   map[uint]models.ModuleCapability
+	Categories map[uint]bool
+}
+
 // PermissionRepository is the persistence boundary for the role-permission matrix.
 type PermissionRepository interface {
 	ListModulesOrdered() ([]models.AppModule, error)
 	ListRoleAccessScoped(scope AccessScope, rolesID uint) ([]models.RolesModuleAccess, error)
-	CapabilitiesFor(moduleIDs []uint) (map[uint]models.ModuleCapability, error)
+	CapabilitiesFor(moduleIDs []uint) (ModuleCapabilities, error)
 	ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess) error
 }
 
@@ -45,27 +53,39 @@ func (r *gormPermissionRepository) ListRoleAccessScoped(scope AccessScope, roles
 }
 
 // CapabilitiesFor resolves every module id to its declared capability in one query, so the write loop stays free of per-item lookups.
-func (r *gormPermissionRepository) CapabilitiesFor(moduleIDs []uint) (map[uint]models.ModuleCapability, error) {
+func (r *gormPermissionRepository) CapabilitiesFor(moduleIDs []uint) (ModuleCapabilities, error) {
 	var modules []models.AppModule
-	if err := r.db.Select("id, module_key").Where("id IN ?", moduleIDs).Find(&modules).Error; err != nil {
-		return nil, err
+	if err := r.db.Select("id, module_key, is_category").Where("id IN ?", moduleIDs).Find(&modules).Error; err != nil {
+		return ModuleCapabilities{}, err
 	}
 
-	capabilities := make(map[uint]models.ModuleCapability, len(modules))
+	resolved := ModuleCapabilities{
+		ByModule:   make(map[uint]models.ModuleCapability, len(modules)),
+		Categories: make(map[uint]bool),
+	}
 	for _, module := range modules {
+		if module.IsCategory {
+			resolved.Categories[module.ID] = true
+			continue
+		}
+
 		capability, ok := models.CapabilityFor(module.ModuleKey)
 		if !ok {
-			return nil, ErrUnknownModule
+			return ModuleCapabilities{}, ErrUnknownModule
 		}
-		capabilities[module.ID] = capability
+		resolved.ByModule[module.ID] = capability
 	}
 
 	for _, id := range moduleIDs {
-		if _, ok := capabilities[id]; !ok {
-			return nil, ErrUnknownModule
+		if _, ok := resolved.ByModule[id]; ok {
+			continue
 		}
+		if resolved.Categories[id] {
+			continue
+		}
+		return ModuleCapabilities{}, ErrUnknownModule
 	}
-	return capabilities, nil
+	return resolved, nil
 }
 
 // ReplaceRoleAccess swaps a role's permission rows in one transaction.

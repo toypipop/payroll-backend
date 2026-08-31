@@ -77,7 +77,7 @@ func ParseSummaryRange(fromValue string, toValue string) (SummaryRange, error) {
 	var window SummaryRange
 
 	if fromValue != "" {
-		parsed, err := time.Parse("2006-01-02", fromValue)
+		parsed, err := timeutil.ParseDayStart(fromValue)
 		if err != nil {
 			return SummaryRange{}, ErrSummaryFromInvalid
 		}
@@ -88,7 +88,7 @@ func ParseSummaryRange(fromValue string, toValue string) (SummaryRange, error) {
 	}
 
 	if toValue != "" {
-		parsed, err := time.Parse("2006-01-02", toValue)
+		parsed, err := timeutil.ParseDayStart(toValue)
 		if err != nil {
 			return SummaryRange{}, ErrSummaryToInvalid
 		}

@@ -296,22 +296,22 @@ func main() {
 
 		// Initialize 2026 Thai holidays
 		holidays := []models.Holiday{
-			{CompaniesID: comp.ID, Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Name: "New Year's Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC), Name: "Makha Bucha Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 6, 0, 0, 0, 0, time.UTC), Name: "Chakri Memorial Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 13, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 14, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), Name: "Labour Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC), Name: "Coronation Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC), Name: "Visakha Bucha Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC), Name: "King's Birthday", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 8, 12, 0, 0, 0, 0, time.UTC), Name: "Queen Mother's Birthday", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 10, 13, 0, 0, 0, 0, time.UTC), Name: "King Rama IX Memorial Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 10, 23, 0, 0, 0, 0, time.UTC), Name: "Chulalongkorn Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 5, 0, 0, 0, 0, time.UTC), Name: "King Rama IX Birthday", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 10, 0, 0, 0, 0, time.UTC), Name: "Constitution Day", IsPaid: true},
-			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC), Name: "New Year's Eve", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "New Year's Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 2, 3, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Makha Bucha Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 6, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Chakri Memorial Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 13, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Songkran Festival", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 14, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Songkran Festival", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 4, 15, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Songkran Festival", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 5, 1, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Labour Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 5, 4, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Coronation Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 6, 3, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Visakha Bucha Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 7, 28, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "King's Birthday", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 8, 12, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Queen Mother's Birthday", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 10, 13, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "King Rama IX Memorial Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 10, 23, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Chulalongkorn Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 5, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "King Rama IX Birthday", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 10, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Constitution Day", IsPaid: true},
+			{CompaniesID: comp.ID, Date: time.Date(2026, 12, 31, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "New Year's Eve", IsPaid: true},
 		}
 		for _, h := range holidays {
 			dateStr := h.Date.Format("2006-01-02")
@@ -686,7 +686,7 @@ func main() {
 		{models.Employees{CompaniesID: compB.ID, RolesID: staffRoleB.ID, DeptID: deptEngB.ID, PosID: posStaffB.ID, EmploymentTypeID: &fullTimeEmpTypeB.ID, EmployeesCode: "EMP-B-03", FirstName: "Frank", LastName: "Garcia", Email: "frank@bizgroup.com", Password: hashStr, IsActive: true}, 35450.00, &bankBBL.ID, "Frank Garcia", "6789012345"},
 	}
 
-	effDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	effDate := time.Date(2026, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation)
 
 	for _, s := range usersToSeed {
 		var existingEmp models.Employees
@@ -1563,7 +1563,7 @@ func main() {
 			"companies_id": u.company,
 			"bank_id":      u.bankID,
 			"account_name": u.account,
-			"account_no":   "2027" + time.Date(2027, time.January, idx+1, 0, 0, 0, 0, time.UTC).Format("0102") + "000",
+			"account_no":   "2027" + time.Date(2027, time.January, idx+1, 0, 0, 0, 0, timeutil.BangkokLocation).Format("0102") + "000",
 		})
 		config.DB.Unscoped().Where("email = ?", u.email).First(u.emp)
 		if u.salary > 0 && u.emp.ID != 0 {
@@ -1571,7 +1571,7 @@ func main() {
 				CompaniesID:   u.company,
 				EmployeesID:   u.emp.ID,
 				BaseSalaries:  u.salary,
-				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation),
 				IsActive:      true,
 			}
 			config.DB.Where(models.SalariesStructure{EmployeesID: u.emp.ID, EffectiveDate: salary.EffectiveDate}).
@@ -1608,33 +1608,33 @@ func main() {
 		USING payroll_transaction AS pt, payroll_cycle AS pc
 		WHERE pt.id = ptd.transaction_id
 			AND pc.id = pt.cycle_id
-			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027)
 	config.DB.Exec(`DELETE FROM payroll_transaction AS pt
 		USING payroll_cycle AS pc
 		WHERE pc.id = pt.cycle_id
-			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027)
 	config.DB.Exec(`DELETE FROM payroll_cycle_earning AS pce
 		USING payroll_cycle AS pc
 		WHERE pc.id = pce.cycle_id
-			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027)
 	config.DB.Exec(`DELETE FROM payroll_cycle_deduction AS pcd
 		USING payroll_cycle AS pc
 		WHERE pc.id = pcd.cycle_id
-			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), start2027)
+			AND pc.companies_id IN ? AND pc.start_date >= ? AND pc.start_date < ?`, companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027)
 	config.DB.Unscoped().Where("companies_id IN ? AND start_date >= ? AND start_date < ?", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), start2027).Delete(&models.PayrollCycle{})
-	config.DB.Unscoped().Where("companies_id IN ? AND ((check_in >= ? AND check_in <= ?) OR (created_at >= ? AND created_at <= ?))", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027, time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), end2027).Delete(&models.TimeLog{})
+	config.DB.Unscoped().Where("companies_id IN ? AND ((check_in >= ? AND check_in <= ?) OR (created_at >= ? AND created_at <= ?))", companyIDs, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), end2027, time.Date(2026, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation), end2027).Delete(&models.TimeLog{})
 
 	holidaySeeds2027 := []models.Holiday{
-		{Date: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC), Name: "New Year's Day", IsPaid: true},
-		{Date: time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC), Name: "Makha Bucha Day", IsPaid: true},
-		{Date: time.Date(2027, 4, 6, 0, 0, 0, 0, time.UTC), Name: "Chakri Memorial Day", IsPaid: true},
-		{Date: time.Date(2027, 4, 13, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
-		{Date: time.Date(2027, 4, 14, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
-		{Date: time.Date(2027, 4, 15, 0, 0, 0, 0, time.UTC), Name: "Songkran Festival", IsPaid: true},
-		{Date: time.Date(2027, 5, 1, 0, 0, 0, 0, time.UTC), Name: "Labour Day", IsPaid: true},
-		{Date: time.Date(2027, 5, 5, 0, 0, 0, 0, time.UTC), Name: "Coronation Day", IsPaid: true},
-		{Date: time.Date(2027, 5, 20, 0, 0, 0, 0, time.UTC), Name: "Visakha Bucha Day", IsPaid: true},
-		{Date: time.Date(2027, 6, 3, 0, 0, 0, 0, time.UTC), Name: "Queen Suthida's Birthday", IsPaid: true},
+		{Date: time.Date(2027, 1, 1, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "New Year's Day", IsPaid: true},
+		{Date: time.Date(2027, 3, 1, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Makha Bucha Day", IsPaid: true},
+		{Date: time.Date(2027, 4, 6, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Chakri Memorial Day", IsPaid: true},
+		{Date: time.Date(2027, 4, 13, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Songkran Festival", IsPaid: true},
+		{Date: time.Date(2027, 4, 14, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Songkran Festival", IsPaid: true},
+		{Date: time.Date(2027, 4, 15, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Songkran Festival", IsPaid: true},
+		{Date: time.Date(2027, 5, 1, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Labour Day", IsPaid: true},
+		{Date: time.Date(2027, 5, 5, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Coronation Day", IsPaid: true},
+		{Date: time.Date(2027, 5, 20, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Visakha Bucha Day", IsPaid: true},
+		{Date: time.Date(2027, 6, 3, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Queen Suthida's Birthday", IsPaid: true},
 	}
 	for _, comp := range companies {
 		for _, h := range holidaySeeds2027 {
@@ -1647,7 +1647,7 @@ func main() {
 		return [...]string{"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"}[m]
 	}
 	monthEnd := func(year int, month time.Month) time.Time {
-		return time.Date(year, month+1, 0, 23, 59, 59, 0, time.UTC)
+		return time.Date(year, month+1, 0, 23, 59, 59, 0, timeutil.BangkokLocation)
 	}
 	cycleByCompanyMonth := map[uint]map[time.Month]models.PayrollCycle{}
 	for _, comp := range companies {
@@ -1656,7 +1656,7 @@ func main() {
 			cycle := models.PayrollCycle{
 				CompaniesID: comp.ID,
 				CycleName:   monthName(m) + " 2027",
-				StartDate:   time.Date(2027, m, 1, 0, 0, 0, 0, time.UTC),
+				StartDate:   time.Date(2027, m, 1, 0, 0, 0, 0, timeutil.BangkokLocation),
 				EndDate:     monthEnd(2027, m),
 				IsClosed:    m <= time.May,
 			}
@@ -1706,11 +1706,11 @@ func main() {
 		return &lt.ID
 	}
 	leavePlans := []leavePlan{
-		{bob, compA.ID, models.LeaveTypeAnnual, "Annual Leave", time.Date(2027, 2, 18, 0, 0, 0, 0, time.UTC), time.Date(2027, 2, 19, 0, 0, 0, 0, time.UTC), 2, models.LeaveStatusApproved, "Family trip booked in advance", &approverA},
-		{carol, compA.ID, models.LeaveTypeSick, "Sick Leave", time.Date(2027, 3, 9, 0, 0, 0, 0, time.UTC), time.Date(2027, 3, 10, 0, 0, 0, 0, time.UTC), 2, models.LeaveStatusApproved, "Medical certificate attached", &approverA},
-		{eve, compB.ID, models.LeaveTypePersonal, "Personal Leave", time.Date(2027, 4, 9, 0, 0, 0, 0, time.UTC), time.Date(2027, 4, 9, 0, 0, 0, 0, time.UTC), 1, models.LeaveStatusApproved, "Government document appointment", &approverB},
-		{frank, compB.ID, models.LeaveTypeAnnual, "Annual Leave", time.Date(2027, 5, 17, 0, 0, 0, 0, time.UTC), time.Date(2027, 5, 18, 0, 0, 0, 0, time.UTC), 2, models.LeaveStatusApproved, "Planned vacation", &approverB},
-		{staff, sysComp.ID, models.LeaveTypeSick, "Sick Leave", time.Date(2027, 6, 8, 0, 0, 0, 0, time.UTC), time.Date(2027, 6, 8, 0, 0, 0, 0, time.UTC), 1, models.LeaveStatusPending, "Flu symptoms", nil},
+		{bob, compA.ID, models.LeaveTypeAnnual, "Annual Leave", time.Date(2027, 2, 18, 0, 0, 0, 0, timeutil.BangkokLocation), time.Date(2027, 2, 19, 0, 0, 0, 0, timeutil.BangkokLocation), 2, models.LeaveStatusApproved, "Family trip booked in advance", &approverA},
+		{carol, compA.ID, models.LeaveTypeSick, "Sick Leave", time.Date(2027, 3, 9, 0, 0, 0, 0, timeutil.BangkokLocation), time.Date(2027, 3, 10, 0, 0, 0, 0, timeutil.BangkokLocation), 2, models.LeaveStatusApproved, "Medical certificate attached", &approverA},
+		{eve, compB.ID, models.LeaveTypePersonal, "Personal Leave", time.Date(2027, 4, 9, 0, 0, 0, 0, timeutil.BangkokLocation), time.Date(2027, 4, 9, 0, 0, 0, 0, timeutil.BangkokLocation), 1, models.LeaveStatusApproved, "Government document appointment", &approverB},
+		{frank, compB.ID, models.LeaveTypeAnnual, "Annual Leave", time.Date(2027, 5, 17, 0, 0, 0, 0, timeutil.BangkokLocation), time.Date(2027, 5, 18, 0, 0, 0, 0, timeutil.BangkokLocation), 2, models.LeaveStatusApproved, "Planned vacation", &approverB},
+		{staff, sysComp.ID, models.LeaveTypeSick, "Sick Leave", time.Date(2027, 6, 8, 0, 0, 0, 0, timeutil.BangkokLocation), time.Date(2027, 6, 8, 0, 0, 0, 0, timeutil.BangkokLocation), 1, models.LeaveStatusPending, "Flu symptoms", nil},
 	}
 	approvedLeaveDays := map[string]bool{}
 	for _, lp := range leavePlans {

@@ -270,3 +270,62 @@ func NormalizeSalaryActiveFlags(db *gorm.DB) error {
 	}
 	return nil
 }
+
+// NormalizeBusinessDatesToBangkok moves calendar-date columns onto one convention: midnight of the day in
+// the business timezone, and 23:59:59 for a period's closing date.
+//
+// Two conventions were in the tables at once. Rows written through the services parsed "2006-01-02" with
+// time.Parse, which yields midnight UTC — 07:00 Bangkok. Rows written by the seed used the business
+// timezone. Nothing compared them directly often enough to break, except the payroll run, which reads
+// `dayOf(cycle.EndDate).AddDate(0,0,1)` through a Bangkok lens and so reached a full extra day into the
+// next month for every cycle stored the other way.
+//
+// The selector is the fix's own undo test: a day-start column is shifted only while it reads 07:00:00 in
+// Bangkok, and a period end only while it reads 06:59:59. After the shift they read 00:00:00 and 23:59:59,
+// which the WHERE no longer matches, so running this twice moves nothing the second time.
+func NormalizeBusinessDatesToBangkok(db *gorm.DB) error {
+	dayStarts := []struct {
+		table  string
+		column string
+	}{
+		{"salaries_structure", "effective_date"},
+		{"leave_request", "start_date"},
+		{"leave_request", "end_date"},
+		{"payroll_cycle", "start_date"},
+		{"holiday", "date"},
+	}
+
+	for _, target := range dayStarts {
+		if !db.Migrator().HasTable(target.table) {
+			continue
+		}
+		result := db.Exec(fmt.Sprintf(`
+			UPDATE %s
+			SET %s = %s - INTERVAL '7 hours'
+			WHERE %s IS NOT NULL
+			  AND to_char(%s AT TIME ZONE 'Asia/Bangkok', 'HH24:MI:SS') = '07:00:00'
+		`, target.table, target.column, target.column, target.column, target.column))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected > 0 {
+			log.Printf("Moved %d %s.%s value(s) onto Bangkok midnight", result.RowsAffected, target.table, target.column)
+		}
+	}
+
+	if db.Migrator().HasTable("payroll_cycle") {
+		result := db.Exec(`
+			UPDATE payroll_cycle
+			SET end_date = end_date - INTERVAL '7 hours'
+			WHERE end_date IS NOT NULL
+			  AND to_char(end_date AT TIME ZONE 'Asia/Bangkok', 'HH24:MI:SS') = '06:59:59'
+		`)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected > 0 {
+			log.Printf("Moved %d payroll cycle end date(s) onto the last instant of their own last day", result.RowsAffected)
+		}
+	}
+	return nil
+}

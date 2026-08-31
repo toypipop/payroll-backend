@@ -26,6 +26,7 @@ const unpaidLeaveDivisor = 30
 // Cycle rule failures.
 var (
 	ErrPayrollCycleEndBeforeStart  = apperr.Validation("end_date must be after start_date")
+	ErrPayrollCycleDateInvalid     = apperr.Validation("start_date and end_date must be YYYY-MM-DD")
 	ErrPayrollCycleCompanyDenied   = apperr.Forbidden("Access denied to the specified company")
 	ErrPayrollCycleNotFoundForList = apperr.NotFound("Cycle not found")
 )
@@ -246,7 +247,19 @@ func (s *PayrollRunService) Cycles(scope repository.AccessScope) ([]models.Payro
 }
 
 // CreateCycle opens a new cycle for a company the caller is authorized for.
-func (s *PayrollRunService) CreateCycle(scope repository.AccessScope, name string, start time.Time, end time.Time, companiesID uint) (models.PayrollCycle, error) {
+func (s *PayrollRunService) CreateCycle(scope repository.AccessScope, name string, startValue string, endValue string, companiesID uint) (models.PayrollCycle, error) {
+	// A cycle spans whole business days: it opens at midnight of its first day and closes on the last
+	// instant of its last one, so `stored_date <= end_date` is true for anything on the closing day.
+	start, err := timeutil.ParseDayStart(startValue)
+	if err != nil {
+		return models.PayrollCycle{}, ErrPayrollCycleDateInvalid
+	}
+	endDay, err := timeutil.ParseDayStart(endValue)
+	if err != nil {
+		return models.PayrollCycle{}, ErrPayrollCycleDateInvalid
+	}
+	end := timeutil.DayEnd(endDay)
+
 	if !end.After(start) {
 		return models.PayrollCycle{}, ErrPayrollCycleEndBeforeStart
 	}

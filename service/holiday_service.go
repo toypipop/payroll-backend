@@ -7,10 +7,8 @@ import (
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 )
-
-// holidayDateLayout is the only date shape the API accepts for a holiday.
-const holidayDateLayout = "2006-01-02"
 
 // Holiday rule failures.
 var (
@@ -50,7 +48,7 @@ func parseHolidayFields(name string, date string) (string, time.Time, error) {
 	if trimmed == "" {
 		return "", time.Time{}, ErrHolidayNameRequired
 	}
-	parsed, err := time.Parse(holidayDateLayout, date)
+	parsed, err := timeutil.ParseDayStart(date)
 	if err != nil {
 		return "", time.Time{}, ErrHolidayDateInvalid
 	}

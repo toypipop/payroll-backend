@@ -127,6 +127,7 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 
 		// --- Payroll Processing ---
 		api.GET("/payroll/cycles", g.CheckPermission("PayrollCyclesPage", "VIEW"), h.Payroll.GetPayrollCycles)
+		api.GET("/payroll/cycles/options", h.Payroll.GetPayrollCycleOptions)
 		api.POST("/payroll/cycles", g.CheckPermission("PayrollCyclesPage", "CREATE"), h.Payroll.CreatePayrollCycle)
 		api.PATCH("/payroll/cycles/:id/close", g.CheckPermission("PayrollCyclesPage", "EDIT"), h.Payroll.ClosePayrollCycle)
 		api.GET("/payroll/pre-check/:cycle_id", g.CheckPermission("RunPayrollPage", "EDIT"), h.Payroll.PreCheckPayroll)

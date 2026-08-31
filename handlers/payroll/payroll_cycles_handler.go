@@ -23,17 +23,57 @@ func (h *Handler) GetPayrollCycles(c *gin.Context) {
 	c.JSON(http.StatusOK, cycles)
 }
 
+// GetPayrollCycleOptions serves the cycle calendar to pages other than Payroll Cycles — the salary forms
+// need to know which periods are already closed, which is not a reason to require permission on that page.
+// The company filter still applies: without CheckPermission the scope falls back to the caller's accessible companies.
+func (h *Handler) GetPayrollCycleOptions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
+	cycles, err := h.PayrollRun.Cycles(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+
+	type option struct {
+		ID          uint      `json:"id"`
+		CycleName   string    `json:"cycle_name"`
+		StartDate   time.Time `json:"start_date"`
+		EndDate     time.Time `json:"end_date"`
+		IsClosed    bool      `json:"is_closed"`
+		CompaniesID uint      `json:"companies_id"`
+	}
+	options := make([]option, 0, len(cycles))
+	for _, cycle := range cycles {
+		options = append(options, option{
+			ID:          cycle.ID,
+			CycleName:   cycle.CycleName,
+			StartDate:   cycle.StartDate,
+			EndDate:     cycle.EndDate,
+			IsClosed:    cycle.IsClosed,
+			CompaniesID: cycle.CompaniesID,
+		})
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func (h *Handler) CreatePayrollCycle(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
+	// The dates arrive as bare "2006-01-02" text. Binding them straight into time.Time would make the
+	// caller decide the timezone, which is how the same table ended up holding two conventions; the service
+	// reads them in the business timezone instead.
 	var input struct {
-		CycleName   string    `json:"cycle_name" binding:"required"`
-		StartDate   time.Time `json:"start_date" binding:"required"`
-		EndDate     time.Time `json:"end_date" binding:"required"`
-		CompaniesID uint      `json:"companies_id"`
+		CycleName   string `json:"cycle_name" binding:"required"`
+		StartDate   string `json:"start_date" binding:"required"`
+		EndDate     string `json:"end_date" binding:"required"`
+		CompaniesID uint   `json:"companies_id"`
 	}
 	if !httpx.BindJSON(c, &input) {
 		return

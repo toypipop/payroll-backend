@@ -90,14 +90,20 @@ func (s *PermissionService) Replace(scope repository.AccessScope, rolesID uint, 
 		return s.repo.ReplaceRoleAccess(scope, rolesID, nil)
 	}
 
-	capabilities, err := s.repo.CapabilitiesFor(moduleIDs)
+	resolved, err := s.repo.CapabilitiesFor(moduleIDs)
 	if err != nil {
 		return err
 	}
 
 	permissions := make([]models.RolesModuleAccess, 0, len(entries))
 	for _, entry := range entries {
-		capability := capabilities[entry.ModuleID]
+		// The matrix posts the whole tree back, headings included. A category is not a page, so it
+		// carries no permission row — skipping it here is what keeps the whole save from being
+		// rejected as an unknown module.
+		if resolved.Categories[entry.ModuleID] {
+			continue
+		}
+		capability := resolved.ByModule[entry.ModuleID]
 
 		dataScope := entry.DataScope
 		if !capability.AllowsScope(dataScope) {

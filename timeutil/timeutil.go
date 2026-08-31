@@ -17,6 +17,14 @@ func DayStart(t time.Time) time.Time {
 	return time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, BangkokLocation)
 }
 
+// DayEnd returns the last instant (23:59:59) of t's calendar day in the business timezone. A period whose
+// end is stored this way is closed at both ends, so a plain `stored_date <= end` comparison is correct
+// without the caller having to normalise through DayStart first.
+func DayEnd(t time.Time) time.Time {
+	b := ToBangkok(t)
+	return time.Date(b.Year(), b.Month(), b.Day(), 23, 59, 59, 0, BangkokLocation)
+}
+
 // DateKey returns t's calendar date in the business timezone as "2006-01-02".
 func DateKey(t time.Time) string {
 	return DayStart(t).Format("2006-01-02")

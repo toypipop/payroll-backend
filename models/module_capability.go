@@ -71,7 +71,7 @@ func atomic(mc ModuleCapability) ModuleCapability {
 var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	// --- Employee-level: rows carry an employee column, so Own/Department bite ---
 	"EmployeesListPage":         employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
-	"SalariesStructurePage":     employeeLevel(ActionView, ActionCreate, ActionDelete),
+	"SalariesStructurePage":     employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"EmployeeEarningsPage":      employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"EmployeeDeductionsPage":    employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"TimelogsListPage":          employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),

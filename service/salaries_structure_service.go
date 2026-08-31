@@ -9,9 +9,6 @@ import (
 	"payroll-backend/timeutil"
 )
 
-// salaryDateLayout is the only date shape the API accepts for an effective date.
-const salaryDateLayout = "2006-01-02"
-
 // Salary rule failures.
 var (
 	ErrSalaryDateInvalid    = apperr.Validation("Invalid date format. Expected YYYY-MM-DD")
@@ -156,8 +153,12 @@ func nextVersion(records []models.SalariesStructure) uint {
 // isLatestOn reports whether the given date is at or past every record still on the timeline, which is what makes
 // a record the one in force once it is switched on.
 func isLatestOn(records []models.SalariesStructure, date time.Time) bool {
+	// An effective date is a calendar day, not an instant: comparing the raw values would let a row stored a
+	// few hours off — which is what a database written under an older timezone convention holds — outrank a
+	// row on the very same day.
+	day := timeutil.DayStart(date)
 	for _, record := range records {
-		if record.DeletedAt == 0 && record.EffectiveDate.After(date) {
+		if record.DeletedAt == 0 && timeutil.DayStart(record.EffectiveDate).After(day) {
 			return false
 		}
 	}
@@ -170,7 +171,7 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 		return SaveResult{}, ErrSalaryEmployeeTarget
 	}
 
-	effectiveDate, err := time.Parse(salaryDateLayout, input.EffectiveDate)
+	effectiveDate, err := timeutil.ParseDayStart(input.EffectiveDate)
 	if err != nil {
 		return SaveResult{}, ErrSalaryDateInvalid
 	}
@@ -263,7 +264,7 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 // Moving a record changes what two periods pay — the one it leaves and the one it lands in — so both sides are
 // checked against the cycles that have already been closed and paid out.
 func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id uint, input SalaryRecordEdit) error {
-	effectiveDate, err := time.Parse(salaryDateLayout, input.EffectiveDate)
+	effectiveDate, err := timeutil.ParseDayStart(input.EffectiveDate)
 	if err != nil {
 		return ErrSalaryDateInvalid
 	}

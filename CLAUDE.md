@@ -79,9 +79,11 @@ rules below from being prose nobody runs — deploy is manual and has no gate of
 
 - `models/module_capability.go` holds `moduleCapabilities`, the **single source of truth** for each module's `ScopeLevel` (`company`/`employee`), `AllowedActions`, and `ActionsAtomic`. `AllowedScopes` is derived from `ScopeLevel`, never declared separately.
 - `ScopeLevel` is a fact about the handler, not a policy: it must match which `Apply*Scopes` the module's queries call. `AllowedActions` must match the action strings its routes pass to `CheckPermission` — several delete routes are gated by `"EDIT"`, so those modules do not list `DELETE`.
+- A missing action in `AllowedActions` fails **silently and permanently**: `service.PermissionService.Replace` writes `CanEdit && capability.AllowsAction(EDIT)`, and the matrix never renders a checkbox to put it back. `SalariesStructurePage` shipped without `ActionEdit` while `PATCH /salaries/:id` gated on `"EDIT"`, so the first successful matrix save would have killed the Edit button for good. When a route gates on an action, the registry entry lists it — check both sides together.
 - `migrations.SyncModuleCapabilities` projects the registry onto `app_module` columns on **every boot** (and at the end of seed), so the DB can never drift from the code and a deploy never depends on reseeding. An active, non-category module missing from the registry is a `log.Fatal`.
 - `migrations.PruneStaleRoleScopes` rewrites saved permission rows whose `DataScope` a company-level module cannot honour. It only makes stored values agree with behaviour already in effect; no role gains or loses access.
 - `service.PermissionService.Replace` coerces disallowed actions to `false` and disallowed scopes to `Companies` before writing, so the database never stores a claim the permission check ignores. It validates the whole payload *before* opening the transaction, so a rejected payload cannot clear a role's existing rows even transiently.
+- **A category module is a heading, not a page.** The matrix posts the whole tree back, `ModuleEmployees`/`ModuleAttendance`/... included; those rows carry no capability and no permission row. `repository.CapabilitiesFor` returns them in `ModuleCapabilities.Categories` and `Replace` skips them — counting them as unknown ids is what made **every** matrix save fail with "Permission payload references an unknown module". `ErrUnknownModule` still fires for an id that resolves to nothing at all.
 - The frontend permission matrix is driven entirely by `allowed_actions` / `allowed_scopes` / `actions_atomic` on `/modules`. Never reintroduce a hardcoded module list there.
 
 - Tables are singular; qualify scoped columns e.g. `time_log.companies_id`.
@@ -141,7 +143,8 @@ Any master-data type consumed by a page other than its own "owning" settings pag
 - No `middleware.CheckPermission(...)` on the route.
 - Scoped only by company data-access (`scope.ApplyCompany(...)`, or the legacy `repository.ApplyCompanyScopes(...)` in a not-yet-migrated handler), never by page permission.
 - Returns minimal fields only (`id`, `name`, `companies_id` — never sensitive/rate fields).
-- Existing examples: `/departments/options`, `/positions/options`, `/roles/options`, `/master/employment-types/options`, `/earning-types/options`, `/deduction-types/options`, `/master/leave-types/options`, `/master/banks/options`, `/master/work-locations/options`, `/master/day-offs/options`.
+- Existing examples: `/departments/options`, `/positions/options`, `/roles/options`, `/master/employment-types/options`, `/earning-types/options`, `/deduction-types/options`, `/master/leave-types/options`, `/master/banks/options`, `/master/work-locations/options`, `/master/day-offs/options`, `/payroll/cycles/options`.
+- `/payroll/cycles/options` is the convention applied to something that is not master data: the salary forms warn when an effective date lands in a closed period, and `GET /payroll/cycles` is gated on `PayrollCyclesPage`. A user may adjust a salary without being allowed to open that page — `staff@admin.com` is exactly that — and they are the ones the warning is for.
 - Exception: if the underlying model has genuinely sensitive fields (e.g. `AttendanceConfig` payroll rates), build a separate purpose-built endpoint instead of a generic `/options` list (see `GetTimelogScheduleConfig`).
 
 ## Business Rules
@@ -185,5 +188,23 @@ Any master-data type consumed by a page other than its own "owning" settings pag
 ## Timezone Handling
 
 The business timezone is fixed to **Asia/Bangkok (UTC+7, no DST)** — see `timeutil/timeutil.go`. Never use `time.Now().Location()`, a bare `.UTC()`, or a DB/driver's ambient session timezone to read or write a wall-clock time-of-day value (`AttendanceConfig.WorkStartTime/WorkEndTime`, `TimeLog.CheckIn/CheckOut`, or anything grouped/compared by calendar day). Always go through `timeutil.BangkokLocation` / `timeutil.ToBangkok(t)` / `timeutil.DayStart(t)` / `timeutil.DateKey(t)`. A `*time.Time` read back from Postgres carries whatever timezone the session/driver attached, not what was originally typed — extracting `.Hour()`/`.Year()`/`.Weekday()` etc. directly without normalizing through `timeutil` first is the exact bug class that shifted schedule times and misattributed late-night check-ins to the wrong day. The one thing a calendar-date field still needs is a *day boundary* in the business timezone: `service.dayOf` is `timeutil.DayStart`, never `Truncate(24 * time.Hour)`, which rounds to a UTC-epoch boundary (07:00 Bangkok) and shifts the day key for anything stored in the evening.
+
+**One convention, everywhere.** A calendar-date column stores midnight of that day in the business
+timezone; a period's closing date stores 23:59:59 of its last day, so `stored_date <= end_date` is true for
+anything on the closing day without the caller normalising first. Read a `"2006-01-02"` string with
+`timeutil.ParseDayStart`, never `time.Parse` — the latter silently means UTC, which is 07:00 Bangkok.
+`timeutil.DayEnd` builds the closing instant. The columns this governs: `salaries_structure.effective_date`,
+`holiday.date`, `leave_request.start_date/end_date`, `payroll_cycle.start_date/end_date`.
+
+This was not always true. Services parsed with `time.Parse` while the seed used the business timezone, so
+one table held both; `migrations.NormalizeBusinessDatesToBangkok` moved the stragglers, selecting on the
+Bangkok time-of-day (`07:00:00`, or `06:59:59` for a period end) so a second run matches nothing. The
+symptom that made it worth fixing: `payroll_run_service.go` computes `dayOf(cycle.EndDate).AddDate(0,0,1)`
+through a Bangkok lens, so every cycle stored the other way reached a full extra day into the next month —
+18 of 30 cycles, with real time logs inside the overlap.
+
+A comparison between two calendar dates belongs on the day, not the instant: see `isLatestOn`, which
+compares `timeutil.DayStart` values so a row a few hours off cannot outrank one on the same day.
+
 
 `CreatedAt`/`UpdatedAt` and pure calendar-date fields (`Holiday.Date`, `PayrollCycle.Start/EndDate`, `LeaveRequest.Start/EndDate`, `SalariesStructure.EffectiveDate`) are NOT subject to this — they're either audit instants (must stay real time, compared against real "now") or date-only values with no time-of-day component.
