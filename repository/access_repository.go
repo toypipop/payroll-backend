@@ -39,7 +39,10 @@ func newGormAccessRepository(db *gorm.DB) *gormAccessRepository {
 // FindScopeUser loads only the columns scoping needs, never the full row (which would drag the password hash around).
 func (r *gormAccessRepository) FindScopeUser(userID uint) (models.Employees, error) {
 	var user models.Employees
-	if err := r.db.Select("id, dept_id, companies_id").First(&user, userID).Error; err != nil {
+	// The name travels with the scoping columns because the salary audit trail snapshots who made a change,
+	// and looking it up again per write would be a query to learn something the request already knew. The
+	// selection stays explicit so the password hash never rides along.
+	if err := r.db.Select("id, dept_id, companies_id, first_name, last_name").First(&user, userID).Error; err != nil {
 		return models.Employees{}, err
 	}
 	return user, nil

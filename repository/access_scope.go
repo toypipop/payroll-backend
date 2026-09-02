@@ -8,7 +8,8 @@ import (
 
 // AccessScope is the request's resolved authorization context, lifted out of gin so lower layers never see a request.
 type AccessScope struct {
-	// User carries only id, dept_id and companies_id — enough for scoping, never the full row (which would drag the password hash around).
+	// User carries only id, dept_id, companies_id and the name — enough for scoping and for naming who made a
+	// change, never the full row (which would drag the password hash around).
 	User models.Employees
 	// DataScope is the widest scope the caller's roles grant for this action.
 	DataScope models.DataScope

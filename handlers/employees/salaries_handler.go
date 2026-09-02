@@ -24,6 +24,8 @@ func (h *Handler) UpdateSalariesStructure(c *gin.Context) {
 		DeletedAt     *bool   `json:"deleted_at"`
 		// Version is the record the form was seeded from; the save is refused if that record has moved since.
 		Version uint `json:"version"`
+		// Reason is why the change is being made, and every salary write carries one.
+		Reason string `json:"reason"`
 	}
 	if !httpx.BindJSON(c, &input) {
 		return
@@ -36,6 +38,7 @@ func (h *Handler) UpdateSalariesStructure(c *gin.Context) {
 		EffectiveDate: input.EffectiveDate,
 		Disable:       input.DeletedAt != nil && *input.DeletedAt,
 		Version:       input.Version,
+		Reason:        input.Reason,
 	})
 	if err != nil {
 		httpx.RespondError(c, err)

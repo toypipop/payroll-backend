@@ -40,6 +40,7 @@ func autoMigrateTables(db *gorm.DB) error {
 		&models.Position{},
 		&models.Employees{},
 		&models.SalariesStructure{},
+		&models.SalaryAudit{},
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
 		&models.PayrollTransactionDetail{},

@@ -38,6 +38,12 @@ type SalariesStructureRepository interface {
 	MoveRecord(record models.SalariesStructure, effectiveDate time.Time, amount float64) error
 	SwitchOffAll(employeesID uint) error
 	DeleteRecord(record *models.SalariesStructure) error
+
+	// AppendAudit records one change. It is called inside the same transaction as the write it describes, so
+	// a change that cannot be recorded is not made.
+	AppendAudit(entry *models.SalaryAudit) error
+	// ListAuditForEmployee returns that employee's trail, newest first.
+	ListAuditForEmployee(employeesID uint) ([]models.SalaryAudit, error)
 }
 
 type gormSalariesStructureRepository struct {
@@ -137,6 +143,20 @@ func (r *gormSalariesStructureRepository) ClosedCyclesUsing(recordIDs []uint) (m
 		usage[row.SalariesStructureID] = append(usage[row.SalariesStructureID], row.CycleName)
 	}
 	return usage, nil
+}
+
+// AppendAudit writes one trail entry. Rows are append-only, so this is the only method that touches the table.
+func (r *gormSalariesStructureRepository) AppendAudit(entry *models.SalaryAudit) error {
+	return r.db.Create(entry).Error
+}
+
+// ListAuditForEmployee returns the employee's trail newest first, which is the order the screen reads it in.
+func (r *gormSalariesStructureRepository) ListAuditForEmployee(employeesID uint) ([]models.SalaryAudit, error) {
+	var entries []models.SalaryAudit
+	err := r.db.Where("employees_id = ?", employeesID).
+		Order("created_at DESC, id DESC").
+		Find(&entries).Error
+	return entries, err
 }
 
 func (r *gormSalariesStructureRepository) FindRecord(id uint) (models.SalariesStructure, error) {

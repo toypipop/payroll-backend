@@ -60,6 +60,25 @@ func (h *Handler) GetSalaryHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, rows)
 }
 
+// GetSalaryAudit returns the change log behind one employee's pay.
+func (h *Handler) GetSalaryAudit(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	employeesID, ok := httpx.ParseID(c, "employees_id", "employee")
+	if !ok {
+		return
+	}
+
+	entries, err := h.SalariesStructure.AuditTrail(scope, employeesID)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, entries)
+}
+
 // UpdateSalaryRecord moves one record along the timeline and re-prices it — the edit behind the history page's
 // Edit button. A save is addressed by effective date, so this is the only way an existing date changes.
 func (h *Handler) UpdateSalaryRecord(c *gin.Context) {
@@ -76,6 +95,7 @@ func (h *Handler) UpdateSalaryRecord(c *gin.Context) {
 		EffectiveDate string  `json:"effective_date"`
 		BaseSalaries  float64 `json:"base_salaries"`
 		Version       uint    `json:"version"`
+		Reason        string  `json:"reason"`
 	}
 	if !httpx.BindJSON(c, &input) {
 		return
@@ -85,6 +105,7 @@ func (h *Handler) UpdateSalaryRecord(c *gin.Context) {
 		EffectiveDate: input.EffectiveDate,
 		BaseSalaries:  input.BaseSalaries,
 		Version:       input.Version,
+		Reason:        input.Reason,
 	}); err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -104,7 +125,16 @@ func (h *Handler) DeleteSalaryRecord(c *gin.Context) {
 		return
 	}
 
-	if err := h.SalariesStructure.DeleteRecord(scope, id); err != nil {
+	// A delete carries its reason in the body: it is the one salary write with no form behind it, and the
+	// trail would be missing exactly the changes hardest to explain after the fact.
+	var input struct {
+		Reason string `json:"reason"`
+	}
+	if !httpx.BindJSON(c, &input) {
+		return
+	}
+
+	if err := h.SalariesStructure.DeleteRecord(scope, id, input.Reason); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

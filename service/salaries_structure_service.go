@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"time"
 
 	"payroll-backend/apperr"
@@ -27,6 +28,9 @@ var (
 // Re-exported so a handler maps one package's errors.
 var ErrSalaryVersionConflict = repository.ErrSalaryVersionConflict
 
+// ErrSalaryReasonRequired is returned when a write arrives with nothing said about why.
+var ErrSalaryReasonRequired = apperr.Validation("A reason is required for every salary change")
+
 // Re-exported so handlers import a single package.
 var (
 	ErrSalaryRecordNotFound = repository.ErrSalaryRecordNotFound
@@ -42,6 +46,9 @@ type SalaryInput struct {
 	Disable       bool
 	// Version is what the form was seeded from. Zero means the client sent none, which is how a create behaves.
 	Version uint
+	// Reason is why the change is being made. It is required: an audit trail of unexplained changes answers
+	// only half the question it exists for.
+	Reason string
 }
 
 // SalaryRecordEdit is what a caller may change on a record that already exists: where it sits on the timeline and
@@ -51,6 +58,8 @@ type SalaryRecordEdit struct {
 	BaseSalaries  float64
 	// Version is the record's own version as the row was read; the edit is refused if it has moved since.
 	Version uint
+	// Reason is why the record is being moved. Required, like every other salary write.
+	Reason string
 }
 
 // SalaryHistoryEntry is one row of an employee's salary history, plus the closed cycles that were paid from
@@ -114,6 +123,14 @@ func (s *SalariesStructureService) History(scope repository.AccessScope, employe
 	return entries, nil
 }
 
+// AuditTrail returns who changed this employee's pay, when, and why — newest first.
+func (s *SalariesStructureService) AuditTrail(scope repository.AccessScope, employeesID uint) ([]models.SalaryAudit, error) {
+	if _, err := s.employees.FindBriefScoped(scope, employeesID); err != nil {
+		return nil, ErrSalaryEmployeeDenied
+	}
+	return s.repo.ListAuditForEmployee(employeesID)
+}
+
 // currentRecord is the record in force: the one with the latest effective date among the records that are
 // switched on. It is derived from the dates every time rather than marked with a flag, so it cannot fall out of
 // step with the timeline the payroll run reads.
@@ -169,10 +186,40 @@ func isLatestOn(records []models.SalariesStructure, date time.Time) bool {
 	return true
 }
 
+// auditActor names the person making the change, snapshotting the name so the trail keeps reading correctly
+// after they are renamed or removed.
+func auditActor(scope repository.AccessScope) (uint, string) {
+	name := strings.TrimSpace(scope.User.FirstName + " " + scope.User.LastName)
+	if name == "" {
+		name = "Unknown"
+	}
+	return scope.User.ID, name
+}
+
+// recordAudit appends one trail entry for a change that has just been made in the same transaction.
+func recordAudit(repo repository.SalariesStructureRepository, scope repository.AccessScope, entry models.SalaryAudit) error {
+	entry.ActorID, entry.ActorName = auditActor(scope)
+	return repo.AppendAudit(&entry)
+}
+
+// cleanReason is the reason a write may proceed with, or the error saying it may not.
+func cleanReason(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", ErrSalaryReasonRequired
+	}
+	return trimmed, nil
+}
+
 // Save either disables an employee's current salary or supersedes it with a new one.
 func (s *SalariesStructureService) Save(scope repository.AccessScope, input SalaryInput) (SaveResult, error) {
 	if input.EmployeesID == 0 || input.CompaniesID == 0 {
 		return SaveResult{}, ErrSalaryEmployeeTarget
+	}
+
+	reason, err := cleanReason(input.Reason)
+	if err != nil {
+		return SaveResult{}, err
 	}
 
 	effectiveDate, err := timeutil.ParseDayStart(input.EffectiveDate)
@@ -210,6 +257,14 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 			if err := repo.SwitchOffAll(input.EmployeesID); err != nil {
 				return err
 			}
+			if err := recordAudit(repo, scope, models.SalaryAudit{
+				CompaniesID: employee.CompaniesID,
+				EmployeesID: input.EmployeesID,
+				Action:      models.SalaryAuditSwitchedOff,
+				Reason:      reason,
+			}); err != nil {
+				return err
+			}
 			result = SaveResult{Disabled: true}
 			return nil
 		}
@@ -241,19 +296,45 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 			}
 			// Correcting the record with the latest date brings it back into use — that is how a disabled salary
 			// is switched back on. Correcting an earlier one only changes what that period pays.
-			return repo.UpdateAmount(record, input.BaseSalaries, isLatestOn(existing, effectiveDate))
+			if err := repo.UpdateAmount(record, input.BaseSalaries, isLatestOn(existing, effectiveDate)); err != nil {
+				return err
+			}
+			was, now, on := record.BaseSalaries, input.BaseSalaries, record.EffectiveDate
+			return recordAudit(repo, scope, models.SalaryAudit{
+				CompaniesID:         employee.CompaniesID,
+				EmployeesID:         input.EmployeesID,
+				SalariesStructureID: &record.ID,
+				Action:              models.SalaryAuditAmountChanged,
+				Reason:              reason,
+				FromAmount:          &was,
+				ToAmount:            &now,
+				ToDate:              &on,
+			})
 		}
 
 		// A record may be added anywhere on the timeline, not only after the last one: a run prices each cycle
 		// from the record in force on that cycle's dates, so one slotted into the past is the rate that period is
 		// meant to be paid at. Which record is in force now follows from the dates, so nothing else is touched.
-		return repo.CreateRecord(&models.SalariesStructure{
+		next := models.SalariesStructure{
 			CompaniesID:   employee.CompaniesID,
 			EmployeesID:   input.EmployeesID,
 			BaseSalaries:  input.BaseSalaries,
 			EffectiveDate: effectiveDate,
 			IsActive:      true,
 			Version:       nextVersion(existing),
+		}
+		if err := repo.CreateRecord(&next); err != nil {
+			return err
+		}
+		amount := next.BaseSalaries
+		return recordAudit(repo, scope, models.SalaryAudit{
+			CompaniesID:         employee.CompaniesID,
+			EmployeesID:         input.EmployeesID,
+			SalariesStructureID: &next.ID,
+			Action:              models.SalaryAuditCreated,
+			Reason:              reason,
+			ToAmount:            &amount,
+			ToDate:              &effectiveDate,
 		})
 	})
 	if err != nil {
@@ -268,6 +349,11 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 // Moving a record changes what two periods pay — the one it leaves and the one it lands in — so both sides are
 // checked against the cycles that have already been closed and paid out.
 func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id uint, input SalaryRecordEdit) error {
+	reason, err := cleanReason(input.Reason)
+	if err != nil {
+		return err
+	}
+
 	effectiveDate, err := timeutil.ParseDayStart(input.EffectiveDate)
 	if err != nil {
 		return ErrSalaryDateInvalid
@@ -331,7 +417,22 @@ func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id
 			}
 		}
 
-		return repo.MoveRecord(current, effectiveDate, input.BaseSalaries)
+		if err := repo.MoveRecord(current, effectiveDate, input.BaseSalaries); err != nil {
+			return err
+		}
+		wasAmount, wasDate := current.BaseSalaries, current.EffectiveDate
+		nowAmount := input.BaseSalaries
+		return recordAudit(repo, scope, models.SalaryAudit{
+			CompaniesID:         current.CompaniesID,
+			EmployeesID:         current.EmployeesID,
+			SalariesStructureID: &current.ID,
+			Action:              models.SalaryAuditMoved,
+			Reason:              reason,
+			FromAmount:          &wasAmount,
+			ToAmount:            &nowAmount,
+			FromDate:            &wasDate,
+			ToDate:              &effectiveDate,
+		})
 	})
 }
 
@@ -347,7 +448,12 @@ func recordByID(records []models.SalariesStructure, id uint) (models.SalariesStr
 }
 
 // DeleteRecord erases a salary record, but only one no closed cycle ever used.
-func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id uint) error {
+func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id uint, reasonValue string) error {
+	reason, err := cleanReason(reasonValue)
+	if err != nil {
+		return err
+	}
+
 	record, err := s.repo.FindRecord(id)
 	if err != nil {
 		return err
@@ -375,6 +481,16 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 			return err
 		}
 
-		return nil
+		// The record id is left out: the row it pointed at is gone, and an entry that outlives its subject is
+		// the point of keeping the trail separate from the timeline.
+		amount, on := record.BaseSalaries, record.EffectiveDate
+		return recordAudit(repo, scope, models.SalaryAudit{
+			CompaniesID: record.CompaniesID,
+			EmployeesID: record.EmployeesID,
+			Action:      models.SalaryAuditDeleted,
+			Reason:      reason,
+			FromAmount:  &amount,
+			FromDate:    &on,
+		})
 	})
 }

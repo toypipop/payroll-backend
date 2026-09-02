@@ -8,6 +8,7 @@ import (
 	"payroll-backend/migrations"
 	"payroll-backend/models"
 	"payroll-backend/timeutil"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -1580,6 +1581,62 @@ func main() {
 			config.DB.Model(&models.SalariesStructure{}).
 				Where("employees_id = ? AND id <> ? AND is_active = ?", u.emp.ID, salary.ID, true).
 				Update("is_active", false)
+		}
+	}
+
+	// Give the seeded salaries the trail a real one would have. Without this the Change log is empty on every
+	// employee until someone edits their pay, which reads as "the feature is broken" rather than "nothing has
+	// happened yet". The reasons are demo text, and the actor is the admin who would have entered them.
+	var seedActor models.Employees
+	config.DB.Where("email = ?", "admin@admin.com").First(&seedActor)
+	if seedActor.ID != 0 {
+		actorName := strings.TrimSpace(seedActor.FirstName + " " + seedActor.LastName)
+		if actorName == "" {
+			actorName = "System Admin"
+		}
+
+		// The first record on an employee's timeline is the one they were hired on; the rest are raises. Cycling
+		// one flat list would hand someone "exceeded expectations" before "starting salary".
+		raiseReasons := []string{
+			"Annual review — met expectations",
+			"Promotion to senior",
+			"Market adjustment",
+			"Annual review — exceeded expectations",
+		}
+
+		var seededSalaries []models.SalariesStructure
+		config.DB.Where("deleted_at = ?", 0).Order("employees_id, effective_date").Find(&seededSalaries)
+		seenPerEmployee := map[uint]int{}
+		for i := range seededSalaries {
+			record := seededSalaries[i]
+			position := seenPerEmployee[record.EmployeesID]
+			seenPerEmployee[record.EmployeesID] = position + 1
+
+			reason := "Starting salary agreed at hire"
+			if position > 0 {
+				reason = raiseReasons[(position-1)%len(raiseReasons)]
+			}
+
+			var already int64
+			config.DB.Model(&models.SalaryAudit{}).
+				Where("salaries_structure_id = ?", record.ID).Count(&already)
+			if already > 0 {
+				continue
+			}
+
+			amount, on := record.BaseSalaries, record.EffectiveDate
+			config.DB.Create(&models.SalaryAudit{
+				CreatedAt:           record.CreatedAt,
+				CompaniesID:         record.CompaniesID,
+				EmployeesID:         record.EmployeesID,
+				SalariesStructureID: &record.ID,
+				Action:              models.SalaryAuditCreated,
+				Reason:              reason,
+				ActorID:             seedActor.ID,
+				ActorName:           actorName,
+				ToAmount:            &amount,
+				ToDate:              &on,
+			})
 		}
 	}
 
