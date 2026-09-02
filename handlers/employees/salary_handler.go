@@ -1,6 +1,7 @@
 package employees
 
 import (
+	"errors"
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
@@ -77,6 +78,81 @@ func (h *Handler) GetSalaryAudit(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, entries)
+}
+
+// bulkRaiseRequest is one batch as the screen sends it.
+type bulkRaiseRequest struct {
+	Mode          string  `json:"mode"`
+	Value         float64 `json:"value"`
+	EffectiveDate string  `json:"effective_date"`
+	Reason        string  `json:"reason"`
+	Targets       []struct {
+		EmployeesID uint    `json:"employees_id"`
+		NewSalary   float64 `json:"new_salary"`
+	} `json:"targets"`
+}
+
+func (r bulkRaiseRequest) toInput() service.BulkRaiseInput {
+	targets := make([]service.BulkRaiseTarget, 0, len(r.Targets))
+	for _, t := range r.Targets {
+		targets = append(targets, service.BulkRaiseTarget{EmployeesID: t.EmployeesID, NewSalary: t.NewSalary})
+	}
+	return service.BulkRaiseInput{
+		Mode:          service.BulkRaiseMode(r.Mode),
+		Value:         r.Value,
+		EffectiveDate: r.EffectiveDate,
+		Reason:        r.Reason,
+		Targets:       targets,
+	}
+}
+
+// PreviewBulkRaise reports what a batch would do to each selected employee, and why any of them cannot be
+// done. It writes nothing.
+func (h *Handler) PreviewBulkRaise(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
+	var input bulkRaiseRequest
+	if !httpx.BindJSON(c, &input) {
+		return
+	}
+
+	preview, err := h.SalariesStructure.BulkRaisePlan(scope, input.toInput())
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, preview)
+}
+
+// ApplyBulkRaise puts the whole batch on the timeline, or none of it. A refusal answers with the same preview
+// shape, so the screen can point at the people who stopped it rather than only saying no.
+func (h *Handler) ApplyBulkRaise(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
+	var input bulkRaiseRequest
+	if !httpx.BindJSON(c, &input) {
+		return
+	}
+
+	preview, err := h.SalariesStructure.BulkRaiseApply(scope, input.toInput())
+	if err != nil {
+		if errors.Is(err, service.ErrBulkBlocked) {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "preview": preview})
+			return
+		}
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Salaries raised successfully",
+		"preview": preview,
+	})
 }
 
 // UpdateSalaryRecord moves one record along the timeline and re-prices it — the edit behind the history page's

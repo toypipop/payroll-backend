@@ -91,6 +91,8 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 		api.POST("/salaries", g.CheckPermission("SalariesStructurePage", "CREATE"), h.Employees.UpdateSalariesStructure)
 		api.GET("/salaries/history/:employees_id", g.CheckPermission("SalariesStructurePage", "VIEW"), h.Employees.GetSalaryHistory)
 		api.GET("/salaries/audit/:employees_id", g.CheckPermission("SalariesStructurePage", "VIEW"), h.Employees.GetSalaryAudit)
+		api.POST("/salaries/bulk/preview", g.CheckPermission("SalariesStructurePage", "CREATE"), h.Employees.PreviewBulkRaise)
+		api.POST("/salaries/bulk", g.CheckPermission("SalariesStructurePage", "CREATE"), h.Employees.ApplyBulkRaise)
 		api.PATCH("/salaries/:id", g.CheckPermission("SalariesStructurePage", "EDIT"), h.Employees.UpdateSalaryRecord)
 		api.DELETE("/salaries/:id", g.CheckPermission("SalariesStructurePage", "DELETE"), h.Employees.DeleteSalaryRecord)
 

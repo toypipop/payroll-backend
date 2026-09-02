@@ -72,7 +72,10 @@ func (r *gormEmployeesRepository) FindScoped(scope AccessScope, id uint) (models
 // FindBriefScoped loads only what a cross-domain company check needs, so callers linking a record to an employee never drag the password hash around.
 func (r *gormEmployeesRepository) FindBriefScoped(scope AccessScope, id uint) (models.Employees, error) {
 	var employee models.Employees
-	if err := r.scoped(scope).Select("id, companies_id").First(&employee, id).Error; err != nil {
+	// The name and code travel with the scoping columns because the bulk raise has to name the people it is
+	// blocking, and asking again per employee would be a second query for what the first one already read.
+	// The selection stays explicit so the password hash never rides along.
+	if err := r.scoped(scope).Select("id, companies_id, employees_code, first_name, last_name").First(&employee, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Employees{}, ErrEmployeeNotFound
 		}

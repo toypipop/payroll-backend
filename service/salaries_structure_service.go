@@ -211,6 +211,91 @@ func cleanReason(value string) (string, error) {
 	return trimmed, nil
 }
 
+// salaryWrite is one employee's part of a salary change, already resolved and authorized. It exists so the
+// single-employee save and the bulk raise share one set of rules rather than two copies that drift.
+type salaryWrite struct {
+	CompaniesID   uint
+	EmployeesID   uint
+	BaseSalaries  float64
+	EffectiveDate time.Time
+	Reason        string
+	// Existing is the employee's whole timeline, read inside the same transaction as the write.
+	Existing []models.SalariesStructure
+}
+
+// applySalaryOn puts one employee's new figure on the timeline and records why. It takes the repository
+// rather than reaching for the service's own, so the caller decides the transaction: a save opens one per
+// employee, a bulk raise opens one for the batch.
+func applySalaryOn(repo repository.SalariesStructureRepository, scope repository.AccessScope, write salaryWrite) error {
+	// Backdating into a period that has already been paid out and closed would change a figure someone has already been paid against.
+	closedCycles, err := repo.CountClosedCyclesCovering(write.CompaniesID, write.EffectiveDate)
+	if err != nil {
+		return err
+	}
+	if closedCycles > 0 {
+		return ErrSalaryDateInClosed
+	}
+
+	// One effective date is one step in the salary's history, so a save that reuses a date already on the
+	// timeline corrects that record rather than adding a second one for the same day.
+	for _, record := range write.Existing {
+		if record.DeletedAt != 0 || timeutil.DateKey(record.EffectiveDate) != timeutil.DateKey(write.EffectiveDate) {
+			continue
+		}
+
+		// Correcting the figure a closed cycle was calculated from would rewrite the basis of a payslip
+		// already paid against it, so that record is fixed for good and the change belongs on a later date.
+		usage, err := repo.ClosedCyclesUsing([]uint{record.ID})
+		if err != nil {
+			return err
+		}
+		if len(usage[record.ID]) > 0 {
+			return ErrSalaryRecordPaid
+		}
+		// Correcting the record with the latest date brings it back into use — that is how a disabled salary
+		// is switched back on. Correcting an earlier one only changes what that period pays.
+		if err := repo.UpdateAmount(record, write.BaseSalaries, isLatestOn(write.Existing, write.EffectiveDate)); err != nil {
+			return err
+		}
+		was, now, on := record.BaseSalaries, write.BaseSalaries, record.EffectiveDate
+		return recordAudit(repo, scope, models.SalaryAudit{
+			CompaniesID:         write.CompaniesID,
+			EmployeesID:         write.EmployeesID,
+			SalariesStructureID: &record.ID,
+			Action:              models.SalaryAuditAmountChanged,
+			Reason:              write.Reason,
+			FromAmount:          &was,
+			ToAmount:            &now,
+			ToDate:              &on,
+		})
+	}
+
+	// A record may be added anywhere on the timeline, not only after the last one: a run prices each cycle
+	// from the record in force on that cycle's dates, so one slotted into the past is the rate that period is
+	// meant to be paid at. Which record is in force now follows from the dates, so nothing else is touched.
+	next := models.SalariesStructure{
+		CompaniesID:   write.CompaniesID,
+		EmployeesID:   write.EmployeesID,
+		BaseSalaries:  write.BaseSalaries,
+		EffectiveDate: write.EffectiveDate,
+		IsActive:      true,
+		Version:       nextVersion(write.Existing),
+	}
+	if err := repo.CreateRecord(&next); err != nil {
+		return err
+	}
+	amount := next.BaseSalaries
+	return recordAudit(repo, scope, models.SalaryAudit{
+		CompaniesID:         write.CompaniesID,
+		EmployeesID:         write.EmployeesID,
+		SalariesStructureID: &next.ID,
+		Action:              models.SalaryAuditCreated,
+		Reason:              write.Reason,
+		ToAmount:            &amount,
+		ToDate:              &write.EffectiveDate,
+	})
+}
+
 // Save either disables an employee's current salary or supersedes it with a new one.
 func (s *SalariesStructureService) Save(scope repository.AccessScope, input SalaryInput) (SaveResult, error) {
 	if input.EmployeesID == 0 || input.CompaniesID == 0 {
@@ -269,72 +354,13 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 			return nil
 		}
 
-		// Backdating into a period that has already been paid out and closed would change a figure someone has already been paid against.
-		closedCycles, err := repo.CountClosedCyclesCovering(employee.CompaniesID, effectiveDate)
-		if err != nil {
-			return err
-		}
-		if closedCycles > 0 {
-			return ErrSalaryDateInClosed
-		}
-
-		// One effective date is one step in the salary's history, so a save that reuses a date already on the
-		// timeline corrects that record rather than adding a second one for the same day.
-		for _, record := range existing {
-			if record.DeletedAt != 0 || timeutil.DateKey(record.EffectiveDate) != timeutil.DateKey(effectiveDate) {
-				continue
-			}
-
-			// Correcting the figure a closed cycle was calculated from would rewrite the basis of a payslip
-			// already paid against it, so that record is fixed for good and the change belongs on a later date.
-			usage, err := repo.ClosedCyclesUsing([]uint{record.ID})
-			if err != nil {
-				return err
-			}
-			if len(usage[record.ID]) > 0 {
-				return ErrSalaryRecordPaid
-			}
-			// Correcting the record with the latest date brings it back into use — that is how a disabled salary
-			// is switched back on. Correcting an earlier one only changes what that period pays.
-			if err := repo.UpdateAmount(record, input.BaseSalaries, isLatestOn(existing, effectiveDate)); err != nil {
-				return err
-			}
-			was, now, on := record.BaseSalaries, input.BaseSalaries, record.EffectiveDate
-			return recordAudit(repo, scope, models.SalaryAudit{
-				CompaniesID:         employee.CompaniesID,
-				EmployeesID:         input.EmployeesID,
-				SalariesStructureID: &record.ID,
-				Action:              models.SalaryAuditAmountChanged,
-				Reason:              reason,
-				FromAmount:          &was,
-				ToAmount:            &now,
-				ToDate:              &on,
-			})
-		}
-
-		// A record may be added anywhere on the timeline, not only after the last one: a run prices each cycle
-		// from the record in force on that cycle's dates, so one slotted into the past is the rate that period is
-		// meant to be paid at. Which record is in force now follows from the dates, so nothing else is touched.
-		next := models.SalariesStructure{
+		return applySalaryOn(repo, scope, salaryWrite{
 			CompaniesID:   employee.CompaniesID,
 			EmployeesID:   input.EmployeesID,
 			BaseSalaries:  input.BaseSalaries,
 			EffectiveDate: effectiveDate,
-			IsActive:      true,
-			Version:       nextVersion(existing),
-		}
-		if err := repo.CreateRecord(&next); err != nil {
-			return err
-		}
-		amount := next.BaseSalaries
-		return recordAudit(repo, scope, models.SalaryAudit{
-			CompaniesID:         employee.CompaniesID,
-			EmployeesID:         input.EmployeesID,
-			SalariesStructureID: &next.ID,
-			Action:              models.SalaryAuditCreated,
-			Reason:              reason,
-			ToAmount:            &amount,
-			ToDate:              &effectiveDate,
+			Reason:        reason,
+			Existing:      existing,
 		})
 	})
 	if err != nil {
