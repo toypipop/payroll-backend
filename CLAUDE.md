@@ -75,6 +75,14 @@ rules below from being prose nobody runs — deploy is manual and has no gate of
 - Both entry points **deny everything** when the authorized company list is empty (`applyCompanyFilter` adds `1 = 0`), matching `ScopeCompanyIDs` and the `ScopeDepartment` branch of `scopeDataAccess`. Three guards mean nothing reaches it empty today — `AuthMiddleware` 403s on empty `AccessibleCompanyIDs`, `CheckPermission` 403s unless it resolved a company, and an FK to `companies(id)` makes `companies_id = 0` unstorable — so this is fail-closed defence, not a hole being patched. Do not "simplify" it back to returning the query unfiltered.
 - `ScopeDepartment` matches on `department.category_id`, never `employees.dept_id`: two companies' "HR" departments share one `DepartmentCategory` so a Department-scoped role reaches its counterparts across authorized companies.
 
+### Salary audit trail
+
+- `salary_audit` is append-only: nothing updates or deletes a row, and there is no soft-delete column. Every write path in `SalariesStructureService` records exactly one entry — `created`, `amount_changed`, `moved`, `switched_off`, `deleted` — **inside the same transaction as the change**, so a change that cannot be recorded is not made.
+- A reason is required on all of them, the delete included; `cleanReason` trims it and refuses whitespace.
+- `ActorName` is stored beside `ActorID` rather than joined. An entry is a statement about what happened, and joining would let it change when the employee row does. `FindScopeUser` selects the name alongside the scoping columns so this costs no extra query — keep that `Select` explicit, or the password hash starts riding along.
+- A delete leaves `SalariesStructureID` null: the row it pointed at is gone, which is why the trail is a separate table rather than a column on the timeline.
+- The seed writes the trail the demo salaries would have had — first record on a timeline reads as a hire, later ones as raises — so the change log is not empty on every employee until someone edits their pay.
+
 ### Module capabilities (what the permission UI is allowed to offer)
 
 - `models/module_capability.go` holds `moduleCapabilities`, the **single source of truth** for each module's `ScopeLevel` (`company`/`employee`), `AllowedActions`, and `ActionsAtomic`. `AllowedScopes` is derived from `ScopeLevel`, never declared separately.
