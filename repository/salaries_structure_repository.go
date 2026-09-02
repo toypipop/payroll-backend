@@ -30,7 +30,7 @@ type SalariesStructureRepository interface {
 	ListEmployeesWithSalary(scope AccessScope) ([]models.Employees, error)
 	ListRecordsForEmployee(employeesID uint) ([]models.SalariesStructure, error)
 	ListAllRecordsUnscoped(employeesID uint, companyID uint) ([]models.SalariesStructure, error)
-	ClosedCycleUsage(recordIDs []uint) (map[uint]int64, error)
+	ClosedCyclesUsing(recordIDs []uint) (map[uint][]string, error)
 	FindRecord(id uint) (models.SalariesStructure, error)
 	CountClosedCyclesCovering(companyID uint, date time.Time) (int64, error)
 	CreateRecord(next *models.SalariesStructure) error
@@ -110,29 +110,31 @@ func (r *gormSalariesStructureRepository) ListAllRecordsUnscoped(employeesID uin
 	return records, err
 }
 
-// ClosedCycleUsage counts, per salary record, the payroll transactions belonging to a closed cycle.
-func (r *gormSalariesStructureRepository) ClosedCycleUsage(recordIDs []uint) (map[uint]int64, error) {
-	usage := make(map[uint]int64, len(recordIDs))
+// ClosedCyclesUsing names, per salary record, the closed payroll cycles that were calculated from it.
+// A record that appears here was the basis of a payslip someone has already been paid, which is what makes
+// it read-only — and naming the cycles is what lets the screen say why rather than just that.
+func (r *gormSalariesStructureRepository) ClosedCyclesUsing(recordIDs []uint) (map[uint][]string, error) {
+	usage := make(map[uint][]string, len(recordIDs))
 	if len(recordIDs) == 0 {
 		return usage, nil
 	}
 
 	var rows []struct {
 		SalariesStructureID uint
-		Total               int64
+		CycleName           string
 	}
 	err := r.db.Model(&models.PayrollTransaction{}).
-		Select("payroll_transaction.salaries_structure_id, COUNT(*) AS total").
+		Select("DISTINCT payroll_transaction.salaries_structure_id, payroll_cycle.cycle_name, payroll_cycle.start_date").
 		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id").
 		Where("payroll_transaction.salaries_structure_id IN ? AND payroll_cycle.is_closed = ?", recordIDs, true).
-		Group("payroll_transaction.salaries_structure_id").
+		Order("payroll_cycle.start_date").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
 
 	for _, row := range rows {
-		usage[row.SalariesStructureID] = row.Total
+		usage[row.SalariesStructureID] = append(usage[row.SalariesStructureID], row.CycleName)
 	}
 	return usage, nil
 }

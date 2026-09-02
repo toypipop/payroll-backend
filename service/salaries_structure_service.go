@@ -53,9 +53,12 @@ type SalaryRecordEdit struct {
 	Version uint
 }
 
-// SalaryHistoryEntry is one row of an employee's salary history plus whether it can still be erased.
+// SalaryHistoryEntry is one row of an employee's salary history, plus the closed cycles that were paid from
+// it. Those names are the whole reason a row is read-only, so CanDelete is derived from them rather than
+// tracked beside them.
 type SalaryHistoryEntry struct {
 	Record    models.SalariesStructure
+	LockedBy  []string
 	CanDelete bool
 }
 
@@ -98,14 +101,15 @@ func (s *SalariesStructureService) History(scope repository.AccessScope, employe
 	for _, record := range records {
 		ids = append(ids, record.ID)
 	}
-	usage, err := s.repo.ClosedCycleUsage(ids)
+	usage, err := s.repo.ClosedCyclesUsing(ids)
 	if err != nil {
 		return nil, err
 	}
 
 	entries := make([]SalaryHistoryEntry, 0, len(records))
 	for _, record := range records {
-		entries = append(entries, SalaryHistoryEntry{Record: record, CanDelete: usage[record.ID] == 0})
+		lockedBy := usage[record.ID]
+		entries = append(entries, SalaryHistoryEntry{Record: record, LockedBy: lockedBy, CanDelete: len(lockedBy) == 0})
 	}
 	return entries, nil
 }
@@ -228,11 +232,11 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 
 			// Correcting the figure a closed cycle was calculated from would rewrite the basis of a payslip
 			// already paid against it, so that record is fixed for good and the change belongs on a later date.
-			usage, err := repo.ClosedCycleUsage([]uint{record.ID})
+			usage, err := repo.ClosedCyclesUsing([]uint{record.ID})
 			if err != nil {
 				return err
 			}
-			if usage[record.ID] > 0 {
+			if len(usage[record.ID]) > 0 {
 				return ErrSalaryRecordPaid
 			}
 			// Correcting the record with the latest date brings it back into use — that is how a disabled salary
@@ -297,11 +301,11 @@ func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id
 
 		// A record a closed cycle was calculated from is the basis of a payslip already paid against it: neither
 		// the date it covers nor the figure it carries may move.
-		usage, err := repo.ClosedCycleUsage([]uint{current.ID})
+		usage, err := repo.ClosedCyclesUsing([]uint{current.ID})
 		if err != nil {
 			return err
 		}
-		if usage[current.ID] > 0 {
+		if len(usage[current.ID]) > 0 {
 			return ErrSalaryRecordPaid
 		}
 
@@ -356,11 +360,11 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 			return err
 		}
 
-		usage, err := repo.ClosedCycleUsage([]uint{record.ID})
+		usage, err := repo.ClosedCyclesUsing([]uint{record.ID})
 		if err != nil {
 			return err
 		}
-		if usage[record.ID] > 0 {
+		if len(usage[record.ID]) > 0 {
 			return ErrSalaryRecordInUse
 		}
 

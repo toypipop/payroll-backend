@@ -7,12 +7,13 @@ import (
 
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 )
 
 // fakeSalaryRepo is an in-memory SalariesStructureRepository that records the order of the calls a write path makes, and whether each one ran inside a transaction.
 type fakeSalaryRepo struct {
 	records      []models.SalariesStructure
-	usage        map[uint]int64
+	usage        map[uint][]string
 	closedCycles int64
 	findRecord   models.SalariesStructure
 
@@ -57,10 +58,10 @@ func (f *fakeSalaryRepo) ListAllRecordsUnscoped(uint, uint) ([]models.SalariesSt
 	return f.records, nil
 }
 
-func (f *fakeSalaryRepo) ClosedCycleUsage([]uint) (map[uint]int64, error) {
-	f.record("ClosedCycleUsage")
+func (f *fakeSalaryRepo) ClosedCyclesUsing([]uint) (map[uint][]string, error) {
+	f.record("ClosedCyclesUsing")
 	if f.usage == nil {
-		return map[uint]int64{}, nil
+		return map[uint][]string{}, nil
 	}
 	return f.usage, nil
 }
@@ -110,7 +111,8 @@ func (f *fakeSalaryRepo) ListEmployeesWithSalary(repository.AccessScope) ([]mode
 }
 
 func (f *fakeSalaryRepo) ListRecordsForEmployee(uint) ([]models.SalariesStructure, error) {
-	return nil, nil
+	f.record("ListRecordsForEmployee")
+	return f.records, nil
 }
 
 // fakeSalaryEmployees answers the one employee lookup the salary service makes.
@@ -207,7 +209,7 @@ func TestSalaryDeleteRunsInsideOneTransaction(t *testing.T) {
 	if len(repo.outsideTx) != 1 || repo.outsideTx[0] != "FindRecord" {
 		t.Errorf("calls outside the transaction = %v, want only the FindRecord that resolves access", repo.outsideTx)
 	}
-	want := []string{"FindRecord", "LockCompanyCycles", "ClosedCycleUsage", "DeleteRecord"}
+	want := []string{"FindRecord", "LockCompanyCycles", "ClosedCyclesUsing", "DeleteRecord"}
 	if len(repo.calls) != len(want) {
 		t.Fatalf("calls = %v, want %v", repo.calls, want)
 	}
@@ -544,7 +546,7 @@ func TestSalarySaveRefusesToCorrectADatePaidAgainst(t *testing.T) {
 			{ID: 5, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3, BaseSalaries: 38000,
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
-		usage: map[uint]int64{5: 1},
+		usage: map[uint][]string{5: {"March 2027"}},
 	}
 	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
 
@@ -725,7 +727,7 @@ func TestSalaryMoveRefusesADateAnotherRecordHolds(t *testing.T) {
 // calculated from stays where it is and keeps its figure.
 func TestSalaryMoveRefusesARecordAlreadyPaidAgainst(t *testing.T) {
 	repo := timeline(salaryOn(23, 2, 35000, 2030, time.July))
-	repo.usage = map[uint]int64{23: 1}
+	repo.usage = map[uint][]string{23: {"March 2027"}}
 	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
 
 	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
@@ -800,7 +802,7 @@ func TestSalaryMoveRunsInsideOneTransaction(t *testing.T) {
 func TestSalaryDeleteRefusesRecordUsedByClosedCycle(t *testing.T) {
 	repo := &fakeSalaryRepo{
 		findRecord: models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true},
-		usage:      map[uint]int64{9: 1},
+		usage:      map[uint][]string{9: {"March 2027"}},
 	}
 	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
 
@@ -812,5 +814,56 @@ func TestSalaryDeleteRefusesRecordUsedByClosedCycle(t *testing.T) {
 		if call == "DeleteRecord" {
 			t.Fatal("DeleteRecord was called for a record a closed cycle used")
 		}
+	}
+}
+
+// A row is read-only because a closed cycle was paid from it, and History carries the names of those cycles
+// so the screen can say which ones rather than only that the row is locked. CanDelete is derived from that
+// same list, so the two can never disagree.
+func TestSalaryHistoryNamesTheClosedCyclesThatLockARow(t *testing.T) {
+	repo := &fakeSalaryRepo{
+		records: []models.SalariesStructure{
+			{ID: 5, EmployeesID: 5, CompaniesID: 1, IsActive: true, BaseSalaries: 38000,
+				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)},
+			{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true, BaseSalaries: 41000,
+				EffectiveDate: time.Date(2027, time.July, 1, 0, 0, 0, 0, timeutil.BangkokLocation)},
+		},
+		usage: map[uint][]string{5: {"January 2027", "February 2027", "March 2027"}},
+	}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+
+	entries, err := NewSalariesStructureService(repo, employees).History(salaryScope(), 5)
+	if err != nil {
+		t.Fatalf("History returned error: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+
+	byID := map[uint]SalaryHistoryEntry{}
+	for _, entry := range entries {
+		byID[entry.Record.ID] = entry
+	}
+
+	locked := byID[5]
+	want := []string{"January 2027", "February 2027", "March 2027"}
+	if len(locked.LockedBy) != len(want) {
+		t.Fatalf("LockedBy = %v, want %v", locked.LockedBy, want)
+	}
+	for i, name := range want {
+		if locked.LockedBy[i] != name {
+			t.Fatalf("LockedBy[%d] = %q, want %q — the order the cycles ran in", i, locked.LockedBy[i], name)
+		}
+	}
+	if locked.CanDelete {
+		t.Fatal("a record three closed cycles were paid from must not be deletable")
+	}
+
+	free := byID[9]
+	if len(free.LockedBy) != 0 {
+		t.Fatalf("LockedBy = %v for a record no closed cycle used, want empty", free.LockedBy)
+	}
+	if !free.CanDelete {
+		t.Fatal("a record no closed cycle used stays deletable")
 	}
 }

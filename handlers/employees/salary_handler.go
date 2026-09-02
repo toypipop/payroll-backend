@@ -45,10 +45,17 @@ func (h *Handler) GetSalaryHistory(c *gin.Context) {
 	type historyRow struct {
 		models.SalariesStructure
 		CanDelete bool `json:"can_delete"`
+		// LockedBy names the closed cycles paid from this record, oldest first, so the screen can say why the
+		// row is read-only instead of only that it is.
+		LockedBy []string `json:"locked_by"`
 	}
 	rows := make([]historyRow, 0, len(entries))
 	for _, entry := range entries {
-		rows = append(rows, historyRow{SalariesStructure: entry.Record, CanDelete: entry.CanDelete})
+		lockedBy := entry.LockedBy
+		if lockedBy == nil {
+			lockedBy = []string{}
+		}
+		rows = append(rows, historyRow{SalariesStructure: entry.Record, CanDelete: entry.CanDelete, LockedBy: lockedBy})
 	}
 	c.JSON(http.StatusOK, rows)
 }
