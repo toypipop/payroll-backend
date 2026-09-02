@@ -867,3 +867,40 @@ func TestSalaryHistoryNamesTheClosedCyclesThatLockARow(t *testing.T) {
 		t.Fatal("a record no closed cycle used stays deletable")
 	}
 }
+
+// Omitting the version used to skip the optimistic lock on a move, which handed the last writer the record.
+// A zero is now compared like any other value, so it only passes when the stored version is zero too.
+func TestSalaryMoveRefusesAnEditThatOmitsTheVersion(t *testing.T) {
+	record := models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3,
+		EffectiveDate: time.Date(2027, time.March, 1, 0, 0, 0, 0, timeutil.BangkokLocation)}
+	repo := timeline(record)
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+
+	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 9, SalaryRecordEdit{
+		EffectiveDate: "2027-04-01", BaseSalaries: 50000, Version: 0,
+	})
+	if !errors.Is(err, ErrSalaryVersionConflict) {
+		t.Fatalf("UpdateRecord error = %v, want %v", err, ErrSalaryVersionConflict)
+	}
+	if repo.moved.record.ID != 0 {
+		t.Fatal("nothing may move on an edit that carried no version")
+	}
+}
+
+// A record whose stored version is zero — a row that predates the column — is still editable by a caller
+// that read that zero and sent it back.
+func TestSalaryMoveAcceptsAZeroVersionWhenTheRecordCarriesOne(t *testing.T) {
+	record := models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 0,
+		EffectiveDate: time.Date(2027, time.March, 1, 0, 0, 0, 0, timeutil.BangkokLocation)}
+	repo := timeline(record)
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+
+	if err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 9, SalaryRecordEdit{
+		EffectiveDate: "2027-04-01", BaseSalaries: 50000, Version: 0,
+	}); err != nil {
+		t.Fatalf("UpdateRecord returned %v, want nil", err)
+	}
+	if repo.moved.record.ID != 9 {
+		t.Fatalf("moved record = %d, want 9", repo.moved.record.ID)
+	}
+}

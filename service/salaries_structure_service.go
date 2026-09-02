@@ -295,7 +295,10 @@ func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id
 		if !found {
 			return ErrSalaryRecordNotFound
 		}
-		if input.Version > 0 && input.Version != current.Version {
+		// The version is compared, not merely checked for presence: an edit that omits it used to skip the
+		// lock entirely and take last-write-wins, which is the exact thing this path exists to prevent. A
+		// record whose stored version really is zero still matches a zero, so nothing old becomes unusable.
+		if input.Version != current.Version {
 			return ErrSalaryVersionConflict
 		}
 
