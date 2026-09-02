@@ -202,7 +202,7 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 
 		// A form seeded from an older version of this employee's salary is refused outright, so the user is
 		// told their screen is stale rather than having their edit silently replace whatever landed in between.
-		if input.Version > 0 && input.Version != currentVersion(existing) {
+		if input.Version != currentVersion(existing) {
 			return ErrSalaryVersionConflict
 		}
 

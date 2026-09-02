@@ -904,3 +904,61 @@ func TestSalaryMoveAcceptsAZeroVersionWhenTheRecordCarriesOne(t *testing.T) {
 		t.Fatalf("moved record = %d, want 9", repo.moved.record.ID)
 	}
 }
+
+// The Save path compares the version too, and the zero it compares against is not a special case: an
+// employee with nothing in force genuinely has version zero, which is what the form is seeded with. These
+// three pin that removing the old `input.Version > 0` short-circuit closed the hole without shutting
+// anything legitimate out.
+func TestSalarySaveAcceptsAZeroVersionForAnEmployeeWithNoSalary(t *testing.T) {
+	repo := &fakeSalaryRepo{}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+
+	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
+		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 30000, EffectiveDate: "2029-02-01", Version: 0,
+	}); err != nil {
+		t.Fatalf("Save returned %v, want nil — a first salary has no earlier version to send", err)
+	}
+	if repo.created.BaseSalaries != 30000 {
+		t.Fatalf("created %v, want the record to be written", repo.created)
+	}
+}
+
+// Nothing is in force while every record is switched off, so the version the form was seeded with is zero
+// there too, and saving must still be allowed.
+func TestSalarySaveAcceptsAZeroVersionWhenEverythingIsSwitchedOff(t *testing.T) {
+	repo := &fakeSalaryRepo{
+		records: []models.SalariesStructure{
+			{ID: 5, EmployeesID: 5, CompaniesID: 1, IsActive: false, Version: 3, BaseSalaries: 38000,
+				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)},
+		},
+	}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+
+	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
+		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 41000, EffectiveDate: "2029-02-01", Version: 0,
+	}); err != nil {
+		t.Fatalf("Save returned %v, want nil — nothing is in force, so the seeded version is zero", err)
+	}
+}
+
+// But an employee who does have a salary in force has a version, and a save that omits it is a stale screen
+// rather than a create.
+func TestSalarySaveRefusesAZeroVersionWhenARecordIsInForce(t *testing.T) {
+	repo := &fakeSalaryRepo{
+		records: []models.SalariesStructure{
+			{ID: 5, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3, BaseSalaries: 38000,
+				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)},
+		},
+	}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+
+	_, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
+		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 41000, EffectiveDate: "2029-02-01", Version: 0,
+	})
+	if !errors.Is(err, ErrSalaryVersionConflict) {
+		t.Fatalf("Save error = %v, want %v", err, ErrSalaryVersionConflict)
+	}
+	if repo.created.BaseSalaries != 0 {
+		t.Fatal("nothing may be written on a save that carried no version")
+	}
+}
