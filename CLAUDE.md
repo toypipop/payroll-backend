@@ -83,6 +83,13 @@ rules below from being prose nobody runs — deploy is manual and has no gate of
 - A delete leaves `SalariesStructureID` null: the row it pointed at is gone, which is why the trail is a separate table rather than a column on the timeline.
 - The seed writes the trail the demo salaries would have had — first record on a timeline reads as a hire, later ones as raises — so the change log is not empty on every employee until someone edits their pay.
 
+### Bulk salary raise
+
+- `applySalaryOn` holds the per-employee rules and takes the **repository**, not the service's own: `Save` opens a transaction per employee, `BulkRaiseApply` opens one for the batch, and neither keeps its own copy of the rules.
+- The batch is all or nothing. `bulkRows` runs the same checks for the preview and again inside the transaction — a preview is a statement about one moment, and a cycle closing while the operator reads it is exactly what `LockCompanyCycles` is for. Any blocked row returns `ErrBulkBlocked`, and the handler answers **409 with the preview attached** so the screen can name who stopped it.
+- Companies are locked in id order (`distinctCompanies`), so two batches cannot take the same locks in opposite orders and deadlock.
+- Percentages round to two decimals in both the service and the frontend, and the preview shows the rounded figure: the number approved is the number written.
+
 ### Module capabilities (what the permission UI is allowed to offer)
 
 - `models/module_capability.go` holds `moduleCapabilities`, the **single source of truth** for each module's `ScopeLevel` (`company`/`employee`), `AllowedActions`, and `ActionsAtomic`. `AllowedScopes` is derived from `ScopeLevel`, never declared separately.
