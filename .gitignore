@@ -32,3 +32,6 @@ build-errors.log
 
 # Local Go build cache
 .gocache/
+
+# scratch log from running the server in the foreground
+tmp_server.log
