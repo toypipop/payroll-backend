@@ -62,6 +62,7 @@ type BulkTimeLogInput struct {
 type BulkTimeLogResult struct {
 	CreatedCount int
 	SkippedDates []string
+	HolidayDates []string
 }
 
 // TimeLogService owns the time-log rules: who a log may be filed against, and what attendance status a pair of timestamps amounts to.
@@ -280,13 +281,23 @@ func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTime
 		if !weekdays[int(day.Weekday())] {
 			continue
 		}
+		date := day.Format(timeLogDateLayout)
+
+		holidays, err := s.repo.CountHolidaysOn(employee.CompaniesID, date)
+		if err != nil {
+			return BulkTimeLogResult{}, err
+		}
+		if holidays > 0 {
+			result.HolidayDates = append(result.HolidayDates, date)
+			continue
+		}
 
 		existing, err := s.repo.CountForEmployeeBetween(employee.ID, day, day.AddDate(0, 0, 1))
 		if err != nil {
 			return BulkTimeLogResult{}, err
 		}
 		if existing > 0 {
-			result.SkippedDates = append(result.SkippedDates, day.Format(timeLogDateLayout))
+			result.SkippedDates = append(result.SkippedDates, date)
 			continue
 		}
 

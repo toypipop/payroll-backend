@@ -1692,6 +1692,13 @@ func main() {
 		{Date: time.Date(2027, 5, 5, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Coronation Day", IsPaid: true},
 		{Date: time.Date(2027, 5, 20, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Visakha Bucha Day", IsPaid: true},
 		{Date: time.Date(2027, 6, 3, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Queen Suthida's Birthday", IsPaid: true},
+		{Date: time.Date(2027, 7, 28, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "King Maha Vajiralongkorn's Birthday", IsPaid: true},
+		{Date: time.Date(2027, 8, 12, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Queen Sirikit's Birthday / Mother's Day", IsPaid: true},
+		{Date: time.Date(2027, 10, 13, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "King Bhumibol Adulyadej Memorial Day", IsPaid: true},
+		{Date: time.Date(2027, 10, 23, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Chulalongkorn Day", IsPaid: true},
+		{Date: time.Date(2027, 12, 5, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "King Bhumibol Adulyadej's Birthday / National Day / Father's Day", IsPaid: true},
+		{Date: time.Date(2027, 12, 10, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "Constitution Day", IsPaid: true},
+		{Date: time.Date(2027, 12, 31, 0, 0, 0, 0, timeutil.BangkokLocation), Name: "New Year's Eve", IsPaid: true},
 	}
 	for _, comp := range companies {
 		for _, h := range holidaySeeds2027 {

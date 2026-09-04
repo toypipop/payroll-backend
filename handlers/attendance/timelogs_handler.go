@@ -83,6 +83,8 @@ func (h *Handler) BulkCreateTimeLog(c *gin.Context) {
 		"created_count": result.CreatedCount,
 		"skipped_count": len(result.SkippedDates),
 		"skipped_dates": result.SkippedDates,
+		"holiday_count": len(result.HolidayDates),
+		"holiday_dates": result.HolidayDates,
 	})
 }
 
