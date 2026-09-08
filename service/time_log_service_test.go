@@ -19,13 +19,13 @@ func (r *bulkTimeLogRepo) ListScoped(repository.AccessScope) ([]models.TimeLog, 
 func (r *bulkTimeLogRepo) FindScoped(repository.AccessScope, uint) (models.TimeLog, error) {
 	return models.TimeLog{}, nil
 }
-func (r *bulkTimeLogRepo) Create(*models.TimeLog) error { return nil }
-func (r *bulkTimeLogRepo) CreateMany(logs []models.TimeLog) error {
+func (r *bulkTimeLogRepo) Create(*models.TimeLog, *models.AuditLog) error { return nil }
+func (r *bulkTimeLogRepo) CreateMany(logs []models.TimeLog, _ *models.AuditLog) error {
 	r.created = append(r.created, logs...)
 	return nil
 }
-func (r *bulkTimeLogRepo) Save(*models.TimeLog) error   { return nil }
-func (r *bulkTimeLogRepo) Delete(*models.TimeLog) error { return nil }
+func (r *bulkTimeLogRepo) Save(*models.TimeLog, *models.AuditLog) error   { return nil }
+func (r *bulkTimeLogRepo) Delete(*models.TimeLog, *models.AuditLog) error { return nil }
 func (r *bulkTimeLogRepo) CountForEmployeeBetween(uint, time.Time, time.Time) (int64, error) {
 	return 0, nil
 }
@@ -81,3 +81,8 @@ func TestBulkCreateSkipsCompanyHoliday(t *testing.T) {
 		t.Fatalf("saved %d logs, want 2", len(repo.created))
 	}
 }
+
+func (f *bulkTimeLogEmployees) WithinTx(fn func(repository.EmployeesRepository) error) error {
+	return fn(f)
+}
+func (f *bulkTimeLogEmployees) AppendAuditLog(*models.AuditLog) error { return nil }

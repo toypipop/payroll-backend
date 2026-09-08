@@ -14,12 +14,18 @@ var ErrRoleAccessDenied = apperr.Forbidden("Access denied or record not found")
 
 // RoleRepository is the persistence boundary for the roles domain.
 type RoleRepository interface {
+	WithinTx(func(RoleRepository) error) error
 	ListScoped(scope AccessScope) ([]models.Roles, error)
 	ListMinimalScoped(scope AccessScope) ([]models.Roles, error)
 	FindScoped(scope AccessScope, id uint) (models.Roles, error)
 	Create(role *models.Roles) error
 	UpdateName(role *models.Roles, name string) error
 	Delete(role *models.Roles) error
+	AppendAuditLog(entry *models.AuditLog) error
+}
+
+func (r *gormRoleRepository) WithinTx(fn func(RoleRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error { return fn(&gormRoleRepository{db: tx}) })
 }
 
 type gormRoleRepository struct {
@@ -70,4 +76,8 @@ func (r *gormRoleRepository) UpdateName(role *models.Roles, name string) error {
 
 func (r *gormRoleRepository) Delete(role *models.Roles) error {
 	return r.db.Delete(role).Error
+}
+
+func (r *gormRoleRepository) AppendAuditLog(entry *models.AuditLog) error {
+	return r.db.Create(entry).Error
 }

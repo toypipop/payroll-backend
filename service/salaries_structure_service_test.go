@@ -210,6 +210,10 @@ func (f *fakeSalaryEmployees) FindDetail(uint) (models.Employees, error) {
 }
 
 func (f *fakeSalaryEmployees) UpdateFields(*models.Employees, map[string]any) error { return nil }
+func (f *fakeSalaryEmployees) WithinTx(fn func(repository.EmployeesRepository) error) error {
+	return fn(f)
+}
+func (f *fakeSalaryEmployees) AppendAuditLog(*models.AuditLog) error { return nil }
 
 // salaryScope is a caller authorized for company 1.
 func salaryScope() repository.AccessScope {

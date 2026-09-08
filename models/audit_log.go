@@ -35,30 +35,57 @@ const (
 	AuditEventTimeLogDeleted AuditEventType = "time_log.deleted"
 	AuditEventLeaveCreated   AuditEventType = "leave_request.created"
 	AuditEventLeaveUpdated   AuditEventType = "leave_request.updated"
+	AuditEventLeaveDeleted   AuditEventType = "leave_request.deleted"
 	AuditEventLeaveApproved  AuditEventType = "leave_request.approved"
 	AuditEventLeaveRejected  AuditEventType = "leave_request.rejected"
 
-	AuditEventLeaveTypeCreated     AuditEventType = "leave_type.created"
-	AuditEventLeaveTypeUpdated     AuditEventType = "leave_type.updated"
-	AuditEventLeaveTypeDeleted     AuditEventType = "leave_type.deleted"
-	AuditEventDepartmentCreated    AuditEventType = "department.created"
-	AuditEventDepartmentUpdated    AuditEventType = "department.updated"
-	AuditEventDepartmentDeleted    AuditEventType = "department.deleted"
-	AuditEventPositionCreated      AuditEventType = "position.created"
-	AuditEventPositionUpdated      AuditEventType = "position.updated"
-	AuditEventPositionDeleted      AuditEventType = "position.deleted"
-	AuditEventEarningTypeCreated   AuditEventType = "earning_type.created"
-	AuditEventEarningTypeUpdated   AuditEventType = "earning_type.updated"
-	AuditEventEarningTypeDeleted   AuditEventType = "earning_type.deleted"
-	AuditEventDeductionTypeCreated AuditEventType = "deduction_type.created"
-	AuditEventDeductionTypeUpdated AuditEventType = "deduction_type.updated"
-	AuditEventDeductionTypeDeleted AuditEventType = "deduction_type.deleted"
-	AuditEventHolidayCreated       AuditEventType = "holiday.created"
-	AuditEventHolidayUpdated       AuditEventType = "holiday.updated"
-	AuditEventHolidayDeleted       AuditEventType = "holiday.deleted"
-	AuditEventWorkLocationCreated  AuditEventType = "work_location.created"
-	AuditEventWorkLocationUpdated  AuditEventType = "work_location.updated"
-	AuditEventWorkLocationDeleted  AuditEventType = "work_location.deleted"
+	AuditEventLeaveTypeCreated             AuditEventType = "leave_type.created"
+	AuditEventLeaveTypeUpdated             AuditEventType = "leave_type.updated"
+	AuditEventLeaveTypeDeleted             AuditEventType = "leave_type.deleted"
+	AuditEventDepartmentCreated            AuditEventType = "department.created"
+	AuditEventDepartmentUpdated            AuditEventType = "department.updated"
+	AuditEventDepartmentDeleted            AuditEventType = "department.deleted"
+	AuditEventPositionCreated              AuditEventType = "position.created"
+	AuditEventPositionUpdated              AuditEventType = "position.updated"
+	AuditEventPositionDeleted              AuditEventType = "position.deleted"
+	AuditEventEarningTypeCreated           AuditEventType = "earning_type.created"
+	AuditEventEarningTypeUpdated           AuditEventType = "earning_type.updated"
+	AuditEventEarningTypeDeleted           AuditEventType = "earning_type.deleted"
+	AuditEventDeductionTypeCreated         AuditEventType = "deduction_type.created"
+	AuditEventDeductionTypeUpdated         AuditEventType = "deduction_type.updated"
+	AuditEventDeductionTypeDeleted         AuditEventType = "deduction_type.deleted"
+	AuditEventHolidayCreated               AuditEventType = "holiday.created"
+	AuditEventHolidayUpdated               AuditEventType = "holiday.updated"
+	AuditEventHolidayDeleted               AuditEventType = "holiday.deleted"
+	AuditEventWorkLocationCreated          AuditEventType = "work_location.created"
+	AuditEventWorkLocationUpdated          AuditEventType = "work_location.updated"
+	AuditEventWorkLocationDeleted          AuditEventType = "work_location.deleted"
+	AuditEventEmployeeEarningCreated       AuditEventType = "employee_earning.created"
+	AuditEventEmployeeEarningUpdated       AuditEventType = "employee_earning.updated"
+	AuditEventEmployeeEarningDeleted       AuditEventType = "employee_earning.deleted"
+	AuditEventEmployeeDeductionCreated     AuditEventType = "employee_deduction.created"
+	AuditEventEmployeeDeductionUpdated     AuditEventType = "employee_deduction.updated"
+	AuditEventEmployeeDeductionDeleted     AuditEventType = "employee_deduction.deleted"
+	AuditEventCycleEarningCreated          AuditEventType = "cycle_earning.created"
+	AuditEventCycleEarningUpdated          AuditEventType = "cycle_earning.updated"
+	AuditEventCycleEarningDeleted          AuditEventType = "cycle_earning.deleted"
+	AuditEventCycleDeductionCreated        AuditEventType = "cycle_deduction.created"
+	AuditEventCycleDeductionUpdated        AuditEventType = "cycle_deduction.updated"
+	AuditEventCycleDeductionDeleted        AuditEventType = "cycle_deduction.deleted"
+	AuditEventEmploymentTypeCreated        AuditEventType = "employment_type.created"
+	AuditEventEmploymentTypeUpdated        AuditEventType = "employment_type.updated"
+	AuditEventEmploymentTypeDeleted        AuditEventType = "employment_type.deleted"
+	AuditEventDayOffCreated                AuditEventType = "day_off.created"
+	AuditEventDayOffUpdated                AuditEventType = "day_off.updated"
+	AuditEventDayOffDeleted                AuditEventType = "day_off.deleted"
+	AuditEventAttendanceConfigSaved        AuditEventType = "attendance_config.saved"
+	AuditEventPayrollConfigSaved           AuditEventType = "payroll_config.saved"
+	AuditEventEmployeeCompanyAccessSaved   AuditEventType = "employee_company_access.saved"
+	AuditEventEmployeeCompanyAccessDeleted AuditEventType = "employee_company_access.deleted"
+	AuditEventDepartmentCategoryCreated    AuditEventType = "department_category.created"
+	AuditEventBankCreated                  AuditEventType = "bank.created"
+	AuditEventBankUpdated                  AuditEventType = "bank.updated"
+	AuditEventBankDeleted                  AuditEventType = "bank.deleted"
 
 	AuditEventSalaryCreated     AuditEventType = "salary.created"
 	AuditEventSalaryChanged     AuditEventType = "salary.amount_changed"
@@ -72,12 +99,21 @@ var auditEventTypes = map[AuditEventType]struct{}{
 	AuditEventRoleCreated: {}, AuditEventRoleUpdated: {}, AuditEventRoleDeleted: {}, AuditEventPermissionUpdated: {},
 	AuditEventEmployeeCreated: {}, AuditEventEmployeeUpdated: {}, AuditEventEmployeeDeleted: {},
 	AuditEventPayrollCycleCreated: {}, AuditEventPayrollCycleUpdated: {}, AuditEventPayrollCycleClosed: {}, AuditEventPayrollRunCompleted: {},
-	AuditEventTimeLogCreated: {}, AuditEventTimeLogUpdated: {}, AuditEventTimeLogDeleted: {}, AuditEventLeaveCreated: {}, AuditEventLeaveUpdated: {}, AuditEventLeaveApproved: {}, AuditEventLeaveRejected: {},
+	AuditEventTimeLogCreated: {}, AuditEventTimeLogUpdated: {}, AuditEventTimeLogDeleted: {}, AuditEventLeaveCreated: {}, AuditEventLeaveUpdated: {}, AuditEventLeaveDeleted: {}, AuditEventLeaveApproved: {}, AuditEventLeaveRejected: {},
 	AuditEventLeaveTypeCreated: {}, AuditEventLeaveTypeUpdated: {}, AuditEventLeaveTypeDeleted: {}, AuditEventDepartmentCreated: {}, AuditEventDepartmentUpdated: {}, AuditEventDepartmentDeleted: {},
 	AuditEventPositionCreated: {}, AuditEventPositionUpdated: {}, AuditEventPositionDeleted: {}, AuditEventEarningTypeCreated: {}, AuditEventEarningTypeUpdated: {}, AuditEventEarningTypeDeleted: {},
 	AuditEventDeductionTypeCreated: {}, AuditEventDeductionTypeUpdated: {}, AuditEventDeductionTypeDeleted: {}, AuditEventHolidayCreated: {}, AuditEventHolidayUpdated: {}, AuditEventHolidayDeleted: {},
 	AuditEventWorkLocationCreated: {}, AuditEventWorkLocationUpdated: {}, AuditEventWorkLocationDeleted: {},
-	AuditEventSalaryCreated: {}, AuditEventSalaryChanged: {}, AuditEventSalaryMoved: {}, AuditEventSalaryDeactivated: {}, AuditEventSalaryDeleted: {},
+	AuditEventEmployeeEarningCreated: {}, AuditEventEmployeeEarningUpdated: {}, AuditEventEmployeeEarningDeleted: {}, AuditEventEmployeeDeductionCreated: {}, AuditEventEmployeeDeductionUpdated: {}, AuditEventEmployeeDeductionDeleted: {},
+	AuditEventCycleEarningCreated: {}, AuditEventCycleEarningUpdated: {}, AuditEventCycleEarningDeleted: {}, AuditEventCycleDeductionCreated: {}, AuditEventCycleDeductionUpdated: {}, AuditEventCycleDeductionDeleted: {},
+	AuditEventEmploymentTypeCreated: {}, AuditEventEmploymentTypeUpdated: {}, AuditEventEmploymentTypeDeleted: {},
+	AuditEventDayOffCreated: {}, AuditEventDayOffUpdated: {}, AuditEventDayOffDeleted: {},
+	AuditEventAttendanceConfigSaved:      {},
+	AuditEventPayrollConfigSaved:         {},
+	AuditEventEmployeeCompanyAccessSaved: {}, AuditEventEmployeeCompanyAccessDeleted: {},
+	AuditEventDepartmentCategoryCreated: {},
+	AuditEventBankCreated: {}, AuditEventBankUpdated: {}, AuditEventBankDeleted: {},
+	AuditEventSalaryCreated:             {}, AuditEventSalaryChanged: {}, AuditEventSalaryMoved: {}, AuditEventSalaryDeactivated: {}, AuditEventSalaryDeleted: {},
 }
 
 var errAuditSensitiveField = errors.New("audit data contains a sensitive field")

@@ -53,7 +53,11 @@ func (s *DeductionTypeService) Create(scope repository.AccessScope, input models
 		IsTaxDeductible: input.IsTaxDeductible,
 		IsSsoDeductible: input.IsSsoDeductible,
 	}
-	if err := s.repo.Create(&deductionType); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventDeductionTypeCreated, "Deduction type created", "deduction_type", deductionType.CompaniesID, &deductionType.ID, nil, deductionTypeAuditData(deductionType))
+	if err != nil {
+		return models.DeductionType{}, err
+	}
+	if err := s.repo.Create(&deductionType, &audit); err != nil {
 		return models.DeductionType{}, err
 	}
 	return deductionType, nil
@@ -71,12 +75,19 @@ func (s *DeductionTypeService) Update(scope repository.AccessScope, id uint, inp
 		return models.DeductionType{}, err
 	}
 
+	before := deductionTypeAuditData(deductionType)
+	updated := deductionType
+	updated.Name, updated.IsTaxDeductible, updated.IsSsoDeductible = name, input.IsTaxDeductible, input.IsSsoDeductible
 	fields := map[string]any{
 		"name":              name,
 		"is_tax_deductible": input.IsTaxDeductible,
 		"is_sso_deductible": input.IsSsoDeductible,
 	}
-	if err := s.repo.UpdateFields(&deductionType, fields); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventDeductionTypeUpdated, "Deduction type updated", "deduction_type", deductionType.CompaniesID, &deductionType.ID, before, deductionTypeAuditData(updated))
+	if err != nil {
+		return models.DeductionType{}, err
+	}
+	if err := s.repo.UpdateFields(&deductionType, fields, &audit); err != nil {
 		return models.DeductionType{}, err
 	}
 	return deductionType, nil
@@ -88,5 +99,13 @@ func (s *DeductionTypeService) Delete(scope repository.AccessScope, id uint) err
 	if err != nil {
 		return ErrDeductionTypeDeleteDenied
 	}
-	return s.repo.Delete(&deductionType)
+	audit, err := masterAudit(scope, models.AuditEventDeductionTypeDeleted, "Deduction type deleted", "deduction_type", deductionType.CompaniesID, &deductionType.ID, deductionTypeAuditData(deductionType), deductionTypeAuditData(deductionType))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&deductionType, &audit)
+}
+
+func deductionTypeAuditData(value models.DeductionType) map[string]any {
+	return map[string]any{"name": value.Name, "is_tax_deductible": value.IsTaxDeductible, "is_sso_deductible": value.IsSsoDeductible}
 }

@@ -24,9 +24,9 @@ type DeductionTypeRepository interface {
 	ListScoped(scope AccessScope) ([]models.DeductionType, error)
 	ListMinimalScoped(scope AccessScope) ([]models.DeductionType, error)
 	FindScoped(scope AccessScope, id uint) (models.DeductionType, error)
-	Create(deductionType *models.DeductionType) error
-	UpdateFields(deductionType *models.DeductionType, fields map[string]any) error
-	Delete(deductionType *models.DeductionType) error
+	Create(deductionType *models.DeductionType, audit *models.AuditLog) error
+	UpdateFields(deductionType *models.DeductionType, fields map[string]any, audit *models.AuditLog) error
+	Delete(deductionType *models.DeductionType, audit *models.AuditLog) error
 }
 
 type gormDeductionTypeRepository struct {
@@ -79,18 +79,45 @@ func (r *gormDeductionTypeRepository) FindScoped(scope AccessScope, id uint) (mo
 	return deductionType, nil
 }
 
-func (r *gormDeductionTypeRepository) Create(deductionType *models.DeductionType) error {
-	return r.db.Create(deductionType).Error
+func (r *gormDeductionTypeRepository) Create(deductionType *models.DeductionType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(deductionType).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = deductionType.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
 // UpdateFields writes an explicit map so a false boolean is stored rather than skipped as a zero value.
-func (r *gormDeductionTypeRepository) UpdateFields(deductionType *models.DeductionType, fields map[string]any) error {
+func (r *gormDeductionTypeRepository) UpdateFields(deductionType *models.DeductionType, fields map[string]any, audit *models.AuditLog) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	return r.db.Model(deductionType).Updates(fields).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(deductionType).Updates(fields).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormDeductionTypeRepository) Delete(deductionType *models.DeductionType) error {
-	return r.db.Delete(deductionType).Error
+func (r *gormDeductionTypeRepository) Delete(deductionType *models.DeductionType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(deductionType).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

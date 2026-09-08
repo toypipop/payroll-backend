@@ -58,7 +58,11 @@ func (s *LeaveTypeSettingService) Create(scope repository.AccessScope, input mod
 		IsPaid:         input.IsPaid,
 		MaxDaysPerYear: input.MaxDaysPerYear,
 	}
-	if err := s.repo.Create(&leaveType); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventLeaveTypeCreated, "Leave type created", "leave_type", leaveType.CompaniesID, &leaveType.ID, nil, leaveTypeAuditData(leaveType))
+	if err != nil {
+		return models.LeaveTypeSetting{}, err
+	}
+	if err := s.repo.Create(&leaveType, &audit); err != nil {
 		return models.LeaveTypeSetting{}, err
 	}
 	return leaveType, nil
@@ -79,10 +83,15 @@ func (s *LeaveTypeSettingService) Update(scope repository.AccessScope, id uint, 
 		return models.LeaveTypeSetting{}, err
 	}
 
+	before := leaveTypeAuditData(leaveType)
 	leaveType.Name = name
 	leaveType.IsPaid = input.IsPaid
 	leaveType.MaxDaysPerYear = input.MaxDaysPerYear
-	if err := s.repo.Save(&leaveType); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventLeaveTypeUpdated, "Leave type updated", "leave_type", leaveType.CompaniesID, &leaveType.ID, before, leaveTypeAuditData(leaveType))
+	if err != nil {
+		return models.LeaveTypeSetting{}, err
+	}
+	if err := s.repo.Save(&leaveType, &audit); err != nil {
 		return models.LeaveTypeSetting{}, err
 	}
 	return leaveType, nil
@@ -94,5 +103,13 @@ func (s *LeaveTypeSettingService) Delete(scope repository.AccessScope, id uint) 
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&leaveType)
+	audit, err := masterAudit(scope, models.AuditEventLeaveTypeDeleted, "Leave type deleted", "leave_type", leaveType.CompaniesID, &leaveType.ID, leaveTypeAuditData(leaveType), leaveTypeAuditData(leaveType))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&leaveType, &audit)
+}
+
+func leaveTypeAuditData(leaveType models.LeaveTypeSetting) map[string]any {
+	return map[string]any{"name": leaveType.Name, "is_paid": leaveType.IsPaid, "max_days_per_year": leaveType.MaxDaysPerYear}
 }

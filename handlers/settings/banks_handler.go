@@ -39,12 +39,16 @@ func (h *Handler) GetBankOptions(c *gin.Context) {
 }
 
 func (h *Handler) CreateBank(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 	var input models.Bank
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	bank, err := h.Bank.Create(input)
+	bank, err := h.Bank.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -53,6 +57,10 @@ func (h *Handler) CreateBank(c *gin.Context) {
 }
 
 func (h *Handler) UpdateBank(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 	id, ok := httpx.ParseID(c, "id", "bank")
 	if !ok {
 		return
@@ -63,7 +71,7 @@ func (h *Handler) UpdateBank(c *gin.Context) {
 		return
 	}
 
-	bank, err := h.Bank.Update(id, input)
+	bank, err := h.Bank.Update(scope, id, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -72,12 +80,16 @@ func (h *Handler) UpdateBank(c *gin.Context) {
 }
 
 func (h *Handler) DeleteBank(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 	id, ok := httpx.ParseID(c, "id", "bank")
 	if !ok {
 		return
 	}
 
-	if err := h.Bank.Delete(id); err != nil {
+	if err := h.Bank.Delete(scope, id); err != nil {
 		httpx.RespondError(c, err)
 		return
 	}

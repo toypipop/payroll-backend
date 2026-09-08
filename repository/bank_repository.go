@@ -16,9 +16,9 @@ var ErrBankNotFound = apperr.NotFound("Bank not found")
 type BankRepository interface {
 	List() ([]models.Bank, error)
 	Find(id uint) (models.Bank, error)
-	Create(bank *models.Bank) error
-	Save(bank *models.Bank) error
-	Delete(bank *models.Bank) error
+	Create(bank *models.Bank, audit *models.AuditLog) error
+	Save(bank *models.Bank, audit *models.AuditLog) error
+	Delete(bank *models.Bank, audit *models.AuditLog) error
 }
 
 type gormBankRepository struct {
@@ -48,14 +48,41 @@ func (r *gormBankRepository) Find(id uint) (models.Bank, error) {
 	return bank, nil
 }
 
-func (r *gormBankRepository) Create(bank *models.Bank) error {
-	return r.db.Create(bank).Error
+func (r *gormBankRepository) Create(bank *models.Bank, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(bank).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = bank.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormBankRepository) Save(bank *models.Bank) error {
-	return r.db.Save(bank).Error
+func (r *gormBankRepository) Save(bank *models.Bank, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(bank).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormBankRepository) Delete(bank *models.Bank) error {
-	return r.db.Delete(bank).Error
+func (r *gormBankRepository) Delete(bank *models.Bank, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(bank).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

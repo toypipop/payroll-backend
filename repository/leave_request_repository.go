@@ -25,12 +25,12 @@ type LeaveRequestRepository interface {
 	ListPendingScoped(scope AccessScope) ([]models.LeaveRequest, error)
 	FindScoped(scope AccessScope, id uint) (models.LeaveRequest, error)
 	FindDetail(id uint) (models.LeaveRequest, error)
-	Create(leave *models.LeaveRequest) error
-	UpdateFields(leave *models.LeaveRequest, fields map[string]any) error
-	Delete(leave *models.LeaveRequest) error
+	Create(leave *models.LeaveRequest, audit *models.AuditLog) error
+	UpdateFields(leave *models.LeaveRequest, fields map[string]any, audit *models.AuditLog) error
+	Delete(leave *models.LeaveRequest, audit *models.AuditLog) error
 	CountOverlapping(employeesID uint, start time.Time, end time.Time, excludeID uint) (int64, error)
 	SumApprovedDaysInYear(employeesID uint, leaveTypeID uint, year int) (float64, error)
-	ApproveWithinQuota(id uint, approverID uint) error
+	ApproveWithinQuota(id uint, approverID uint, audit *models.AuditLog) error
 }
 
 type gormLeaveRequestRepository struct {
@@ -98,19 +98,46 @@ func (r *gormLeaveRequestRepository) FindDetail(id uint) (models.LeaveRequest, e
 	return leave, nil
 }
 
-func (r *gormLeaveRequestRepository) Create(leave *models.LeaveRequest) error {
-	return r.db.Create(leave).Error
+func (r *gormLeaveRequestRepository) Create(leave *models.LeaveRequest, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(leave).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = leave.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormLeaveRequestRepository) UpdateFields(leave *models.LeaveRequest, fields map[string]any) error {
+func (r *gormLeaveRequestRepository) UpdateFields(leave *models.LeaveRequest, fields map[string]any, audit *models.AuditLog) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	return r.db.Model(leave).Updates(fields).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(leave).Updates(fields).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormLeaveRequestRepository) Delete(leave *models.LeaveRequest) error {
-	return r.db.Delete(leave).Error
+func (r *gormLeaveRequestRepository) Delete(leave *models.LeaveRequest, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(leave).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
 // CountOverlapping counts the employee's pending or approved requests that overlap [start, end].
@@ -158,7 +185,7 @@ func daysByCalendarYear(start, end time.Time) map[int]float64 {
 }
 
 // ApproveWithinQuota serializes approvals for one employee and checks the current leave-type cap in the same transaction.
-func (r *gormLeaveRequestRepository) ApproveWithinQuota(id uint, approverID uint) error {
+func (r *gormLeaveRequestRepository) ApproveWithinQuota(id uint, approverID uint, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var leave models.LeaveRequest
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&leave, id).Error; err != nil {
@@ -203,10 +230,16 @@ func (r *gormLeaveRequestRepository) ApproveWithinQuota(id uint, approverID uint
 			}
 		}
 
-		return tx.Model(&leave).Updates(map[string]any{
+		if err := tx.Model(&leave).Updates(map[string]any{
 			"status":      models.LeaveStatusApproved,
 			"approved_by": approverID,
 			"updated_at":  time.Now(),
-		}).Error
+		}).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
 	})
 }

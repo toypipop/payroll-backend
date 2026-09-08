@@ -33,14 +33,17 @@ func (h *Handler) GetAllCompanies(c *gin.Context) {
 
 // CreateCompanies bootstraps a usable tenant in one transaction: the company
 func (h *Handler) CreateCompanies(c *gin.Context) {
-	userID, _ := httpx.ContextAuth(c)
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 
 	var input models.Companies
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	company, err := h.Company.Create(userID, input)
+	company, err := h.Company.Create(scope, input)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -49,6 +52,10 @@ func (h *Handler) CreateCompanies(c *gin.Context) {
 }
 
 func (h *Handler) UpdateCompanies(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 	id, ok := httpx.ParseID(c, "id", "company")
 	if !ok {
 		return
@@ -64,7 +71,7 @@ func (h *Handler) UpdateCompanies(c *gin.Context) {
 		return
 	}
 
-	company, err := h.Company.Update(id, service.CompanyUpdate{
+	company, err := h.Company.Update(scope, id, service.CompanyUpdate{
 		Name:    input.Name,
 		TaxID:   input.TaxID,
 		Address: input.Address,
@@ -78,6 +85,10 @@ func (h *Handler) UpdateCompanies(c *gin.Context) {
 }
 
 func (h *Handler) SetCompanyStatus(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 	id, ok := httpx.ParseID(c, "id", "company")
 	if !ok {
 		return
@@ -89,7 +100,7 @@ func (h *Handler) SetCompanyStatus(c *gin.Context) {
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
-	company, err := h.Company.SetActive(id, *input.IsActive)
+	company, err := h.Company.SetActive(scope, id, *input.IsActive)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

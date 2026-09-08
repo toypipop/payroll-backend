@@ -19,7 +19,7 @@ type PayrollConfigRepository interface {
 	ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error)
 	FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	FindActiveForCompany(companyID uint) (models.PayrollConfig, error)
-	UpsertForCompany(configuration *models.PayrollConfig) error
+	UpsertForCompany(configuration *models.PayrollConfig, audit *models.AuditLog) error
 }
 
 type gormPayrollConfigRepository struct {
@@ -72,15 +72,23 @@ func (r *gormPayrollConfigRepository) FindActiveForCompany(companyID uint) (mode
 }
 
 // UpsertForCompany writes the configuration, updating in place when the company already has one.
-func (r *gormPayrollConfigRepository) UpsertForCompany(configuration *models.PayrollConfig) error {
-	return r.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "companies_id"}},
-		DoUpdates: clause.Assignments(map[string]any{
-			"sso_rate":        configuration.SsoRate,
-			"sso_max_amount":  configuration.SsoMaxAmount,
-			"sso_min_salary":  configuration.SsoMinSalary,
-			"tax_calculation": configuration.TaxCalculation,
-			"updated_at":      time.Now(),
-		}),
-	}).Create(configuration).Error
+func (r *gormPayrollConfigRepository) UpsertForCompany(configuration *models.PayrollConfig, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "companies_id"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"sso_rate":        configuration.SsoRate,
+				"sso_max_amount":  configuration.SsoMaxAmount,
+				"sso_min_salary":  configuration.SsoMinSalary,
+				"tax_calculation": configuration.TaxCalculation,
+				"updated_at":      time.Now(),
+			}),
+		}).Create(configuration).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

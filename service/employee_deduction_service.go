@@ -73,7 +73,11 @@ func (s *EmployeeDeductionService) Create(scope repository.AccessScope, input mo
 		DeductionTypeID: input.DeductionTypeID,
 		Amount:          input.Amount,
 	}
-	if err := s.repo.Create(&deduction); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEmployeeDeductionCreated, "Employee deduction created", "employee_deduction", deduction.CompaniesID, &deduction.ID, nil, employeeDeductionAuditData(deduction))
+	if err != nil {
+		return models.EmployeeDeduction{}, err
+	}
+	if err := s.repo.Create(&deduction, &audit); err != nil {
 		return models.EmployeeDeduction{}, err
 	}
 	return s.repo.FindDetail(deduction.ID)
@@ -91,13 +95,20 @@ func (s *EmployeeDeductionService) Update(scope repository.AccessScope, id uint,
 		return models.EmployeeDeduction{}, err
 	}
 
+	before := employeeDeductionAuditData(item)
+	updated := item
+	updated.CompaniesID, updated.EmployeesID, updated.DeductionTypeID = companyID, input.EmployeesID, input.DeductionTypeID
 	fields := map[string]any{
 		"amount":            input.Amount,
 		"companies_id":      companyID,
 		"deduction_type_id": input.DeductionTypeID,
 		"employees_id":      input.EmployeesID,
 	}
-	if err := s.repo.UpdateFields(&item, fields); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEmployeeDeductionUpdated, "Employee deduction updated", "employee_deduction", companyID, &item.ID, before, employeeDeductionAuditData(updated))
+	if err != nil {
+		return models.EmployeeDeduction{}, err
+	}
+	if err := s.repo.UpdateFields(&item, fields, &audit); err != nil {
 		return models.EmployeeDeduction{}, err
 	}
 	return s.repo.FindDetail(item.ID)
@@ -109,5 +120,13 @@ func (s *EmployeeDeductionService) Delete(scope repository.AccessScope, id uint)
 	if err != nil {
 		return ErrEmployeeDeductionNotDeletable
 	}
-	return s.repo.Delete(&item)
+	audit, err := masterAudit(scope, models.AuditEventEmployeeDeductionDeleted, "Employee deduction deleted", "employee_deduction", item.CompaniesID, &item.ID, employeeDeductionAuditData(item), employeeDeductionAuditData(item))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&item, &audit)
+}
+
+func employeeDeductionAuditData(value models.EmployeeDeduction) map[string]any {
+	return map[string]any{"employees_id": value.EmployeesID, "deduction_type_id": value.DeductionTypeID}
 }

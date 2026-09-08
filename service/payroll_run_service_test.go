@@ -154,6 +154,7 @@ func (f *fakeRunRepo) ListCyclesScoped(repository.AccessScope) ([]models.Payroll
 }
 func (f *fakeRunRepo) CreateCycle(*models.PayrollCycle) error      { return nil }
 func (f *fakeRunRepo) MarkCycleClosed(*models.PayrollCycle) error  { return nil }
+func (f *fakeRunRepo) AppendAuditLog(*models.AuditLog) error       { return nil }
 func (f *fakeRunRepo) CountLivePayrollConfigs(uint) (int64, error) { return 0, nil }
 
 func (f *fakeRunRepo) ListActiveEmployeesBrief(uint) ([]models.Employees, error) { return nil, nil }

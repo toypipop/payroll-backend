@@ -96,7 +96,11 @@ func (s *CycleDeductionService) Create(scope repository.AccessScope, input model
 		DeductionTypeID: input.DeductionTypeID,
 		Amount:          input.Amount,
 	}
-	if err := s.repo.Create(&item); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventCycleDeductionCreated, "Cycle deduction created", "cycle_deduction", item.CompaniesID, &item.ID, nil, cycleDeductionAuditData(item))
+	if err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
+	if err := s.repo.Create(&item, &audit); err != nil {
 		return models.PayrollCycleDeduction{}, err
 	}
 	return s.repo.FindDetail(item.ID)
@@ -127,13 +131,20 @@ func (s *CycleDeductionService) Update(scope repository.AccessScope, id uint, in
 		return models.PayrollCycleDeduction{}, ErrCycleDeductionEmployeeCompany
 	}
 
+	before := cycleDeductionAuditData(item)
+	updated := item
+	updated.CompaniesID, updated.EmployeesID, updated.DeductionTypeID = cycle.CompaniesID, input.EmployeesID, input.DeductionTypeID
 	fields := map[string]any{
 		"amount":            input.Amount,
 		"companies_id":      cycle.CompaniesID,
 		"deduction_type_id": input.DeductionTypeID,
 		"employees_id":      input.EmployeesID,
 	}
-	if err := s.repo.UpdateFields(&item, fields); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventCycleDeductionUpdated, "Cycle deduction updated", "cycle_deduction", cycle.CompaniesID, &item.ID, before, cycleDeductionAuditData(updated))
+	if err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
+	if err := s.repo.UpdateFields(&item, fields, &audit); err != nil {
 		return models.PayrollCycleDeduction{}, err
 	}
 	return s.repo.FindDetail(item.ID)
@@ -148,5 +159,13 @@ func (s *CycleDeductionService) Delete(scope repository.AccessScope, id uint) er
 	if _, err := s.openCycle(scope, item.CycleID, ErrCycleDeductionCycleClosedDel); err != nil {
 		return err
 	}
-	return s.repo.Delete(&item)
+	audit, err := masterAudit(scope, models.AuditEventCycleDeductionDeleted, "Cycle deduction deleted", "cycle_deduction", item.CompaniesID, &item.ID, cycleDeductionAuditData(item), cycleDeductionAuditData(item))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&item, &audit)
+}
+
+func cycleDeductionAuditData(value models.PayrollCycleDeduction) map[string]any {
+	return map[string]any{"cycle_id": value.CycleID, "employees_id": value.EmployeesID, "deduction_type_id": value.DeductionTypeID}
 }

@@ -17,9 +17,9 @@ type DayOffRepository interface {
 	ListScoped(scope AccessScope) ([]models.DayOff, error)
 	ListMinimalScoped(scope AccessScope) ([]models.DayOff, error)
 	FindScoped(scope AccessScope, id uint) (models.DayOff, error)
-	Create(dayOff *models.DayOff) error
-	Save(dayOff *models.DayOff) error
-	Delete(dayOff *models.DayOff) error
+	Create(dayOff *models.DayOff, audit *models.AuditLog) error
+	Save(dayOff *models.DayOff, audit *models.AuditLog) error
+	Delete(dayOff *models.DayOff, audit *models.AuditLog) error
 }
 
 type gormDayOffRepository struct {
@@ -60,14 +60,41 @@ func (r *gormDayOffRepository) FindScoped(scope AccessScope, id uint) (models.Da
 	return dayOff, nil
 }
 
-func (r *gormDayOffRepository) Create(dayOff *models.DayOff) error {
-	return r.db.Create(dayOff).Error
+func (r *gormDayOffRepository) Create(dayOff *models.DayOff, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(dayOff).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = dayOff.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormDayOffRepository) Save(dayOff *models.DayOff) error {
-	return r.db.Save(dayOff).Error
+func (r *gormDayOffRepository) Save(dayOff *models.DayOff, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(dayOff).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormDayOffRepository) Delete(dayOff *models.DayOff) error {
-	return r.db.Delete(dayOff).Error
+func (r *gormDayOffRepository) Delete(dayOff *models.DayOff, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(dayOff).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

@@ -24,7 +24,7 @@ type PermissionRepository interface {
 	ListModulesOrdered() ([]models.AppModule, error)
 	ListRoleAccessScoped(scope AccessScope, rolesID uint) ([]models.RolesModuleAccess, error)
 	CapabilitiesFor(moduleIDs []uint) (ModuleCapabilities, error)
-	ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess) error
+	ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess, audit *models.AuditLog) error
 }
 
 type gormPermissionRepository struct {
@@ -89,16 +89,21 @@ func (r *gormPermissionRepository) CapabilitiesFor(moduleIDs []uint) (ModuleCapa
 }
 
 // ReplaceRoleAccess swaps a role's permission rows in one transaction.
-func (r *gormPermissionRepository) ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess) error {
+func (r *gormPermissionRepository) ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Scopes(scope.ApplyCompany("roles_module_access.companies_id")).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
 			return err
 		}
-		if len(permissions) == 0 {
-			return nil
+		if len(permissions) > 0 {
+			if err := tx.Create(&permissions).Error; err != nil {
+				return err
+			}
 		}
-		return tx.Create(&permissions).Error
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
 	})
 }

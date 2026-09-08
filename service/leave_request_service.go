@@ -146,7 +146,11 @@ func (s *LeaveRequestService) Create(scope repository.AccessScope, input LeaveIn
 		Reason:      input.Reason,
 		Status:      models.LeaveStatusPending,
 	}
-	if err := s.repo.Create(&leave); err != nil {
+	audit, err := leaveAudit(scope, models.AuditEventLeaveCreated, "Leave request created", leave, nil)
+	if err != nil {
+		return models.LeaveRequest{}, err
+	}
+	if err := s.repo.Create(&leave, &audit); err != nil {
 		return models.LeaveRequest{}, err
 	}
 	return leave, nil
@@ -180,6 +184,7 @@ func (s *LeaveRequestService) Update(scope repository.AccessScope, id uint, inpu
 		return models.LeaveRequest{}, err
 	}
 
+	before := leaveAuditData(leave)
 	fields := map[string]any{
 		"employees_id":  input.EmployeesID,
 		"leave_type_id": input.LeaveTypeID,
@@ -191,7 +196,14 @@ func (s *LeaveRequestService) Update(scope repository.AccessScope, id uint, inpu
 		"companies_id":  employee.CompaniesID,
 		"updated_at":    time.Now(),
 	}
-	if err := s.repo.UpdateFields(&leave, fields); err != nil {
+	updated := leave
+	updated.EmployeesID, updated.CompaniesID, updated.LeaveTypeID = input.EmployeesID, employee.CompaniesID, &input.LeaveTypeID
+	updated.LeaveType, updated.StartDate, updated.EndDate, updated.TotalDays = models.LeaveType(leaveType.Name), start, end, totalDays(start, end)
+	audit, err := leaveAudit(scope, models.AuditEventLeaveUpdated, "Leave request updated", updated, before)
+	if err != nil {
+		return models.LeaveRequest{}, err
+	}
+	if err := s.repo.UpdateFields(&leave, fields, &audit); err != nil {
 		return models.LeaveRequest{}, err
 	}
 
@@ -208,7 +220,11 @@ func (s *LeaveRequestService) Delete(scope repository.AccessScope, id uint) erro
 	if err != nil {
 		return ErrLeaveRequestNotDeletable
 	}
-	return s.repo.Delete(&leave)
+	audit, err := leaveAudit(scope, models.AuditEventLeaveDeleted, "Leave request deleted", leave, leaveAuditData(leave))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&leave, &audit)
 }
 
 // Pending returns the requests awaiting approval, each decorated with the quota for every calendar year they touch.
@@ -276,11 +292,37 @@ func (s *LeaveRequestService) Decide(scope repository.AccessScope, id uint, stat
 	}
 
 	if status == string(models.LeaveStatusApproved) {
-		return s.repo.ApproveWithinQuota(leave.ID, scope.User.ID)
+		approvedBy := scope.User.ID
+		updated := leave
+		updated.Status, updated.ApprovedBy = models.LeaveStatusApproved, &approvedBy
+		audit, err := leaveAudit(scope, models.AuditEventLeaveApproved, "Leave request approved", updated, leaveAuditData(leave))
+		if err != nil {
+			return err
+		}
+		return s.repo.ApproveWithinQuota(leave.ID, scope.User.ID, &audit)
+	}
+	approvedBy := scope.User.ID
+	updated := leave
+	updated.Status, updated.ApprovedBy = models.LeaveStatusRejected, &approvedBy
+	audit, err := leaveAudit(scope, models.AuditEventLeaveRejected, "Leave request rejected", updated, leaveAuditData(leave))
+	if err != nil {
+		return err
 	}
 	return s.repo.UpdateFields(&leave, map[string]any{
 		"status":      status,
 		"approved_by": scope.User.ID,
 		"updated_at":  time.Now(),
-	})
+	}, &audit)
+}
+
+func leaveAudit(scope repository.AccessScope, event models.AuditEventType, summary string, leave models.LeaveRequest, before map[string]any) (models.AuditLog, error) {
+	return BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &leave.CompaniesID, EventType: event, EntityType: "leave_request", EntityID: &leave.ID, Summary: summary, BeforeData: before, AfterData: leaveAuditData(leave)})
+}
+
+func leaveAuditData(leave models.LeaveRequest) map[string]any {
+	data := map[string]any{"employees_id": leave.EmployeesID, "leave_type_id": leave.LeaveTypeID, "leave_type": leave.LeaveType, "start_date": leave.StartDate.Format("2006-01-02"), "end_date": leave.EndDate.Format("2006-01-02"), "total_days": leave.TotalDays, "status": leave.Status}
+	if leave.ApprovedBy != nil {
+		data["approved_by"] = *leave.ApprovedBy
+	}
+	return data
 }

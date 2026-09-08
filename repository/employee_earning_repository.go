@@ -20,9 +20,9 @@ type EmployeeEarningRepository interface {
 	ListScoped(scope AccessScope) ([]models.EmployeeEarning, error)
 	FindScoped(scope AccessScope, id uint) (models.EmployeeEarning, error)
 	FindDetail(id uint) (models.EmployeeEarning, error)
-	Create(earning *models.EmployeeEarning) error
-	UpdateFields(earning *models.EmployeeEarning, fields map[string]any) error
-	Delete(earning *models.EmployeeEarning) error
+	Create(earning *models.EmployeeEarning, audit *models.AuditLog) error
+	UpdateFields(earning *models.EmployeeEarning, fields map[string]any, audit *models.AuditLog) error
+	Delete(earning *models.EmployeeEarning, audit *models.AuditLog) error
 }
 
 type gormEmployeeEarningRepository struct {
@@ -72,17 +72,44 @@ func (r *gormEmployeeEarningRepository) FindDetail(id uint) (models.EmployeeEarn
 	return item, nil
 }
 
-func (r *gormEmployeeEarningRepository) Create(earning *models.EmployeeEarning) error {
-	return r.db.Create(earning).Error
+func (r *gormEmployeeEarningRepository) Create(earning *models.EmployeeEarning, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(earning).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = earning.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEmployeeEarningRepository) UpdateFields(earning *models.EmployeeEarning, fields map[string]any) error {
+func (r *gormEmployeeEarningRepository) UpdateFields(earning *models.EmployeeEarning, fields map[string]any, audit *models.AuditLog) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	return r.db.Model(earning).Updates(fields).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(earning).Updates(fields).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEmployeeEarningRepository) Delete(earning *models.EmployeeEarning) error {
-	return r.db.Delete(earning).Error
+func (r *gormEmployeeEarningRepository) Delete(earning *models.EmployeeEarning, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(earning).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

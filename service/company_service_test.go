@@ -13,7 +13,7 @@ type lifecycleCompanyRepo struct {
 	created models.Companies
 }
 
-func (r *lifecycleCompanyRepo) CreateTenant(company *models.Companies, _ repository.TenantBootstrap) error {
+func (r *lifecycleCompanyRepo) CreateTenant(company *models.Companies, _ repository.TenantBootstrap, _ *models.AuditLog) error {
 	r.created = *company
 	return nil
 }
@@ -24,7 +24,7 @@ func TestCompanyCreateAlwaysStartsActive(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"name":" Example ","is_active":false}`), &input); err != nil {
 		t.Fatal(err)
 	}
-	company, err := NewCompanyService(repo).Create(1, input)
+	company, err := NewCompanyService(repo).Create(repository.NewAccessScope(models.Employees{ID: 1}, models.ScopeCompanies, nil), input)
 	if err != nil {
 		t.Fatal(err)
 	}

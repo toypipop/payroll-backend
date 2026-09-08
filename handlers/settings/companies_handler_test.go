@@ -17,7 +17,7 @@ type statusCompanyRepository struct {
 	repository.CompanyRepository
 }
 
-func (r statusCompanyRepository) SetActive(id uint, active bool) (models.Companies, error) {
+func (r statusCompanyRepository) SetActive(id uint, active bool, _ *models.AuditLog) (models.Companies, error) {
 	return models.Companies{ID: id, IsActive: active}, nil
 }
 
@@ -36,6 +36,12 @@ func TestCompanyStatusRequiresBooleanAndAcceptsFalse(t *testing.T) {
 		t.Run(tc.body, func(t *testing.T) {
 			handler := &Handler{Company: service.NewCompanyService(statusCompanyRepository{})}
 			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set("scope_user", models.Employees{ID: 1})
+				c.Set("data_scope", models.ScopeCompanies)
+				c.Set("authorized_company_ids", []uint{7})
+				c.Next()
+			})
 			router.PATCH("/companies/:id/status", handler.SetCompanyStatus)
 			request := httptest.NewRequest(http.MethodPatch, "/companies/7/status", strings.NewReader(tc.body))
 			request.Header.Set("Content-Type", "application/json")

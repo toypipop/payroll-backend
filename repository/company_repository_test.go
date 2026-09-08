@@ -119,7 +119,7 @@ func cycleCount(count int64) companySQLStep {
 }
 func TestCompanyDeactivationRejectsOpenPayroll(t *testing.T) {
 	repo, db := lifecycleRepo(t, lockedCompany(true), cycleCount(1))
-	_, err := repo.SetActive(7, false)
+	_, err := repo.SetActive(7, false, nil)
 	if apperr.KindOf(err) != apperr.KindConflict || !db.rolledBack || db.committed {
 		t.Fatalf("expected conflict and rollback: %v, %+v", err, db)
 	}
@@ -140,7 +140,7 @@ func TestCompanyStatusTransitionsAndIdempotence(t *testing.T) {
 				steps = append(steps, companySQLStep{contains: []string{`UPDATE "companies" SET "is_active"=`, `"companies"."deleted_at" =`}, excludes: []string{`"deleted_at"=`, `"name"=`}})
 			}
 			repo, db := lifecycleRepo(t, steps...)
-			company, err := repo.SetActive(7, tc.target)
+			company, err := repo.SetActive(7, tc.target, nil)
 			if err != nil || company.IsActive != tc.target || company.ID != 7 || !db.committed {
 				t.Fatalf("unexpected transition result: %+v, %v", company, err)
 			}
@@ -150,7 +150,7 @@ func TestCompanyStatusTransitionsAndIdempotence(t *testing.T) {
 func TestCompanyProfileCannotReactivateStaleCompany(t *testing.T) {
 	repo, db := lifecycleRepo(t, lockedCompany(false))
 	company := models.Companies{ID: 7, Name: "Stale update", IsActive: true}
-	err := repo.Save(&company)
+	err := repo.Save(&company, nil)
 	if apperr.KindOf(err) != apperr.KindConflict || !db.rolledBack {
 		t.Fatalf("inactive profile update must fail: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestCompanyProfileWritesOnlyProfileColumns(t *testing.T) {
 		excludes: []string{`"is_active"=`, `"deleted_at"=`, `"created_at"=`},
 	})
 	company := models.Companies{ID: 7, Name: "New name", IsActive: false}
-	err := repo.Save(&company)
+	err := repo.Save(&company, nil)
 	if err != nil || !company.IsActive || company.Name != "New name" || !db.committed {
 		t.Fatalf("profile result: %+v, %v", company, err)
 	}
@@ -170,7 +170,7 @@ func TestCompanyStatusMissingOrDeletedIsNotFound(t *testing.T) {
 	step := lockedCompany(false)
 	step.values = nil
 	repo, db := lifecycleRepo(t, step)
-	_, err := repo.SetActive(7, true)
+	_, err := repo.SetActive(7, true, nil)
 	if apperr.KindOf(err) != apperr.KindNotFound || !db.rolledBack {
 		t.Fatalf("missing/deleted company should be hidden: %v", err)
 	}

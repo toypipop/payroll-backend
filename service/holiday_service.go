@@ -68,7 +68,11 @@ func (s *HolidayService) Create(scope repository.AccessScope, input HolidayInput
 	}
 
 	holiday := models.Holiday{CompaniesID: companyID, Date: date, Name: name, IsPaid: input.IsPaid}
-	if err := s.repo.Create(&holiday); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventHolidayCreated, "Holiday created", "holiday", holiday.CompaniesID, &holiday.ID, nil, holidayAuditData(holiday))
+	if err != nil {
+		return models.Holiday{}, err
+	}
+	if err := s.repo.Create(&holiday, &audit); err != nil {
 		return models.Holiday{}, err
 	}
 	return holiday, nil
@@ -86,10 +90,15 @@ func (s *HolidayService) Update(scope repository.AccessScope, id uint, input Hol
 		return models.Holiday{}, err
 	}
 
+	before := holidayAuditData(holiday)
 	holiday.Date = date
 	holiday.Name = name
 	holiday.IsPaid = input.IsPaid
-	if err := s.repo.Save(&holiday); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventHolidayUpdated, "Holiday updated", "holiday", holiday.CompaniesID, &holiday.ID, before, holidayAuditData(holiday))
+	if err != nil {
+		return models.Holiday{}, err
+	}
+	if err := s.repo.Save(&holiday, &audit); err != nil {
 		return models.Holiday{}, err
 	}
 	return holiday, nil
@@ -101,5 +110,13 @@ func (s *HolidayService) Delete(scope repository.AccessScope, id uint) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&holiday)
+	audit, err := masterAudit(scope, models.AuditEventHolidayDeleted, "Holiday deleted", "holiday", holiday.CompaniesID, &holiday.ID, holidayAuditData(holiday), holidayAuditData(holiday))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&holiday, &audit)
+}
+
+func holidayAuditData(holiday models.Holiday) map[string]any {
+	return map[string]any{"date": holiday.Date.Format("2006-01-02"), "name": holiday.Name, "is_paid": holiday.IsPaid}
 }

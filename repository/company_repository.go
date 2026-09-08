@@ -28,9 +28,9 @@ type CompanyRepository interface {
 	ListAccessible(userID uint) ([]models.Companies, error)
 	ListAll() ([]models.Companies, error)
 	Find(id uint) (models.Companies, error)
-	Save(company *models.Companies) error
-	SetActive(id uint, active bool) (models.Companies, error)
-	CreateTenant(company *models.Companies, boot TenantBootstrap) error
+	Save(company *models.Companies, audit *models.AuditLog) error
+	SetActive(id uint, active bool, audit *models.AuditLog) (models.Companies, error)
+	CreateTenant(company *models.Companies, boot TenantBootstrap, audit *models.AuditLog) error
 }
 
 type gormCompanyRepository struct {
@@ -74,7 +74,7 @@ func (r *gormCompanyRepository) Find(id uint) (models.Companies, error) {
 	return company, nil
 }
 
-func (r *gormCompanyRepository) Save(company *models.Companies) error {
+func (r *gormCompanyRepository) Save(company *models.Companies, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		current, err := lockCompany(tx, company.ID)
 		if err != nil {
@@ -91,6 +91,9 @@ func (r *gormCompanyRepository) Save(company *models.Companies) error {
 			return TranslateUniqueViolation(err)
 		}
 		*company = current
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
 		return nil
 	})
 }
@@ -107,7 +110,7 @@ func lockCompany(tx *gorm.DB, id uint) (models.Companies, error) {
 }
 
 // SetActive serializes status and profile changes against ordinary requests' company locks.
-func (r *gormCompanyRepository) SetActive(id uint, active bool) (models.Companies, error) {
+func (r *gormCompanyRepository) SetActive(id uint, active bool, audit *models.AuditLog) (models.Companies, error) {
 	var company models.Companies
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var err error
@@ -127,13 +130,19 @@ func (r *gormCompanyRepository) SetActive(id uint, active bool) (models.Companie
 				return apperr.Conflict("Close all open payroll cycles before deactivating this company")
 			}
 		}
-		return tx.Model(&company).Update("is_active", active).Error
+		if err := tx.Model(&company).Update("is_active", active).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
 	})
 	return company, err
 }
 
 // CreateTenant writes the company, its bootstrap role, that role's grants and the creator's access as one transaction.
-func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot TenantBootstrap) error {
+func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot TenantBootstrap, audit *models.AuditLog) error {
 	company.IsActive = true
 	excluded := make(map[models.ModuleKey]bool, len(boot.ExcludeModules))
 	for _, key := range boot.ExcludeModules {
@@ -143,6 +152,10 @@ func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot Ten
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(company).Error; err != nil {
 			return err
+		}
+		if audit != nil {
+			audit.CompaniesID = &company.ID
+			audit.EntityID = &company.ID
 		}
 
 		role := models.Roles{
@@ -186,6 +199,9 @@ func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot Ten
 			if err := tx.Create(&creatorAccess).Error; err != nil {
 				return err
 			}
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
 		}
 		return nil
 	})

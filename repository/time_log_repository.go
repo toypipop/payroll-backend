@@ -20,10 +20,10 @@ var (
 type TimeLogRepository interface {
 	ListScoped(scope AccessScope) ([]models.TimeLog, error)
 	FindScoped(scope AccessScope, id uint) (models.TimeLog, error)
-	Create(log *models.TimeLog) error
-	CreateMany(logs []models.TimeLog) error
-	Save(log *models.TimeLog) error
-	Delete(log *models.TimeLog) error
+	Create(log *models.TimeLog, audit *models.AuditLog) error
+	CreateMany(logs []models.TimeLog, audit *models.AuditLog) error
+	Save(log *models.TimeLog, audit *models.AuditLog) error
+	Delete(log *models.TimeLog, audit *models.AuditLog) error
 	CountForEmployeeBetween(employeesID uint, from time.Time, to time.Time) (int64, error)
 	CountHolidaysOn(companyID uint, date string) (int64, error)
 	CountDayOffsOn(companyID uint, weekday int) (int64, error)
@@ -64,26 +64,59 @@ func (r *gormTimeLogRepository) FindScoped(scope AccessScope, id uint) (models.T
 	return log, nil
 }
 
-func (r *gormTimeLogRepository) Create(log *models.TimeLog) error {
-	return r.db.Create(log).Error
+func (r *gormTimeLogRepository) Create(log *models.TimeLog, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(log).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = log.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
 // CreateMany writes a generated run as one transaction, so a failure part-way through leaves no logs behind instead of a partial date range.
-func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog) error {
+func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog, audit *models.AuditLog) error {
 	if len(logs) == 0 {
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		return tx.Create(&logs).Error
+		if err := tx.Create(&logs).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
 	})
 }
 
-func (r *gormTimeLogRepository) Save(log *models.TimeLog) error {
-	return r.db.Save(log).Error
+func (r *gormTimeLogRepository) Save(log *models.TimeLog, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(log).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormTimeLogRepository) Delete(log *models.TimeLog) error {
-	return r.db.Delete(log).Error
+func (r *gormTimeLogRepository) Delete(log *models.TimeLog, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(log).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
 // CountForEmployeeBetween counts an employee's logs whose check-in falls in [from, to).

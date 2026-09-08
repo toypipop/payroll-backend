@@ -105,7 +105,11 @@ func (s *CycleEarningService) Create(scope repository.AccessScope, input models.
 		EarningTypeID: input.EarningTypeID,
 		Amount:        input.Amount,
 	}
-	if err := s.repo.Create(&item); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventCycleEarningCreated, "Cycle earning created", "cycle_earning", item.CompaniesID, &item.ID, nil, cycleEarningAuditData(item))
+	if err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
+	if err := s.repo.Create(&item, &audit); err != nil {
 		return models.PayrollCycleEarning{}, err
 	}
 	return s.repo.FindDetail(item.ID)
@@ -136,13 +140,20 @@ func (s *CycleEarningService) Update(scope repository.AccessScope, id uint, inpu
 		return models.PayrollCycleEarning{}, ErrCycleEarningEmployeeCompany
 	}
 
+	before := cycleEarningAuditData(item)
+	updated := item
+	updated.CompaniesID, updated.EmployeesID, updated.EarningTypeID = cycle.CompaniesID, input.EmployeesID, input.EarningTypeID
 	fields := map[string]any{
 		"amount":          input.Amount,
 		"companies_id":    cycle.CompaniesID,
 		"earning_type_id": input.EarningTypeID,
 		"employees_id":    input.EmployeesID,
 	}
-	if err := s.repo.UpdateFields(&item, fields); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventCycleEarningUpdated, "Cycle earning updated", "cycle_earning", cycle.CompaniesID, &item.ID, before, cycleEarningAuditData(updated))
+	if err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
+	if err := s.repo.UpdateFields(&item, fields, &audit); err != nil {
 		return models.PayrollCycleEarning{}, err
 	}
 	return s.repo.FindDetail(item.ID)
@@ -157,5 +168,13 @@ func (s *CycleEarningService) Delete(scope repository.AccessScope, id uint) erro
 	if _, err := s.openCycle(scope, item.CycleID, ErrCycleEarningCycleClosedDel); err != nil {
 		return err
 	}
-	return s.repo.Delete(&item)
+	audit, err := masterAudit(scope, models.AuditEventCycleEarningDeleted, "Cycle earning deleted", "cycle_earning", item.CompaniesID, &item.ID, cycleEarningAuditData(item), cycleEarningAuditData(item))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&item, &audit)
+}
+
+func cycleEarningAuditData(value models.PayrollCycleEarning) map[string]any {
+	return map[string]any{"cycle_id": value.CycleID, "employees_id": value.EmployeesID, "earning_type_id": value.EarningTypeID}
 }

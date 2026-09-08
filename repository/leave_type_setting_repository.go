@@ -17,9 +17,9 @@ type LeaveTypeSettingRepository interface {
 	ListScoped(scope AccessScope) ([]models.LeaveTypeSetting, error)
 	ListMinimalScoped(scope AccessScope) ([]models.LeaveTypeSetting, error)
 	FindScoped(scope AccessScope, id uint) (models.LeaveTypeSetting, error)
-	Create(leaveType *models.LeaveTypeSetting) error
-	Save(leaveType *models.LeaveTypeSetting) error
-	Delete(leaveType *models.LeaveTypeSetting) error
+	Create(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error
+	Save(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error
+	Delete(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error
 }
 
 type gormLeaveTypeSettingRepository struct {
@@ -60,14 +60,41 @@ func (r *gormLeaveTypeSettingRepository) FindScoped(scope AccessScope, id uint) 
 	return leaveType, nil
 }
 
-func (r *gormLeaveTypeSettingRepository) Create(leaveType *models.LeaveTypeSetting) error {
-	return r.db.Create(leaveType).Error
+func (r *gormLeaveTypeSettingRepository) Create(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(leaveType).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = leaveType.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormLeaveTypeSettingRepository) Save(leaveType *models.LeaveTypeSetting) error {
-	return r.db.Save(leaveType).Error
+func (r *gormLeaveTypeSettingRepository) Save(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(leaveType).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormLeaveTypeSettingRepository) Delete(leaveType *models.LeaveTypeSetting) error {
-	return r.db.Delete(leaveType).Error
+func (r *gormLeaveTypeSettingRepository) Delete(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(leaveType).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

@@ -18,6 +18,10 @@ func (h *Handler) GetDepartmentCategories(c *gin.Context) {
 }
 
 func (h *Handler) CreateDepartmentCategory(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
 	var input struct {
 		Name string `json:"name"`
 	}
@@ -25,7 +29,7 @@ func (h *Handler) CreateDepartmentCategory(c *gin.Context) {
 		return
 	}
 
-	category, err := h.DepartmentCategory.Create(input.Name)
+	category, err := h.DepartmentCategory.Create(scope, input.Name)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

@@ -73,7 +73,11 @@ func (s *EmployeeEarningService) Create(scope repository.AccessScope, input mode
 		EarningTypeID: input.EarningTypeID,
 		Amount:        input.Amount,
 	}
-	if err := s.repo.Create(&earning); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEmployeeEarningCreated, "Employee earning created", "employee_earning", earning.CompaniesID, &earning.ID, nil, employeeEarningAuditData(earning))
+	if err != nil {
+		return models.EmployeeEarning{}, err
+	}
+	if err := s.repo.Create(&earning, &audit); err != nil {
 		return models.EmployeeEarning{}, err
 	}
 	return s.repo.FindDetail(earning.ID)
@@ -91,13 +95,20 @@ func (s *EmployeeEarningService) Update(scope repository.AccessScope, id uint, i
 		return models.EmployeeEarning{}, err
 	}
 
+	before := employeeEarningAuditData(item)
+	updated := item
+	updated.CompaniesID, updated.EmployeesID, updated.EarningTypeID = companyID, input.EmployeesID, input.EarningTypeID
 	fields := map[string]any{
 		"amount":          input.Amount,
 		"companies_id":    companyID,
 		"earning_type_id": input.EarningTypeID,
 		"employees_id":    input.EmployeesID,
 	}
-	if err := s.repo.UpdateFields(&item, fields); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEmployeeEarningUpdated, "Employee earning updated", "employee_earning", companyID, &item.ID, before, employeeEarningAuditData(updated))
+	if err != nil {
+		return models.EmployeeEarning{}, err
+	}
+	if err := s.repo.UpdateFields(&item, fields, &audit); err != nil {
 		return models.EmployeeEarning{}, err
 	}
 	return s.repo.FindDetail(item.ID)
@@ -109,5 +120,13 @@ func (s *EmployeeEarningService) Delete(scope repository.AccessScope, id uint) e
 	if err != nil {
 		return ErrEmployeeEarningNotDeletable
 	}
-	return s.repo.Delete(&item)
+	audit, err := masterAudit(scope, models.AuditEventEmployeeEarningDeleted, "Employee earning deleted", "employee_earning", item.CompaniesID, &item.ID, employeeEarningAuditData(item), employeeEarningAuditData(item))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&item, &audit)
+}
+
+func employeeEarningAuditData(value models.EmployeeEarning) map[string]any {
+	return map[string]any{"employees_id": value.EmployeesID, "earning_type_id": value.EarningTypeID}
 }

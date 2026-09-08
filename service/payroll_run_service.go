@@ -274,7 +274,21 @@ func (s *PayrollRunService) CreateCycle(scope repository.AccessScope, name strin
 		StartDate:   start,
 		EndDate:     end,
 	}
-	if err := s.repo.CreateCycle(&cycle); err != nil {
+	err = s.repo.WithinTx(func(repo repository.PayrollRunRepository) error {
+		if err := repo.CreateCycle(&cycle); err != nil {
+			return err
+		}
+		audit, err := BuildAuditLog(scope, models.AuditLogInput{
+			CompaniesID: &cycle.CompaniesID, EventType: models.AuditEventPayrollCycleCreated,
+			EntityType: "payroll_cycle", EntityID: &cycle.ID, Summary: "Payroll cycle created",
+			AfterData: payrollCycleAuditData(cycle),
+		})
+		if err != nil {
+			return err
+		}
+		return repo.AppendAuditLog(&audit)
+	})
+	if err != nil {
 		return models.PayrollCycle{}, err
 	}
 	return cycle, nil
@@ -303,6 +317,29 @@ func (s *PayrollRunService) Close(scope repository.AccessScope, cycleID uint) (m
 			return err
 		}
 		if err := repo.MarkCycleClosed(&locked); err != nil {
+			return err
+		}
+		locked.IsClosed = true
+		runAudit, err := BuildAuditLog(scope, models.AuditLogInput{
+			CompaniesID: &locked.CompaniesID, EventType: models.AuditEventPayrollRunCompleted,
+			EntityType: "payroll_cycle", EntityID: &locked.ID, Summary: "Payroll run completed",
+			AfterData: payrollRunAuditData(result),
+		})
+		if err != nil {
+			return err
+		}
+		if err := repo.AppendAuditLog(&runAudit); err != nil {
+			return err
+		}
+		closeAudit, err := BuildAuditLog(scope, models.AuditLogInput{
+			CompaniesID: &locked.CompaniesID, EventType: models.AuditEventPayrollCycleClosed,
+			EntityType: "payroll_cycle", EntityID: &locked.ID, Summary: "Payroll cycle closed",
+			BeforeData: map[string]any{"is_closed": false}, AfterData: payrollCycleAuditData(locked),
+		})
+		if err != nil {
+			return err
+		}
+		if err := repo.AppendAuditLog(&closeAudit); err != nil {
 			return err
 		}
 		cycle = locked
@@ -337,6 +374,17 @@ func (s *PayrollRunService) Recalculate(scope repository.AccessScope, cycleID ui
 		if err != nil {
 			return err
 		}
+		audit, err := BuildAuditLog(scope, models.AuditLogInput{
+			CompaniesID: &locked.CompaniesID, EventType: models.AuditEventPayrollRunCompleted,
+			EntityType: "payroll_cycle", EntityID: &locked.ID, Summary: "Payroll run recalculated",
+			AfterData: payrollRunAuditData(result),
+		})
+		if err != nil {
+			return err
+		}
+		if err := repo.AppendAuditLog(&audit); err != nil {
+			return err
+		}
 		cycle = locked
 		return nil
 	})
@@ -344,6 +392,14 @@ func (s *PayrollRunService) Recalculate(scope repository.AccessScope, cycleID ui
 		return models.PayrollCycle{}, RunResult{}, err
 	}
 	return cycle, result, nil
+}
+
+func payrollCycleAuditData(cycle models.PayrollCycle) map[string]any {
+	return map[string]any{"cycle_name": cycle.CycleName, "start_date": cycle.StartDate.Format("2006-01-02"), "end_date": cycle.EndDate.Format("2006-01-02"), "is_closed": cycle.IsClosed}
+}
+
+func payrollRunAuditData(result RunResult) map[string]any {
+	return map[string]any{"processed_count": result.ProcessedCount, "skipped_count": result.SkippedCount, "prorated_count": len(result.Prorated)}
 }
 
 // Snapshot recalculates and persists the transactions and detail lines for one cycle, as a single transaction.

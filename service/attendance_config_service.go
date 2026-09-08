@@ -119,7 +119,11 @@ func (s *AttendanceConfigService) Save(scope repository.AccessScope, input Atten
 		IsOvertimeEarningsEnabled: input.IsOvertimeEarningsEnabled,
 		IsExtraEarningsEnabled:    input.IsExtraEarningsEnabled,
 	}
-	if err := s.repo.UpsertForCompany(&configuration); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventAttendanceConfigSaved, "Attendance configuration saved", "attendance_config", configuration.CompaniesID, &configuration.ID, nil, map[string]any{"work_start_time": input.WorkStartTime, "work_end_time": input.WorkEndTime, "late_deduction_enabled": input.IsLateDeductionEnabled, "absent_deduction_enabled": input.IsAbsentDeductionEnabled, "overtime_earnings_enabled": input.IsOvertimeEarningsEnabled, "extra_earnings_enabled": input.IsExtraEarningsEnabled})
+	if err != nil {
+		return models.AttendanceConfig{}, err
+	}
+	if err := s.repo.UpsertForCompany(&configuration, &audit); err != nil {
 		return models.AttendanceConfig{}, err
 	}
 	return configuration, nil

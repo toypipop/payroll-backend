@@ -89,11 +89,13 @@ func (b *bulkEmployees) ListScoped(repository.AccessScope) ([]models.Employees, 
 func (b *bulkEmployees) FindScoped(repository.AccessScope, uint) (models.Employees, error) {
 	return models.Employees{}, nil
 }
-func (b *bulkEmployees) FindRole(uint) (models.Roles, error)                  { return models.Roles{}, nil }
-func (b *bulkEmployees) Create(*models.Employees) error                       { return nil }
-func (b *bulkEmployees) Delete(*models.Employees) error                       { return nil }
-func (b *bulkEmployees) FindDetail(uint) (models.Employees, error)            { return models.Employees{}, nil }
-func (b *bulkEmployees) UpdateFields(*models.Employees, map[string]any) error { return nil }
+func (b *bulkEmployees) FindRole(uint) (models.Roles, error)                          { return models.Roles{}, nil }
+func (b *bulkEmployees) Create(*models.Employees) error                               { return nil }
+func (b *bulkEmployees) Delete(*models.Employees) error                               { return nil }
+func (b *bulkEmployees) FindDetail(uint) (models.Employees, error)                    { return models.Employees{}, nil }
+func (b *bulkEmployees) UpdateFields(*models.Employees, map[string]any) error         { return nil }
+func (b *bulkEmployees) WithinTx(fn func(repository.EmployeesRepository) error) error { return fn(b) }
+func (b *bulkEmployees) AppendAuditLog(*models.AuditLog) error                        { return nil }
 
 // bulkFixture is three employees of company 1: two already paid, and one who has no salary at all.
 func bulkFixture() (*bulkRepo, *bulkEmployees) {

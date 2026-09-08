@@ -16,7 +16,7 @@ var ErrAttendanceConfigNotFound = apperr.NotFound("Attendance configuration not 
 // AttendanceConfigRepository is the persistence boundary for the attendance-config domain.
 type AttendanceConfigRepository interface {
 	ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error)
-	UpsertForCompany(configuration *models.AttendanceConfig) error
+	UpsertForCompany(configuration *models.AttendanceConfig, audit *models.AuditLog) error
 }
 
 type gormAttendanceConfigRepository struct {
@@ -55,7 +55,13 @@ func saveFields(configuration *models.AttendanceConfig) map[string]any {
 }
 
 // UpsertForCompany writes the configuration, updating in place when the company already has one: companies_id is unique, so a company has exactly one.
-func (r *gormAttendanceConfigRepository) UpsertForCompany(configuration *models.AttendanceConfig) error {
+func (r *gormAttendanceConfigRepository) UpsertForCompany(configuration *models.AttendanceConfig, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return (&gormAttendanceConfigRepository{db: tx}).upsertForCompany(configuration, audit)
+	})
+}
+
+func (r *gormAttendanceConfigRepository) upsertForCompany(configuration *models.AttendanceConfig, audit *models.AuditLog) error {
 	fields := saveFields(configuration)
 	now := time.Now()
 
@@ -67,6 +73,9 @@ func (r *gormAttendanceConfigRepository) UpsertForCompany(configuration *models.
 			return updateErr
 		}
 		configuration.ID = existing.ID
+		if audit != nil {
+			return r.db.Create(audit).Error
+		}
 		return nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -76,5 +85,15 @@ func (r *gormAttendanceConfigRepository) UpsertForCompany(configuration *models.
 	fields["companies_id"] = configuration.CompaniesID
 	fields["created_at"] = now
 	fields["updated_at"] = now
-	return r.db.Model(&models.AttendanceConfig{}).Create(fields).Error
+	configuration.CreatedAt, configuration.UpdatedAt = now, now
+	if err := r.db.Create(configuration).Error; err != nil {
+		return err
+	}
+	if audit != nil && audit.EntityID != nil {
+		*audit.EntityID = configuration.ID
+	}
+	if audit != nil {
+		return r.db.Create(audit).Error
+	}
+	return nil
 }

@@ -21,6 +21,7 @@ var ClearField = struct{}{}
 
 // EmployeesRepository is the persistence boundary for the employees domain.
 type EmployeesRepository interface {
+	WithinTx(func(EmployeesRepository) error) error
 	ListScoped(scope AccessScope) ([]models.Employees, error)
 	FindScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindBriefScoped(scope AccessScope, id uint) (models.Employees, error)
@@ -29,6 +30,11 @@ type EmployeesRepository interface {
 	UpdateFields(employee *models.Employees, fields map[string]any) error
 	Delete(employee *models.Employees) error
 	FindDetail(id uint) (models.Employees, error)
+	AppendAuditLog(*models.AuditLog) error
+}
+
+func (r *gormEmployeesRepository) WithinTx(fn func(EmployeesRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error { return fn(&gormEmployeesRepository{db: tx}) })
 }
 
 type gormEmployeesRepository struct {
@@ -145,4 +151,8 @@ func (r *gormEmployeesRepository) FindDetail(id uint) (models.Employees, error) 
 		return models.Employees{}, err
 	}
 	return employee, nil
+}
+
+func (r *gormEmployeesRepository) AppendAuditLog(entry *models.AuditLog) error {
+	return r.db.Create(entry).Error
 }

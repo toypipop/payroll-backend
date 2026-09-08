@@ -43,7 +43,11 @@ func (s *PayrollConfigService) Save(scope repository.AccessScope, input models.P
 		return models.PayrollConfig{}, ErrPayrollConfigCompanyDenied
 	}
 
-	if err := s.repo.UpsertForCompany(&input); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventPayrollConfigSaved, "Payroll configuration saved", "payroll_config", input.CompaniesID, nil, nil, map[string]any{"tax_calculation": input.TaxCalculation})
+	if err != nil {
+		return models.PayrollConfig{}, err
+	}
+	if err := s.repo.UpsertForCompany(&input, &audit); err != nil {
 		return models.PayrollConfig{}, err
 	}
 	return input, nil

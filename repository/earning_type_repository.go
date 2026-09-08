@@ -24,9 +24,9 @@ type EarningTypeRepository interface {
 	ListScoped(scope AccessScope) ([]models.EarningType, error)
 	ListMinimalScoped(scope AccessScope) ([]models.EarningType, error)
 	FindScoped(scope AccessScope, id uint) (models.EarningType, error)
-	Create(earningType *models.EarningType) error
-	UpdateFields(earningType *models.EarningType, fields map[string]any) error
-	Delete(earningType *models.EarningType) error
+	Create(earningType *models.EarningType, audit *models.AuditLog) error
+	UpdateFields(earningType *models.EarningType, fields map[string]any, audit *models.AuditLog) error
+	Delete(earningType *models.EarningType, audit *models.AuditLog) error
 }
 
 type gormEarningTypeRepository struct {
@@ -79,18 +79,45 @@ func (r *gormEarningTypeRepository) FindScoped(scope AccessScope, id uint) (mode
 	return earningType, nil
 }
 
-func (r *gormEarningTypeRepository) Create(earningType *models.EarningType) error {
-	return r.db.Create(earningType).Error
+func (r *gormEarningTypeRepository) Create(earningType *models.EarningType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(earningType).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = earningType.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
 // UpdateFields writes an explicit map so a false boolean is stored rather than skipped as a zero value.
-func (r *gormEarningTypeRepository) UpdateFields(earningType *models.EarningType, fields map[string]any) error {
+func (r *gormEarningTypeRepository) UpdateFields(earningType *models.EarningType, fields map[string]any, audit *models.AuditLog) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	return r.db.Model(earningType).Updates(fields).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(earningType).Updates(fields).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEarningTypeRepository) Delete(earningType *models.EarningType) error {
-	return r.db.Delete(earningType).Error
+func (r *gormEarningTypeRepository) Delete(earningType *models.EarningType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(earningType).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

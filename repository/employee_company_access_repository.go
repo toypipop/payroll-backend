@@ -18,9 +18,9 @@ type EmployeeCompanyAccessRepository interface {
 	FindScoped(scope AccessScope, id uint) (models.EmployeeCompanyAccess, error)
 	FindDetail(id uint) (models.EmployeeCompanyAccess, error)
 	FindEmployeeBrief(id uint) (models.Employees, error)
-	Create(mapping *models.EmployeeCompanyAccess) error
-	UpdateFields(mapping *models.EmployeeCompanyAccess, fields map[string]any) error
-	Delete(mapping *models.EmployeeCompanyAccess) error
+	Create(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error
+	UpdateFields(mapping *models.EmployeeCompanyAccess, fields map[string]any, audit *models.AuditLog) error
+	Delete(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error
 }
 
 type gormEmployeeCompanyAccessRepository struct {
@@ -87,17 +87,44 @@ func (r *gormEmployeeCompanyAccessRepository) FindEmployeeBrief(id uint) (models
 	return employee, nil
 }
 
-func (r *gormEmployeeCompanyAccessRepository) Create(mapping *models.EmployeeCompanyAccess) error {
-	return r.db.Create(mapping).Error
+func (r *gormEmployeeCompanyAccessRepository) Create(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(mapping).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = mapping.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEmployeeCompanyAccessRepository) UpdateFields(mapping *models.EmployeeCompanyAccess, fields map[string]any) error {
+func (r *gormEmployeeCompanyAccessRepository) UpdateFields(mapping *models.EmployeeCompanyAccess, fields map[string]any, audit *models.AuditLog) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	return r.db.Model(mapping).Updates(fields).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(mapping).Updates(fields).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEmployeeCompanyAccessRepository) Delete(mapping *models.EmployeeCompanyAccess) error {
-	return r.db.Delete(mapping).Error
+func (r *gormEmployeeCompanyAccessRepository) Delete(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(mapping).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

@@ -45,6 +45,7 @@ type TransactionSnapshot struct {
 type PayrollRunRepository interface {
 	// WithinTx runs fn against a repository bound to a single database transaction, so a whole payroll run commits or rolls back as one unit.
 	WithinTx(fn func(PayrollRunRepository) error) error
+	AppendAuditLog(entry *models.AuditLog) error
 	// LockCycleForUpdate takes a row lock on the cycle for the rest of the transaction, so two concurrent runs on the same cycle serialise instead of racing.
 	LockCycleForUpdate(cycleID uint) (models.PayrollCycle, error)
 
@@ -100,6 +101,10 @@ func (r *gormPayrollRunRepository) WithinTx(fn func(PayrollRunRepository) error)
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		return fn(&gormPayrollRunRepository{db: tx})
 	})
+}
+
+func (r *gormPayrollRunRepository) AppendAuditLog(entry *models.AuditLog) error {
+	return r.db.Create(entry).Error
 }
 
 // LockCycleForUpdate reads the cycle with SELECT ... FOR UPDATE, holding the row until the surrounding transaction ends.

@@ -57,7 +57,11 @@ func (s *DepartmentService) Create(scope repository.AccessScope, input models.De
 		DeptName:    name,
 		CategoryID:  input.CategoryID,
 	}
-	if err := s.repo.Create(&department); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventDepartmentCreated, "Department created", "department", department.CompaniesID, &department.ID, nil, departmentAuditData(department))
+	if err != nil {
+		return models.Department{}, err
+	}
+	if err := s.repo.Create(&department, &audit); err != nil {
 		return models.Department{}, err
 	}
 	return department, nil
@@ -78,9 +82,14 @@ func (s *DepartmentService) Update(scope repository.AccessScope, id uint, name s
 		return models.Department{}, err
 	}
 
+	before := departmentAuditData(department)
 	department.DeptName = trimmed
 	department.CategoryID = categoryID
-	if err := s.repo.Save(&department); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventDepartmentUpdated, "Department updated", "department", department.CompaniesID, &department.ID, before, departmentAuditData(department))
+	if err != nil {
+		return models.Department{}, err
+	}
+	if err := s.repo.Save(&department, &audit); err != nil {
 		return models.Department{}, err
 	}
 	return department, nil
@@ -92,5 +101,13 @@ func (s *DepartmentService) Delete(scope repository.AccessScope, id uint) error 
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&department)
+	audit, err := masterAudit(scope, models.AuditEventDepartmentDeleted, "Department deleted", "department", department.CompaniesID, &department.ID, departmentAuditData(department), departmentAuditData(department))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&department, &audit)
+}
+
+func departmentAuditData(department models.Department) map[string]any {
+	return map[string]any{"name": department.DeptName, "category_id": department.CategoryID}
 }

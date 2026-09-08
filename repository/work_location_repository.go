@@ -17,9 +17,9 @@ type WorkLocationRepository interface {
 	ListScoped(scope AccessScope) ([]models.WorkLocation, error)
 	ListMinimalScoped(scope AccessScope) ([]models.WorkLocation, error)
 	FindScoped(scope AccessScope, id uint) (models.WorkLocation, error)
-	Create(location *models.WorkLocation) error
-	Save(location *models.WorkLocation) error
-	Delete(location *models.WorkLocation) error
+	Create(location *models.WorkLocation, audit *models.AuditLog) error
+	Save(location *models.WorkLocation, audit *models.AuditLog) error
+	Delete(location *models.WorkLocation, audit *models.AuditLog) error
 }
 
 type gormWorkLocationRepository struct {
@@ -60,14 +60,41 @@ func (r *gormWorkLocationRepository) FindScoped(scope AccessScope, id uint) (mod
 	return location, nil
 }
 
-func (r *gormWorkLocationRepository) Create(location *models.WorkLocation) error {
-	return r.db.Create(location).Error
+func (r *gormWorkLocationRepository) Create(location *models.WorkLocation, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(location).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = location.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormWorkLocationRepository) Save(location *models.WorkLocation) error {
-	return r.db.Save(location).Error
+func (r *gormWorkLocationRepository) Save(location *models.WorkLocation, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(location).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormWorkLocationRepository) Delete(location *models.WorkLocation) error {
-	return r.db.Delete(location).Error
+func (r *gormWorkLocationRepository) Delete(location *models.WorkLocation, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(location).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

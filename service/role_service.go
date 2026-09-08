@@ -45,7 +45,17 @@ func (s *RoleService) Create(scope repository.AccessScope, input models.Roles) (
 	}
 
 	role := models.Roles{CompaniesID: input.CompaniesID, RolesName: name}
-	if err := s.repo.Create(&role); err != nil {
+	if err := s.repo.WithinTx(func(repo repository.RoleRepository) error {
+		if err := repo.Create(&role); err != nil {
+			return err
+		}
+		companyID, roleID := role.CompaniesID, role.ID
+		audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &roleID, EventType: models.AuditEventRoleCreated, EntityType: "role", Summary: "Role created", AfterData: map[string]any{"roles_name": role.RolesName}})
+		if err != nil {
+			return err
+		}
+		return repo.AppendAuditLog(&audit)
+	}); err != nil {
 		return models.Roles{}, err
 	}
 	return role, nil
@@ -63,7 +73,18 @@ func (s *RoleService) Update(scope repository.AccessScope, id uint, name string)
 		return models.Roles{}, err
 	}
 
-	if err := s.repo.UpdateName(&role, trimmed); err != nil {
+	before := role.RolesName
+	if err := s.repo.WithinTx(func(repo repository.RoleRepository) error {
+		if err := repo.UpdateName(&role, trimmed); err != nil {
+			return err
+		}
+		companyID, roleID := role.CompaniesID, role.ID
+		audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &roleID, EventType: models.AuditEventRoleUpdated, EntityType: "role", Summary: "Role updated", BeforeData: map[string]any{"roles_name": before}, AfterData: map[string]any{"roles_name": trimmed}})
+		if err != nil {
+			return err
+		}
+		return repo.AppendAuditLog(&audit)
+	}); err != nil {
 		return models.Roles{}, err
 	}
 	return role, nil
@@ -75,5 +96,15 @@ func (s *RoleService) Delete(scope repository.AccessScope, id uint) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&role)
+	return s.repo.WithinTx(func(repo repository.RoleRepository) error {
+		if err := repo.Delete(&role); err != nil {
+			return err
+		}
+		companyID, roleID := role.CompaniesID, role.ID
+		audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &roleID, EventType: models.AuditEventRoleDeleted, EntityType: "role", Summary: "Role deleted", BeforeData: map[string]any{"roles_name": role.RolesName}})
+		if err != nil {
+			return err
+		}
+		return repo.AppendAuditLog(&audit)
+	})
 }

@@ -76,7 +76,11 @@ func (s *DayOffService) Create(scope repository.AccessScope, input DayOffInput) 
 	}
 
 	dayOff := models.DayOff{CompaniesID: companyID, Weekday: input.Weekday, Name: name, IsPaid: input.IsPaid}
-	if err := s.repo.Create(&dayOff); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventDayOffCreated, "Day off created", "day_off", dayOff.CompaniesID, &dayOff.ID, nil, dayOffAuditData(dayOff))
+	if err != nil {
+		return models.DayOff{}, err
+	}
+	if err := s.repo.Create(&dayOff, &audit); err != nil {
 		return models.DayOff{}, err
 	}
 	return dayOff, nil
@@ -94,10 +98,15 @@ func (s *DayOffService) Update(scope repository.AccessScope, id uint, input DayO
 		return models.DayOff{}, err
 	}
 
+	before := dayOffAuditData(dayOff)
 	dayOff.Weekday = input.Weekday
 	dayOff.Name = name
 	dayOff.IsPaid = input.IsPaid
-	if err := s.repo.Save(&dayOff); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventDayOffUpdated, "Day off updated", "day_off", dayOff.CompaniesID, &dayOff.ID, before, dayOffAuditData(dayOff))
+	if err != nil {
+		return models.DayOff{}, err
+	}
+	if err := s.repo.Save(&dayOff, &audit); err != nil {
 		return models.DayOff{}, err
 	}
 	return dayOff, nil
@@ -109,5 +118,13 @@ func (s *DayOffService) Delete(scope repository.AccessScope, id uint) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&dayOff)
+	audit, err := masterAudit(scope, models.AuditEventDayOffDeleted, "Day off deleted", "day_off", dayOff.CompaniesID, &dayOff.ID, dayOffAuditData(dayOff), dayOffAuditData(dayOff))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&dayOff, &audit)
+}
+
+func dayOffAuditData(value models.DayOff) map[string]any {
+	return map[string]any{"weekday": value.Weekday, "name": value.Name, "is_paid": value.IsPaid}
 }

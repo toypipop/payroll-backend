@@ -17,9 +17,9 @@ type DepartmentRepository interface {
 	ListScoped(scope AccessScope) ([]models.Department, error)
 	ListMinimalScoped(scope AccessScope) ([]models.Department, error)
 	FindScoped(scope AccessScope, id uint) (models.Department, error)
-	Create(department *models.Department) error
-	Save(department *models.Department) error
-	Delete(department *models.Department) error
+	Create(department *models.Department, audit *models.AuditLog) error
+	Save(department *models.Department, audit *models.AuditLog) error
+	Delete(department *models.Department, audit *models.AuditLog) error
 }
 
 type gormDepartmentRepository struct {
@@ -60,14 +60,41 @@ func (r *gormDepartmentRepository) FindScoped(scope AccessScope, id uint) (model
 	return department, nil
 }
 
-func (r *gormDepartmentRepository) Create(department *models.Department) error {
-	return r.db.Create(department).Error
+func (r *gormDepartmentRepository) Create(department *models.Department, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(department).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = department.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormDepartmentRepository) Save(department *models.Department) error {
-	return r.db.Save(department).Error
+func (r *gormDepartmentRepository) Save(department *models.Department, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(department).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormDepartmentRepository) Delete(department *models.Department) error {
-	return r.db.Delete(department).Error
+func (r *gormDepartmentRepository) Delete(department *models.Department, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(department).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

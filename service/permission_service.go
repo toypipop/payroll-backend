@@ -87,7 +87,7 @@ func (s *PermissionService) Replace(scope repository.AccessScope, rolesID uint, 
 	}
 
 	if len(entries) == 0 {
-		return s.repo.ReplaceRoleAccess(scope, rolesID, nil)
+		return s.replaceWithAudit(scope, role, nil)
 	}
 
 	resolved, err := s.repo.CapabilitiesFor(moduleIDs)
@@ -122,5 +122,16 @@ func (s *PermissionService) Replace(scope repository.AccessScope, rolesID uint, 
 		})
 	}
 
-	return s.repo.ReplaceRoleAccess(scope, rolesID, permissions)
+	return s.replaceWithAudit(scope, role, permissions)
+}
+
+func (s *PermissionService) replaceWithAudit(scope repository.AccessScope, role models.Roles, permissions []models.RolesModuleAccess) error {
+	companyID, roleID := role.CompaniesID, role.ID
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &roleID,
+		EventType: models.AuditEventPermissionUpdated, EntityType: "role", Summary: "Role permissions updated",
+		AfterData: map[string]any{"permission_count": len(permissions)}})
+	if err != nil {
+		return err
+	}
+	return s.repo.ReplaceRoleAccess(scope, role.ID, permissions, &audit)
 }

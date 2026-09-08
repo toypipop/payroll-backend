@@ -33,7 +33,7 @@ func (f *fakePermissionRepo) CapabilitiesFor(moduleIDs []uint) (repository.Modul
 	return f.capabilities, nil
 }
 
-func (f *fakePermissionRepo) ReplaceRoleAccess(_ repository.AccessScope, _ uint, permissions []models.RolesModuleAccess) error {
+func (f *fakePermissionRepo) ReplaceRoleAccess(_ repository.AccessScope, _ uint, permissions []models.RolesModuleAccess, _ *models.AuditLog) error {
 	f.writes++
 	f.written = append([]models.RolesModuleAccess(nil), permissions...)
 	return nil
@@ -52,9 +52,11 @@ func (f *fakeRoleRepo) ListMinimalScoped(repository.AccessScope) ([]models.Roles
 func (f *fakeRoleRepo) FindScoped(repository.AccessScope, uint) (models.Roles, error) {
 	return f.role, f.err
 }
-func (f *fakeRoleRepo) Create(*models.Roles) error             { return nil }
-func (f *fakeRoleRepo) UpdateName(*models.Roles, string) error { return nil }
-func (f *fakeRoleRepo) Delete(*models.Roles) error             { return nil }
+func (f *fakeRoleRepo) Create(*models.Roles) error                              { return nil }
+func (f *fakeRoleRepo) UpdateName(*models.Roles, string) error                  { return nil }
+func (f *fakeRoleRepo) Delete(*models.Roles) error                              { return nil }
+func (f *fakeRoleRepo) WithinTx(fn func(repository.RoleRepository) error) error { return fn(f) }
+func (f *fakeRoleRepo) AppendAuditLog(*models.AuditLog) error                   { return nil }
 
 func newPermissionService(repo *fakePermissionRepo) *PermissionService {
 	return NewPermissionService(repo, &fakeRoleRepo{role: models.Roles{CompaniesID: 1}})

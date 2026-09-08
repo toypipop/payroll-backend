@@ -68,7 +68,12 @@ func (s *EmployeesService) Create(scope repository.AccessScope, input models.Emp
 		input.Password = string(hashed)
 	}
 
-	if err := s.repo.Create(&input); err != nil {
+	if err := s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
+		if err := repo.Create(&input); err != nil {
+			return err
+		}
+		return appendEmployeeAudit(repo, scope, models.AuditEventEmployeeCreated, "Employee created", input, nil, employeeAuditData(input))
+	}); err != nil {
 		return models.Employees{}, err
 	}
 	return input, nil
@@ -108,7 +113,13 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 
 	normalizeBankID(patch)
 
-	if err := s.repo.UpdateFields(&employee, patch); err != nil {
+	before := employeeAuditData(employee)
+	if err := s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
+		if err := repo.UpdateFields(&employee, patch); err != nil {
+			return err
+		}
+		return appendEmployeeAudit(repo, scope, models.AuditEventEmployeeUpdated, "Employee updated", employee, before, employeeAuditPatch(patch))
+	}); err != nil {
 		return models.Employees{}, err
 	}
 	return s.repo.FindDetail(id)
@@ -167,5 +178,33 @@ func (s *EmployeesService) Delete(scope repository.AccessScope, id uint) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&employee)
+	return s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
+		if err := repo.Delete(&employee); err != nil {
+			return err
+		}
+		return appendEmployeeAudit(repo, scope, models.AuditEventEmployeeDeleted, "Employee deleted", employee, employeeAuditData(employee), nil)
+	})
+}
+
+func appendEmployeeAudit(repo repository.EmployeesRepository, scope repository.AccessScope, event models.AuditEventType, summary string, employee models.Employees, before, after map[string]any) error {
+	companyID, employeeID := employee.CompaniesID, employee.ID
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &employeeID, EventType: event, EntityType: "employee", Summary: summary, BeforeData: before, AfterData: after})
+	if err != nil {
+		return err
+	}
+	return repo.AppendAuditLog(&audit)
+}
+
+func employeeAuditData(employee models.Employees) map[string]any {
+	return map[string]any{"employees_code": employee.EmployeesCode, "first_name": employee.FirstName, "last_name": employee.LastName, "roles_id": employee.RolesID, "is_active": employee.IsActive}
+}
+
+func employeeAuditPatch(patch map[string]any) map[string]any {
+	safe := map[string]any{}
+	for _, key := range []string{"employees_code", "first_name", "last_name", "roles_id", "is_active", "dept_id", "pos_id", "employment_type_id"} {
+		if value, ok := patch[key]; ok {
+			safe[key] = value
+		}
+	}
+	return safe
 }

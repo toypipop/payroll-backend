@@ -173,7 +173,11 @@ func (s *TimeLogService) Create(scope repository.AccessScope, input models.TimeL
 		return models.TimeLog{}, err
 	}
 
-	if err := s.repo.Create(&input); err != nil {
+	audit, err := timeLogAudit(scope, models.AuditEventTimeLogCreated, "Time log created", input, nil)
+	if err != nil {
+		return models.TimeLog{}, err
+	}
+	if err := s.repo.Create(&input, &audit); err != nil {
 		return models.TimeLog{}, err
 	}
 	return input, nil
@@ -194,6 +198,7 @@ func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input mod
 		return models.TimeLog{}, err
 	}
 
+	before := timeLogAuditData(log)
 	log.EmployeesID = employee.ID
 	log.CompaniesID = employee.CompaniesID
 	log.CheckIn = input.CheckIn
@@ -210,7 +215,11 @@ func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input mod
 	if err != nil {
 		return models.TimeLog{}, err
 	}
-	if err := s.repo.Save(&log); err != nil {
+	audit, err := timeLogAudit(scope, models.AuditEventTimeLogUpdated, "Time log updated", log, before)
+	if err != nil {
+		return models.TimeLog{}, err
+	}
+	if err := s.repo.Save(&log, &audit); err != nil {
 		return models.TimeLog{}, err
 	}
 	return log, nil
@@ -222,7 +231,11 @@ func (s *TimeLogService) Delete(scope repository.AccessScope, id uint) error {
 	if err != nil {
 		return ErrTimeLogNotDeletable
 	}
-	return s.repo.Delete(&log)
+	audit, err := timeLogAudit(scope, models.AuditEventTimeLogDeleted, "Time log deleted", log, timeLogAuditData(log))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&log, &audit)
 }
 
 // parseClock reads an HH:MM string into its hour and minute.
@@ -322,9 +335,32 @@ func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTime
 		pending = append(pending, log)
 	}
 
-	if err := s.repo.CreateMany(pending); err != nil {
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{
+		CompaniesID: &employee.CompaniesID, EventType: models.AuditEventTimeLogCreated,
+		EntityType: "time_log", Summary: "Time logs created in bulk",
+		AfterData: map[string]any{"employees_id": employee.ID, "created_count": len(pending), "start_date": input.StartDate, "end_date": input.EndDate},
+	})
+	if err != nil {
+		return BulkTimeLogResult{}, err
+	}
+	if err := s.repo.CreateMany(pending, &audit); err != nil {
 		return BulkTimeLogResult{}, err
 	}
 	result.CreatedCount = len(pending)
 	return result, nil
+}
+
+func timeLogAudit(scope repository.AccessScope, event models.AuditEventType, summary string, log models.TimeLog, before map[string]any) (models.AuditLog, error) {
+	return BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &log.CompaniesID, EventType: event, EntityType: "time_log", EntityID: &log.ID, Summary: summary, BeforeData: before, AfterData: timeLogAuditData(log)})
+}
+
+func timeLogAuditData(log models.TimeLog) map[string]any {
+	data := map[string]any{"employees_id": log.EmployeesID, "status": log.Status, "work_location_id": log.WorkLocationID}
+	if log.CheckIn != nil {
+		data["check_in"] = log.CheckIn.UTC().Format(time.RFC3339)
+	}
+	if log.CheckOut != nil {
+		data["check_out"] = log.CheckOut.UTC().Format(time.RFC3339)
+	}
+	return data
 }

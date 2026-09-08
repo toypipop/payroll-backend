@@ -54,7 +54,11 @@ func (s *EarningTypeService) Create(scope repository.AccessScope, input models.E
 		IsSso:       input.IsSso,
 		IsPermanent: input.IsPermanent,
 	}
-	if err := s.repo.Create(&earningType); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEarningTypeCreated, "Earning type created", "earning_type", earningType.CompaniesID, &earningType.ID, nil, earningTypeAuditData(earningType))
+	if err != nil {
+		return models.EarningType{}, err
+	}
+	if err := s.repo.Create(&earningType, &audit); err != nil {
 		return models.EarningType{}, err
 	}
 	return earningType, nil
@@ -72,13 +76,20 @@ func (s *EarningTypeService) Update(scope repository.AccessScope, id uint, input
 		return models.EarningType{}, err
 	}
 
+	before := earningTypeAuditData(earningType)
+	updated := earningType
+	updated.Name, updated.IsTaxable, updated.IsSso, updated.IsPermanent = name, input.IsTaxable, input.IsSso, input.IsPermanent
 	fields := map[string]any{
 		"name":         name,
 		"is_taxable":   input.IsTaxable,
 		"is_sso":       input.IsSso,
 		"is_permanent": input.IsPermanent,
 	}
-	if err := s.repo.UpdateFields(&earningType, fields); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEarningTypeUpdated, "Earning type updated", "earning_type", earningType.CompaniesID, &earningType.ID, before, earningTypeAuditData(updated))
+	if err != nil {
+		return models.EarningType{}, err
+	}
+	if err := s.repo.UpdateFields(&earningType, fields, &audit); err != nil {
 		return models.EarningType{}, err
 	}
 	return earningType, nil
@@ -90,5 +101,13 @@ func (s *EarningTypeService) Delete(scope repository.AccessScope, id uint) error
 	if err != nil {
 		return ErrEarningTypeDeleteDenied
 	}
-	return s.repo.Delete(&earningType)
+	audit, err := masterAudit(scope, models.AuditEventEarningTypeDeleted, "Earning type deleted", "earning_type", earningType.CompaniesID, &earningType.ID, earningTypeAuditData(earningType), earningTypeAuditData(earningType))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&earningType, &audit)
+}
+
+func earningTypeAuditData(value models.EarningType) map[string]any {
+	return map[string]any{"name": value.Name, "is_taxable": value.IsTaxable, "is_sso": value.IsSso, "is_permanent": value.IsPermanent}
 }

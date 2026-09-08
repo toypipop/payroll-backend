@@ -47,7 +47,11 @@ func (s *WorkLocationService) Create(scope repository.AccessScope, input models.
 	}
 
 	location := models.WorkLocation{CompaniesID: companyID, Name: name}
-	if err := s.repo.Create(&location); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventWorkLocationCreated, "Work location created", "work_location", location.CompaniesID, &location.ID, nil, workLocationAuditData(location))
+	if err != nil {
+		return models.WorkLocation{}, err
+	}
+	if err := s.repo.Create(&location, &audit); err != nil {
 		return models.WorkLocation{}, err
 	}
 	return location, nil
@@ -65,8 +69,13 @@ func (s *WorkLocationService) Update(scope repository.AccessScope, id uint, name
 		return models.WorkLocation{}, err
 	}
 
+	before := workLocationAuditData(location)
 	location.Name = trimmed
-	if err := s.repo.Save(&location); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventWorkLocationUpdated, "Work location updated", "work_location", location.CompaniesID, &location.ID, before, workLocationAuditData(location))
+	if err != nil {
+		return models.WorkLocation{}, err
+	}
+	if err := s.repo.Save(&location, &audit); err != nil {
 		return models.WorkLocation{}, err
 	}
 	return location, nil
@@ -78,5 +87,13 @@ func (s *WorkLocationService) Delete(scope repository.AccessScope, id uint) erro
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&location)
+	audit, err := masterAudit(scope, models.AuditEventWorkLocationDeleted, "Work location deleted", "work_location", location.CompaniesID, &location.ID, workLocationAuditData(location), workLocationAuditData(location))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&location, &audit)
+}
+
+func workLocationAuditData(location models.WorkLocation) map[string]any {
+	return map[string]any{"name": location.Name}
 }

@@ -91,7 +91,11 @@ func (s *EmployeeCompanyAccessService) Create(scope repository.AccessScope, inpu
 		RoleID:     input.RoleID,
 		IsActive:   input.IsActive,
 	}
-	if err := s.repo.Create(&mapping); err != nil {
+	audit, err := companyAccessAudit(scope, models.AuditEventEmployeeCompanyAccessSaved, "Employee company access granted", mapping, nil)
+	if err != nil {
+		return models.EmployeeCompanyAccess{}, err
+	}
+	if err := s.repo.Create(&mapping, &audit); err != nil {
 		return models.EmployeeCompanyAccess{}, err
 	}
 	return s.repo.FindDetail(mapping.ID)
@@ -107,13 +111,20 @@ func (s *EmployeeCompanyAccessService) Update(scope repository.AccessScope, id u
 		return models.EmployeeCompanyAccess{}, err
 	}
 
+	before := companyAccessAuditData(existing)
+	updated := existing
+	updated.EmployeeID, updated.CompanyID, updated.RoleID, updated.IsActive = input.EmployeeID, input.CompanyID, input.RoleID, input.IsActive
 	fields := map[string]any{
 		"employee_id": input.EmployeeID,
 		"company_id":  input.CompanyID,
 		"role_id":     input.RoleID,
 		"is_active":   input.IsActive,
 	}
-	if err := s.repo.UpdateFields(&existing, fields); err != nil {
+	audit, err := companyAccessAudit(scope, models.AuditEventEmployeeCompanyAccessSaved, "Employee company access updated", updated, before)
+	if err != nil {
+		return models.EmployeeCompanyAccess{}, err
+	}
+	if err := s.repo.UpdateFields(&existing, fields, &audit); err != nil {
 		return models.EmployeeCompanyAccess{}, err
 	}
 	return s.repo.FindDetail(existing.ID)
@@ -125,5 +136,16 @@ func (s *EmployeeCompanyAccessService) Delete(scope repository.AccessScope, id u
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&mapping)
+	audit, err := companyAccessAudit(scope, models.AuditEventEmployeeCompanyAccessDeleted, "Employee company access removed", mapping, companyAccessAuditData(mapping))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&mapping, &audit)
+}
+
+func companyAccessAudit(scope repository.AccessScope, event models.AuditEventType, summary string, mapping models.EmployeeCompanyAccess, before map[string]any) (models.AuditLog, error) {
+	return masterAudit(scope, event, summary, "employee_company_access", mapping.CompanyID, &mapping.ID, before, companyAccessAuditData(mapping))
+}
+func companyAccessAuditData(value models.EmployeeCompanyAccess) map[string]any {
+	return map[string]any{"employee_id": value.EmployeeID, "company_id": value.CompanyID, "role_id": value.RoleID, "is_active": value.IsActive}
 }

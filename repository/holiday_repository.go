@@ -16,9 +16,9 @@ var ErrHolidayNotFound = apperr.NotFound("Holiday not found or unauthorized")
 type HolidayRepository interface {
 	ListScoped(scope AccessScope) ([]models.Holiday, error)
 	FindScoped(scope AccessScope, id uint) (models.Holiday, error)
-	Create(holiday *models.Holiday) error
-	Save(holiday *models.Holiday) error
-	Delete(holiday *models.Holiday) error
+	Create(holiday *models.Holiday, audit *models.AuditLog) error
+	Save(holiday *models.Holiday, audit *models.AuditLog) error
+	Delete(holiday *models.Holiday, audit *models.AuditLog) error
 }
 
 type gormHolidayRepository struct {
@@ -52,14 +52,41 @@ func (r *gormHolidayRepository) FindScoped(scope AccessScope, id uint) (models.H
 	return holiday, nil
 }
 
-func (r *gormHolidayRepository) Create(holiday *models.Holiday) error {
-	return r.db.Create(holiday).Error
+func (r *gormHolidayRepository) Create(holiday *models.Holiday, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(holiday).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = holiday.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormHolidayRepository) Save(holiday *models.Holiday) error {
-	return r.db.Save(holiday).Error
+func (r *gormHolidayRepository) Save(holiday *models.Holiday, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(holiday).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormHolidayRepository) Delete(holiday *models.Holiday) error {
-	return r.db.Delete(holiday).Error
+func (r *gormHolidayRepository) Delete(holiday *models.Holiday, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(holiday).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

@@ -49,7 +49,7 @@ func (s *CompanyService) ListAll() ([]models.Companies, error) {
 }
 
 // Create bootstraps a usable tenant: the company, a default ADMIN role with full permissions on every active module, and company access for the creator.
-func (s *CompanyService) Create(creatorID uint, input models.Companies) (models.Companies, error) {
+func (s *CompanyService) Create(scope repository.AccessScope, input models.Companies) (models.Companies, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return models.Companies{}, ErrCompanyNameRequired
@@ -60,7 +60,7 @@ func (s *CompanyService) Create(creatorID uint, input models.Companies) (models.
 	boot := repository.TenantBootstrap{
 		RoleName:        bootstrapRoleName,
 		RoleDescription: bootstrapRoleDescription,
-		CreatorID:       creatorID,
+		CreatorID:       scope.User.ID,
 		ExcludeModules:  []models.ModuleKey{"CompaniesPage"},
 		Grant: models.RolesModuleAccess{
 			CanView:   true,
@@ -70,14 +70,18 @@ func (s *CompanyService) Create(creatorID uint, input models.Companies) (models.
 			DataScope: models.ScopeCompanies,
 		},
 	}
-	if err := s.repo.CreateTenant(&input, boot); err != nil {
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{EventType: models.AuditEventCompanyCreated, EntityType: "company", Summary: "Company created", AfterData: map[string]any{"name": input.Name}})
+	if err != nil {
+		return models.Companies{}, err
+	}
+	if err := s.repo.CreateTenant(&input, boot, &audit); err != nil {
 		return models.Companies{}, err
 	}
 	return input, nil
 }
 
 // Update rewrites a company's profile fields.
-func (s *CompanyService) Update(id uint, input CompanyUpdate) (models.Companies, error) {
+func (s *CompanyService) Update(scope repository.AccessScope, id uint, input CompanyUpdate) (models.Companies, error) {
 	company, err := s.repo.Find(id)
 	if err != nil {
 		return models.Companies{}, err
@@ -96,13 +100,25 @@ func (s *CompanyService) Update(id uint, input CompanyUpdate) (models.Companies,
 		company.Phone = phone
 	}
 
-	if err := s.repo.Save(&company); err != nil {
+	companyID := company.ID
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &companyID, EventType: models.AuditEventCompanyUpdated, EntityType: "company", Summary: "Company updated", AfterData: map[string]any{"name": company.Name}})
+	if err != nil {
+		return models.Companies{}, err
+	}
+	if err := s.repo.Save(&company, &audit); err != nil {
 		return models.Companies{}, err
 	}
 	return company, nil
 }
 
 // SetActive changes operational availability while retaining the company and its history.
-func (s *CompanyService) SetActive(id uint, active bool) (models.Companies, error) {
-	return s.repo.SetActive(id, active)
+func (s *CompanyService) SetActive(scope repository.AccessScope, id uint, active bool) (models.Companies, error) {
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &id, EntityID: &id, EventType: models.AuditEventCompanyActivated, EntityType: "company", Summary: "Company activated"})
+	if !active {
+		audit, err = BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &id, EntityID: &id, EventType: models.AuditEventCompanyDeactivated, EntityType: "company", Summary: "Company deactivated"})
+	}
+	if err != nil {
+		return models.Companies{}, err
+	}
+	return s.repo.SetActive(id, active, &audit)
 }

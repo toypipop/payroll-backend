@@ -17,9 +17,9 @@ type EmploymentTypeRepository interface {
 	ListScoped(scope AccessScope) ([]models.EmploymentType, error)
 	ListMinimalScoped(scope AccessScope) ([]models.EmploymentType, error)
 	FindScoped(scope AccessScope, id uint) (models.EmploymentType, error)
-	Create(employmentType *models.EmploymentType) error
-	Save(employmentType *models.EmploymentType) error
-	Delete(employmentType *models.EmploymentType) error
+	Create(employmentType *models.EmploymentType, audit *models.AuditLog) error
+	Save(employmentType *models.EmploymentType, audit *models.AuditLog) error
+	Delete(employmentType *models.EmploymentType, audit *models.AuditLog) error
 }
 
 type gormEmploymentTypeRepository struct {
@@ -60,14 +60,41 @@ func (r *gormEmploymentTypeRepository) FindScoped(scope AccessScope, id uint) (m
 	return employmentType, nil
 }
 
-func (r *gormEmploymentTypeRepository) Create(employmentType *models.EmploymentType) error {
-	return r.db.Create(employmentType).Error
+func (r *gormEmploymentTypeRepository) Create(employmentType *models.EmploymentType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(employmentType).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = employmentType.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEmploymentTypeRepository) Save(employmentType *models.EmploymentType) error {
-	return r.db.Save(employmentType).Error
+func (r *gormEmploymentTypeRepository) Save(employmentType *models.EmploymentType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(employmentType).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormEmploymentTypeRepository) Delete(employmentType *models.EmploymentType) error {
-	return r.db.Delete(employmentType).Error
+func (r *gormEmploymentTypeRepository) Delete(employmentType *models.EmploymentType, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(employmentType).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

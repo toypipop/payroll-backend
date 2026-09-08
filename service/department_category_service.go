@@ -27,14 +27,18 @@ func (s *DepartmentCategoryService) List() ([]models.DepartmentCategory, error) 
 }
 
 // Create adds a category, trimming the name so whitespace cannot slip past the unique index.
-func (s *DepartmentCategoryService) Create(name string) (models.DepartmentCategory, error) {
+func (s *DepartmentCategoryService) Create(scope repository.AccessScope, name string) (models.DepartmentCategory, error) {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" {
 		return models.DepartmentCategory{}, ErrCategoryNameRequired
 	}
 
 	category := models.DepartmentCategory{Name: trimmed}
-	if err := s.repo.Create(&category); err != nil {
+	audit, err := BuildAuditLog(scope, models.AuditLogInput{EventType: models.AuditEventDepartmentCategoryCreated, EntityType: "department_category", EntityID: &category.ID, Summary: "Department category created", AfterData: map[string]any{"name": category.Name}})
+	if err != nil {
+		return models.DepartmentCategory{}, err
+	}
+	if err := s.repo.Create(&category, &audit); err != nil {
 		return models.DepartmentCategory{}, err
 	}
 	return category, nil

@@ -9,7 +9,7 @@ import (
 // DepartmentCategoryRepository is the persistence boundary for the department-category list.
 type DepartmentCategoryRepository interface {
 	List() ([]models.DepartmentCategory, error)
-	Create(category *models.DepartmentCategory) error
+	Create(category *models.DepartmentCategory, audit *models.AuditLog) error
 }
 
 type gormDepartmentCategoryRepository struct {
@@ -28,6 +28,17 @@ func (r *gormDepartmentCategoryRepository) List() ([]models.DepartmentCategory, 
 	return categories, err
 }
 
-func (r *gormDepartmentCategoryRepository) Create(category *models.DepartmentCategory) error {
-	return r.db.Create(category).Error
+func (r *gormDepartmentCategoryRepository) Create(category *models.DepartmentCategory, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(category).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = category.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

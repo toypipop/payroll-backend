@@ -20,9 +20,9 @@ type CycleDeductionRepository interface {
 	ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleDeduction, error)
 	FindScoped(scope AccessScope, id uint) (models.PayrollCycleDeduction, error)
 	FindDetail(id uint) (models.PayrollCycleDeduction, error)
-	Create(item *models.PayrollCycleDeduction) error
-	UpdateFields(item *models.PayrollCycleDeduction, fields map[string]any) error
-	Delete(item *models.PayrollCycleDeduction) error
+	Create(item *models.PayrollCycleDeduction, audit *models.AuditLog) error
+	UpdateFields(item *models.PayrollCycleDeduction, fields map[string]any, audit *models.AuditLog) error
+	Delete(item *models.PayrollCycleDeduction, audit *models.AuditLog) error
 }
 
 type gormCycleDeductionRepository struct {
@@ -73,17 +73,44 @@ func (r *gormCycleDeductionRepository) FindDetail(id uint) (models.PayrollCycleD
 	return item, nil
 }
 
-func (r *gormCycleDeductionRepository) Create(item *models.PayrollCycleDeduction) error {
-	return r.db.Create(item).Error
+func (r *gormCycleDeductionRepository) Create(item *models.PayrollCycleDeduction, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(item).Error; err != nil {
+			return err
+		}
+		if audit != nil && audit.EntityID != nil {
+			*audit.EntityID = item.ID
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormCycleDeductionRepository) UpdateFields(item *models.PayrollCycleDeduction, fields map[string]any) error {
+func (r *gormCycleDeductionRepository) UpdateFields(item *models.PayrollCycleDeduction, fields map[string]any, audit *models.AuditLog) error {
 	if len(fields) == 0 {
 		return nil
 	}
-	return r.db.Model(item).Updates(fields).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(item).Updates(fields).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }
 
-func (r *gormCycleDeductionRepository) Delete(item *models.PayrollCycleDeduction) error {
-	return r.db.Delete(item).Error
+func (r *gormCycleDeductionRepository) Delete(item *models.PayrollCycleDeduction, audit *models.AuditLog) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(item).Error; err != nil {
+			return err
+		}
+		if audit != nil {
+			return tx.Create(audit).Error
+		}
+		return nil
+	})
 }

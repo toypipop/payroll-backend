@@ -47,7 +47,11 @@ func (s *PositionService) Create(scope repository.AccessScope, input models.Posi
 	}
 
 	position := models.Position{CompaniesID: companyID, PosName: name}
-	if err := s.repo.Create(&position); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventPositionCreated, "Position created", "position", position.CompaniesID, &position.ID, nil, positionAuditData(position))
+	if err != nil {
+		return models.Position{}, err
+	}
+	if err := s.repo.Create(&position, &audit); err != nil {
 		return models.Position{}, err
 	}
 	return position, nil
@@ -65,8 +69,13 @@ func (s *PositionService) Update(scope repository.AccessScope, id uint, name str
 		return models.Position{}, err
 	}
 
+	before := positionAuditData(position)
 	position.PosName = trimmed
-	if err := s.repo.Save(&position); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventPositionUpdated, "Position updated", "position", position.CompaniesID, &position.ID, before, positionAuditData(position))
+	if err != nil {
+		return models.Position{}, err
+	}
+	if err := s.repo.Save(&position, &audit); err != nil {
 		return models.Position{}, err
 	}
 	return position, nil
@@ -78,5 +87,13 @@ func (s *PositionService) Delete(scope repository.AccessScope, id uint) error {
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&position)
+	audit, err := masterAudit(scope, models.AuditEventPositionDeleted, "Position deleted", "position", position.CompaniesID, &position.ID, positionAuditData(position), positionAuditData(position))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&position, &audit)
+}
+
+func positionAuditData(position models.Position) map[string]any {
+	return map[string]any{"name": position.PosName}
 }

@@ -49,7 +49,11 @@ func (s *EmploymentTypeService) Create(scope repository.AccessScope, input model
 		Name:        name,
 		Description: strings.TrimSpace(input.Description),
 	}
-	if err := s.repo.Create(&employmentType); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEmploymentTypeCreated, "Employment type created", "employment_type", employmentType.CompaniesID, &employmentType.ID, nil, employmentTypeAuditData(employmentType))
+	if err != nil {
+		return models.EmploymentType{}, err
+	}
+	if err := s.repo.Create(&employmentType, &audit); err != nil {
 		return models.EmploymentType{}, err
 	}
 	return employmentType, nil
@@ -67,9 +71,14 @@ func (s *EmploymentTypeService) Update(scope repository.AccessScope, id uint, na
 		return models.EmploymentType{}, err
 	}
 
+	before := employmentTypeAuditData(employmentType)
 	employmentType.Name = trimmed
 	employmentType.Description = strings.TrimSpace(description)
-	if err := s.repo.Save(&employmentType); err != nil {
+	audit, err := masterAudit(scope, models.AuditEventEmploymentTypeUpdated, "Employment type updated", "employment_type", employmentType.CompaniesID, &employmentType.ID, before, employmentTypeAuditData(employmentType))
+	if err != nil {
+		return models.EmploymentType{}, err
+	}
+	if err := s.repo.Save(&employmentType, &audit); err != nil {
 		return models.EmploymentType{}, err
 	}
 	return employmentType, nil
@@ -81,5 +90,13 @@ func (s *EmploymentTypeService) Delete(scope repository.AccessScope, id uint) er
 	if err != nil {
 		return err
 	}
-	return s.repo.Delete(&employmentType)
+	audit, err := masterAudit(scope, models.AuditEventEmploymentTypeDeleted, "Employment type deleted", "employment_type", employmentType.CompaniesID, &employmentType.ID, employmentTypeAuditData(employmentType), employmentTypeAuditData(employmentType))
+	if err != nil {
+		return err
+	}
+	return s.repo.Delete(&employmentType, &audit)
+}
+
+func employmentTypeAuditData(value models.EmploymentType) map[string]any {
+	return map[string]any{"name": value.Name, "description": value.Description}
 }
