@@ -8,6 +8,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Leave-request lookup failures.
@@ -15,6 +16,7 @@ var (
 	ErrLeaveRequestNotFound      = apperr.NotFound("Record not found or access denied")
 	ErrLeaveRequestNotDeletable  = apperr.NotFound("Record not found or unauthorized")
 	ErrLeaveRequestNotApprovable = apperr.NotFound("Leave request not found or access denied")
+	ErrLeaveQuotaExceeded        = apperr.Conflict("This approval would exceed the leave type's annual limit")
 )
 
 // LeaveRequestRepository is the persistence boundary for the leave-requests domain.
@@ -28,6 +30,7 @@ type LeaveRequestRepository interface {
 	Delete(leave *models.LeaveRequest) error
 	CountOverlapping(employeesID uint, start time.Time, end time.Time, excludeID uint) (int64, error)
 	SumApprovedDaysInYear(employeesID uint, leaveTypeID uint, year int) (float64, error)
+	ApproveWithinQuota(id uint, approverID uint) error
 }
 
 type gormLeaveRequestRepository struct {
@@ -125,13 +128,85 @@ func (r *gormLeaveRequestRepository) CountOverlapping(employeesID uint, start ti
 	return count, err
 }
 
-// SumApprovedDaysInYear totals the approved days an employee has already taken of one leave type in a calendar year, for the quota warning on the approval page.
+// SumApprovedDaysInYear totals the portion of approved leave that falls within one calendar year.
+// A leave crossing New Year therefore contributes only the days in the requested year.
 func (r *gormLeaveRequestRepository) SumApprovedDaysInYear(employeesID uint, leaveTypeID uint, year int) (float64, error) {
-	var used float64
-	err := r.db.Model(&models.LeaveRequest{}).
+	yearStart := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
+	yearEnd := time.Date(year, time.December, 31, 23, 59, 59, 999999999, time.UTC)
+	var approved []models.LeaveRequest
+	err := r.db.
 		Where("employees_id = ? AND leave_type_id = ? AND status = ?", employeesID, leaveTypeID, models.LeaveStatusApproved).
-		Where("EXTRACT(YEAR FROM start_date) = ?", year).
-		Select("COALESCE(SUM(total_days), 0)").
-		Scan(&used).Error
-	return used, err
+		Where("start_date <= ? AND end_date >= ?", yearEnd, yearStart).
+		Find(&approved).Error
+	if err != nil {
+		return 0, err
+	}
+
+	var used float64
+	for _, leave := range approved {
+		used += daysByCalendarYear(leave.StartDate, leave.EndDate)[year]
+	}
+	return used, nil
+}
+
+func daysByCalendarYear(start, end time.Time) map[int]float64 {
+	days := make(map[int]float64)
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		days[day.Year()]++
+	}
+	return days
+}
+
+// ApproveWithinQuota serializes approvals for one employee and checks the current leave-type cap in the same transaction.
+func (r *gormLeaveRequestRepository) ApproveWithinQuota(id uint, approverID uint) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var leave models.LeaveRequest
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&leave, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrLeaveRequestNotApprovable
+			}
+			return err
+		}
+		if leave.Status != models.LeaveStatusPending {
+			return apperr.Validation("This request has already been processed")
+		}
+
+		if leave.LeaveTypeID != nil {
+			var leaveType models.LeaveTypeSetting
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&leaveType, *leave.LeaveTypeID).Error; err != nil {
+				return err
+			}
+			if leaveType.MaxDaysPerYear > 0 {
+				var employee models.Employees
+				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&employee, leave.EmployeesID).Error; err != nil {
+					return err
+				}
+				firstYearStart := time.Date(leave.StartDate.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+				lastYearEnd := time.Date(leave.EndDate.Year(), time.December, 31, 23, 59, 59, 0, time.UTC)
+				var approved []models.LeaveRequest
+				if err := tx.Where("employees_id = ? AND leave_type_id = ? AND status = ?", leave.EmployeesID, *leave.LeaveTypeID, models.LeaveStatusApproved).
+					Where("start_date <= ? AND end_date >= ?", lastYearEnd, firstYearStart).
+					Find(&approved).Error; err != nil {
+					return err
+				}
+				used := make(map[int]float64)
+				for _, approvedLeave := range approved {
+					for year, days := range daysByCalendarYear(approvedLeave.StartDate, approvedLeave.EndDate) {
+						used[year] += days
+					}
+				}
+				for year, days := range daysByCalendarYear(leave.StartDate, leave.EndDate) {
+					if used[year]+days > leaveType.MaxDaysPerYear {
+						return ErrLeaveQuotaExceeded
+					}
+				}
+			}
+		}
+
+		return tx.Model(&leave).Updates(map[string]any{
+			"status":      models.LeaveStatusApproved,
+			"approved_by": approverID,
+			"updated_at":  time.Now(),
+		}).Error
+	})
 }

@@ -17,6 +17,12 @@ func AutoMigrateSchema(db *gorm.DB) error {
 	if err := autoMigrateTables(db); err != nil {
 		return err
 	}
+	if err := ensureAuditLogIndexes(db); err != nil {
+		return err
+	}
+	if err := BackfillSalaryAudits(db); err != nil {
+		return err
+	}
 
 	// A row added before the optimistic lock existed would carry version 0, and every write guarded by
 	// `version = <what was read>` would then compare against a value the client never saw.
@@ -41,6 +47,7 @@ func autoMigrateTables(db *gorm.DB) error {
 		&models.Employees{},
 		&models.SalariesStructure{},
 		&models.SalaryAudit{},
+		&models.AuditLog{},
 		&models.PayrollCycle{},
 		&models.PayrollTransaction{},
 		&models.PayrollTransactionDetail{},
@@ -63,6 +70,20 @@ func autoMigrateTables(db *gorm.DB) error {
 		&models.LeaveTypeSetting{},
 		&models.EmployeeCompanyAccess{},
 	)
+}
+
+func ensureAuditLogIndexes(db *gorm.DB) error {
+	indexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_company_occurred ON audit_log (companies_id, occurred_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_entity_occurred ON audit_log (entity_type, entity_id, occurred_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_actor_occurred ON audit_log (actor_user_id, occurred_at DESC)`,
+	}
+	for _, statement := range indexes {
+		if err := db.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DedupePayrollTransactions keeps the most recently updated live transaction per (cycle_id, employees_id) and erases the rest with their detail lines.

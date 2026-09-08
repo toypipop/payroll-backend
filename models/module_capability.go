@@ -22,12 +22,22 @@ type ModuleCapability struct {
 	ScopeLevel ModuleScopeLevel
 	// AllowedActions lists only the actions some route actually gates on.
 	AllowedActions []string
+	// ExplicitScopes overrides the standard scopes for exceptional modules such as
+	// Audit Logs, whose rows are company-owned but may be read globally by an All grant.
+	ExplicitScopes []DataScope
 	// ActionsAtomic presents create/edit/delete as one on/off toggle instead of four independent checkboxes.
 	ActionsAtomic bool
 }
 
 // AllowedScopes returns the DataScope values that actually change the query result for this module.
 func (mc ModuleCapability) AllowedScopes() []string {
+	if len(mc.ExplicitScopes) > 0 {
+		result := make([]string, 0, len(mc.ExplicitScopes))
+		for _, scope := range mc.ExplicitScopes {
+			result = append(result, string(scope))
+		}
+		return result
+	}
 	if mc.ScopeLevel == ScopeLevelEmployee {
 		return []string{string(ScopeOwn), string(ScopeDepartment), string(ScopeCompanies)}
 	}
@@ -67,6 +77,11 @@ func atomic(mc ModuleCapability) ModuleCapability {
 	return mc
 }
 
+func withScopes(mc ModuleCapability, scopes ...DataScope) ModuleCapability {
+	mc.ExplicitScopes = scopes
+	return mc
+}
+
 // moduleCapabilities is the single source of truth.
 var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	// --- Employee-level: rows carry an employee column, so Own/Department bite ---
@@ -83,9 +98,11 @@ var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	"CycleDeductionsPage":       employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"EmployeeCompanyAccessPage": employeeLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 
-	// DashboardPage is deliberately absent: it is not permission-controlled at all.
-
 	// --- Company-level: rows belong to a company, no per-person meaning ---
+	// General pages have one Access toggle and only expose read-only page entry.
+	"DashboardPage":  atomic(companyLevel(ActionView)),
+	"MyPayslipsPage": atomic(companyLevel(ActionView)),
+
 	"PayrollCyclesPage":         companyLevel(ActionView, ActionCreate, ActionEdit),
 	"RunPayrollPage":            companyLevel(ActionView, ActionEdit),
 	"TransactionsPage":          companyLevel(ActionView),
@@ -104,6 +121,7 @@ var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	"DayOffPage":          companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"WorkLocationPage":    companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
 	"MasterLeaveTypePage": companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete),
+	"AuditLogsPage":       companyLevel(ActionView),
 
 	// Reports are GET-only, so View is the only action that exists.
 	"PayslipsReportPage":     companyLevel(ActionView),
@@ -113,7 +131,7 @@ var moduleCapabilities = map[ModuleKey]ModuleCapability{
 	"PayrollAnalysisPage":    companyLevel(ActionView),
 
 	// Presented as a single on/off toggle.
-	"CompaniesPage":  atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
+	"CompaniesPage":  atomic(companyLevel(ActionView, ActionCreate, ActionEdit)),
 	"MasterBankPage": atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
 	"HelpPage":       atomic(companyLevel(ActionView, ActionCreate, ActionEdit, ActionDelete)),
 }

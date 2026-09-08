@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -39,9 +40,9 @@ type SalariesStructureRepository interface {
 	SwitchOffAll(employeesID uint) error
 	DeleteRecord(record *models.SalariesStructure) error
 
-	// AppendAudit records one change. It is called inside the same transaction as the write it describes, so
-	// a change that cannot be recorded is not made.
-	AppendAudit(entry *models.SalaryAudit) error
+	// AppendAuditLog records one change. It is called inside the same transaction as the write it describes,
+	// so a change that cannot be recorded is not made.
+	AppendAuditLog(entry *models.AuditLog) error
 	// ListAuditForEmployee returns that employee's trail, newest first.
 	ListAuditForEmployee(employeesID uint) ([]models.SalaryAudit, error)
 }
@@ -145,18 +146,91 @@ func (r *gormSalariesStructureRepository) ClosedCyclesUsing(recordIDs []uint) (m
 	return usage, nil
 }
 
-// AppendAudit writes one trail entry. Rows are append-only, so this is the only method that touches the table.
-func (r *gormSalariesStructureRepository) AppendAudit(entry *models.SalaryAudit) error {
+// AppendAuditLog writes one trail entry. Rows are append-only, so this is the only method that touches the table.
+func (r *gormSalariesStructureRepository) AppendAuditLog(entry *models.AuditLog) error {
 	return r.db.Create(entry).Error
 }
 
-// ListAuditForEmployee returns the employee's trail newest first, which is the order the screen reads it in.
+// ListAuditForEmployee keeps the existing salary-history response stable while the storage is the central
+// audit_log table. The UI therefore remains compatible while all new salary writes use the shared trail.
 func (r *gormSalariesStructureRepository) ListAuditForEmployee(employeesID uint) ([]models.SalaryAudit, error) {
-	var entries []models.SalaryAudit
-	err := r.db.Where("employees_id = ?", employeesID).
-		Order("created_at DESC, id DESC").
-		Find(&entries).Error
-	return entries, err
+	var rows []models.AuditLog
+	err := r.db.Where("entity_type = ? AND entity_id = ?", "employee", employeesID).
+		Where("event_type IN ?", []models.AuditEventType{
+			models.AuditEventSalaryCreated, models.AuditEventSalaryChanged, models.AuditEventSalaryMoved,
+			models.AuditEventSalaryDeactivated, models.AuditEventSalaryDeleted,
+		}).Order("occurred_at DESC, id DESC").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]models.SalaryAudit, 0, len(rows))
+	for _, row := range rows {
+		entries = append(entries, salaryAuditFromLog(row))
+	}
+	return entries, nil
+}
+
+func salaryAuditFromLog(entry models.AuditLog) models.SalaryAudit {
+	audit := models.SalaryAudit{ID: entry.ID, CreatedAt: entry.OccurredAt, Reason: entry.Reason, ActorName: entry.ActorNameSnapshot}
+	if entry.CompaniesID != nil {
+		audit.CompaniesID = *entry.CompaniesID
+	}
+	if entry.EntityID != nil {
+		audit.EmployeesID = *entry.EntityID
+	}
+	if entry.ActorUserID != nil {
+		audit.ActorID = *entry.ActorUserID
+	}
+	switch entry.EventType {
+	case models.AuditEventSalaryCreated:
+		audit.Action = models.SalaryAuditCreated
+	case models.AuditEventSalaryChanged:
+		audit.Action = models.SalaryAuditAmountChanged
+	case models.AuditEventSalaryMoved:
+		audit.Action = models.SalaryAuditMoved
+	case models.AuditEventSalaryDeactivated:
+		audit.Action = models.SalaryAuditSwitchedOff
+	case models.AuditEventSalaryDeleted:
+		audit.Action = models.SalaryAuditDeleted
+	}
+	decodeSalaryAuditData(entry.BeforeData, &audit, true)
+	decodeSalaryAuditData(entry.AfterData, &audit, false)
+	return audit
+}
+
+func decodeSalaryAuditData(data json.RawMessage, audit *models.SalaryAudit, before bool) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil {
+		return
+	}
+	if raw, ok := fields["salary_record_id"]; ok {
+		var recordID uint
+		if json.Unmarshal(raw, &recordID) == nil {
+			audit.SalariesStructureID = &recordID
+		}
+	}
+	if raw, ok := fields["base_salary"]; ok {
+		var amount float64
+		if json.Unmarshal(raw, &amount) == nil {
+			if before {
+				audit.FromAmount = &amount
+			} else {
+				audit.ToAmount = &amount
+			}
+		}
+	}
+	if raw, ok := fields["effective_date"]; ok {
+		var value string
+		if json.Unmarshal(raw, &value) == nil {
+			if date, err := time.Parse("2006-01-02", value); err == nil {
+				if before {
+					audit.FromDate = &date
+				} else {
+					audit.ToDate = &date
+				}
+			}
+		}
+	}
 }
 
 func (r *gormSalariesStructureRepository) FindRecord(id uint) (models.SalariesStructure, error) {

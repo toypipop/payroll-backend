@@ -33,9 +33,6 @@ func main() {
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
 	}
-	if err := migrations.RunOnce(config.DB, "20260811_remove_dashboard_module", migrations.RemoveDashboardModule); err != nil {
-		log.Fatalf("Dashboard module removal failed: %v", err)
-	}
 	if err := migrations.RunOnce(config.DB, "20260824_normalize_salary_active_flags", migrations.NormalizeSalaryActiveFlags); err != nil {
 		log.Fatalf("Salary active-flag normalisation failed: %v", err)
 	}

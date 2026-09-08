@@ -77,15 +77,22 @@ func (h *Handler) UpdateCompanies(c *gin.Context) {
 	c.JSON(http.StatusOK, company)
 }
 
-func (h *Handler) DeleteCompanies(c *gin.Context) {
+func (h *Handler) SetCompanyStatus(c *gin.Context) {
 	id, ok := httpx.ParseID(c, "id", "company")
 	if !ok {
 		return
 	}
 
-	if err := h.Company.Delete(id); err != nil {
+	var input struct {
+		IsActive *bool `json:"is_active" binding:"required"`
+	}
+	if !httpx.BindJSON(c, &input) {
+		return
+	}
+	company, err := h.Company.SetActive(id, *input.IsActive)
+	if err != nil {
 		httpx.RespondError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
+	c.JSON(http.StatusOK, company)
 }

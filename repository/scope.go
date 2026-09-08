@@ -63,7 +63,7 @@ func scopeDataAccess(user models.Employees, scope models.DataScope, companyIDs [
 				Joins("JOIN department ON department.id = employees.dept_id AND department.deleted_at = 0").
 				Where("department.category_id = ? AND employees.companies_id IN ?", userCategoryID, companyIDs)
 			return db.Where(employeeCol+" IN (?)", subQuery)
-		case models.ScopeCompanies, models.ScopeAll:
+		case models.ScopeCompanies:
 			return db
 		default:
 			return db.Where(employeeCol+" = ?", user.ID)

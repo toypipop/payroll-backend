@@ -26,6 +26,7 @@ var (
 	ErrLeaveRequestNotFound      = repository.ErrLeaveRequestNotFound
 	ErrLeaveRequestNotDeletable  = repository.ErrLeaveRequestNotDeletable
 	ErrLeaveRequestNotApprovable = repository.ErrLeaveRequestNotApprovable
+	ErrLeaveQuotaExceeded        = repository.ErrLeaveQuotaExceeded
 )
 
 // LeaveInput is what a caller may set on a leave request.
@@ -44,6 +45,16 @@ type PendingLeave struct {
 	QuotaMaxDays  float64
 	QuotaUsedDays float64
 	QuotaExceeded bool
+	QuotaYears    []LeaveQuotaYear
+}
+
+// LeaveQuotaYear describes the yearly portion of a pending request's annual quota.
+type LeaveQuotaYear struct {
+	Year          int
+	MaxDays       float64
+	UsedDays      float64
+	RequestedDays float64
+	Exceeded      bool
 }
 
 // LeaveRequestService owns the leave rules: no overlapping requests, a leave type belonging to the employee's company, and only a pending request being editable.
@@ -200,7 +211,7 @@ func (s *LeaveRequestService) Delete(scope repository.AccessScope, id uint) erro
 	return s.repo.Delete(&leave)
 }
 
-// Pending returns the requests awaiting approval, each decorated with how much of the leave type's yearly quota the employee has already used.
+// Pending returns the requests awaiting approval, each decorated with the quota for every calendar year they touch.
 func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLeave, error) {
 	leaves, err := s.repo.ListPendingScoped(scope)
 	if err != nil {
@@ -211,17 +222,43 @@ func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLe
 	for _, leave := range leaves {
 		entry := PendingLeave{Request: leave}
 		if leave.LeaveTypeID != nil && leave.LeaveTypeMaster != nil && leave.LeaveTypeMaster.MaxDaysPerYear > 0 {
-			used, err := s.repo.SumApprovedDaysInYear(leave.EmployeesID, *leave.LeaveTypeID, leave.StartDate.Year())
-			if err != nil {
-				return nil, err
+			requestedByYear := leaveDaysByCalendarYear(leave.StartDate, leave.EndDate)
+			for year := leave.StartDate.Year(); year <= leave.EndDate.Year(); year++ {
+				requestedDays := requestedByYear[year]
+				used, err := s.repo.SumApprovedDaysInYear(leave.EmployeesID, *leave.LeaveTypeID, year)
+				if err != nil {
+					return nil, err
+				}
+				quotaYear := LeaveQuotaYear{
+					Year:          year,
+					MaxDays:       leave.LeaveTypeMaster.MaxDaysPerYear,
+					UsedDays:      used,
+					RequestedDays: requestedDays,
+					Exceeded:      used+requestedDays > leave.LeaveTypeMaster.MaxDaysPerYear,
+				}
+				entry.QuotaYears = append(entry.QuotaYears, quotaYear)
+				if quotaYear.Exceeded {
+					entry.QuotaExceeded = true
+				}
+				if year == leave.StartDate.Year() {
+					// Retain the existing fields for API consumers while quota_years
+					// provides the complete cross-year explanation.
+					entry.QuotaMaxDays = quotaYear.MaxDays
+					entry.QuotaUsedDays = quotaYear.UsedDays
+				}
 			}
-			entry.QuotaMaxDays = leave.LeaveTypeMaster.MaxDaysPerYear
-			entry.QuotaUsedDays = used
-			entry.QuotaExceeded = used+leave.TotalDays > entry.QuotaMaxDays
 		}
 		pending = append(pending, entry)
 	}
 	return pending, nil
+}
+
+func leaveDaysByCalendarYear(start time.Time, end time.Time) map[int]float64 {
+	days := make(map[int]float64)
+	for day := dateOnly(start); !day.After(end); day = day.AddDate(0, 0, 1) {
+		days[day.Year()]++
+	}
+	return days
 }
 
 // Decide approves or rejects a pending request.
@@ -238,10 +275,12 @@ func (s *LeaveRequestService) Decide(scope repository.AccessScope, id uint, stat
 		return ErrLeaveAlreadyProcessed
 	}
 
-	approverID := scope.User.ID
+	if status == string(models.LeaveStatusApproved) {
+		return s.repo.ApproveWithinQuota(leave.ID, scope.User.ID)
+	}
 	return s.repo.UpdateFields(&leave, map[string]any{
 		"status":      status,
-		"approved_by": approverID,
+		"approved_by": scope.User.ID,
 		"updated_at":  time.Now(),
 	})
 }

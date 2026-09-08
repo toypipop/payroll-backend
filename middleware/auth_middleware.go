@@ -7,6 +7,7 @@ import (
 	authhandler "payroll-backend/handlers/auth"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -14,13 +15,14 @@ import (
 
 // Guard holds the lookups the request-gating middleware needs, so no middleware reaches for a database handle of its own.
 type Guard struct {
-	access repository.AccessRepository
-	delete repository.DeleteGuardRepository
+	access    repository.AccessRepository
+	delete    repository.DeleteGuardRepository
+	companies *service.CompanyAccessService
 }
 
 // NewGuard builds the middleware set from the repositories main composed.
-func NewGuard(access repository.AccessRepository, deleteGuard repository.DeleteGuardRepository) *Guard {
-	return &Guard{access: access, delete: deleteGuard}
+func NewGuard(access repository.AccessRepository, deleteGuard repository.DeleteGuardRepository, companies *service.CompanyAccessService) *Guard {
+	return &Guard{access: access, delete: deleteGuard, companies: companies}
 }
 
 // Auth validates the JWT cookie and puts the caller's identity and reachable companies on the request.
@@ -87,8 +89,6 @@ func (g *Guard) Auth() gin.HandlerFunc {
 
 func scopeRank(scope models.DataScope) int {
 	switch scope {
-	case models.ScopeAll:
-		return 4
 	case models.ScopeCompanies:
 		return 3
 	case models.ScopeDepartment:
@@ -167,6 +167,10 @@ func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc
 		}
 
 		companyRoles := g.access.AccessibleCompanyRoles(userID)
+		if value, limited := c.Get("active_company_ids"); limited {
+			active, _ := value.([]uint)
+			companyRoles = activeCompanyRoles(companyRoles, active)
+		}
 		if len(companyRoles) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
 			c.Abort()
@@ -200,4 +204,18 @@ func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc
 		c.Set("authorized_company_ids", companyIDs)
 		c.Next()
 	}
+}
+
+func activeCompanyRoles(roles []repository.CompanyRole, active []uint) []repository.CompanyRole {
+	allowed := make(map[uint]bool, len(active))
+	for _, id := range active {
+		allowed[id] = true
+	}
+	result := make([]repository.CompanyRole, 0, len(roles))
+	for _, role := range roles {
+		if allowed[role.CompanyID] {
+			result = append(result, role)
+		}
+	}
+	return result
 }

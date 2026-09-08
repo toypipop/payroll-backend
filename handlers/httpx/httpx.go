@@ -78,7 +78,11 @@ func BindJSON(c *gin.Context, dst any) bool {
 
 // RespondError maps a domain error onto a status code without leaking driver or SQL detail.
 func RespondError(c *gin.Context, err error) {
-	c.JSON(statusFor(apperr.KindOf(err)), gin.H{"error": apperr.Message(err)})
+	body := gin.H{"error": apperr.Message(err)}
+	if code := apperr.Code(err); code != "" {
+		body["code"] = code
+	}
+	c.JSON(statusFor(apperr.KindOf(err)), body)
 }
 
 // statusFor is the single place the whole API decides which status an error kind deserves.

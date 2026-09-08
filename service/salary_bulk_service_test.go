@@ -68,7 +68,7 @@ func (b *bulkRepo) UpdateAmount(models.SalariesStructure, float64, bool) error {
 	return nil
 }
 
-func (b *bulkRepo) AppendAudit(*models.SalaryAudit) error { return nil }
+func (b *bulkRepo) AppendAuditLog(*models.AuditLog) error { return nil }
 
 // bulkEmployees answers the authorization lookup for several people.
 type bulkEmployees struct {

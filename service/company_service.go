@@ -55,6 +55,7 @@ func (s *CompanyService) Create(creatorID uint, input models.Companies) (models.
 		return models.Companies{}, ErrCompanyNameRequired
 	}
 	input.Name = name
+	input.IsActive = true
 
 	boot := repository.TenantBootstrap{
 		RoleName:        bootstrapRoleName,
@@ -101,11 +102,7 @@ func (s *CompanyService) Update(id uint, input CompanyUpdate) (models.Companies,
 	return company, nil
 }
 
-// Delete removes a company; reference checks run in middleware before this.
-func (s *CompanyService) Delete(id uint) error {
-	company, err := s.repo.Find(id)
-	if err != nil {
-		return err
-	}
-	return s.repo.Delete(&company)
+// SetActive changes operational availability while retaining the company and its history.
+func (s *CompanyService) SetActive(id uint, active bool) (models.Companies, error) {
+	return s.repo.SetActive(id, active)
 }

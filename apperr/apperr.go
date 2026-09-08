@@ -18,8 +18,23 @@ const (
 
 // Error pairs a client-safe message with its kind; driver or SQL text must never become one.
 type Error struct {
-	Kind    Kind
-	Message string
+	Kind      Kind
+	Message   string
+	ErrorCode string
+}
+
+// CompanyInactive identifies the company lifecycle conflict independently of display text.
+func CompanyInactive() error {
+	return &Error{Kind: KindConflict, Message: "Company is inactive. Reactivate it in Companies before accessing its data.", ErrorCode: "COMPANY_INACTIVE"}
+}
+
+// Code is optional; existing errors keep their original response shape.
+func Code(err error) string {
+	var appErr *Error
+	if errors.As(err, &appErr) {
+		return appErr.ErrorCode
+	}
+	return ""
 }
 
 func (e *Error) Error() string { return e.Message }

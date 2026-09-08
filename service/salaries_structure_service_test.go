@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -116,15 +117,71 @@ func (f *fakeSalaryRepo) ListRecordsForEmployee(uint) ([]models.SalariesStructur
 	return f.records, nil
 }
 
-func (f *fakeSalaryRepo) AppendAudit(entry *models.SalaryAudit) error {
-	f.record("AppendAudit")
-	f.audits = append(f.audits, *entry)
+func (f *fakeSalaryRepo) AppendAuditLog(entry *models.AuditLog) error {
+	f.record("AppendAuditLog")
+	f.audits = append(f.audits, salaryAuditFromLogForTest(*entry))
 	return nil
 }
 
 func (f *fakeSalaryRepo) ListAuditForEmployee(uint) ([]models.SalaryAudit, error) {
 	f.record("ListAuditForEmployee")
 	return f.audits, nil
+}
+
+func salaryAuditFromLogForTest(entry models.AuditLog) models.SalaryAudit {
+	audit := models.SalaryAudit{Reason: entry.Reason, ActorName: entry.ActorNameSnapshot}
+	if entry.CompaniesID != nil {
+		audit.CompaniesID = *entry.CompaniesID
+	}
+	if entry.EntityID != nil {
+		audit.EmployeesID = *entry.EntityID
+	}
+	if entry.ActorUserID != nil {
+		audit.ActorID = *entry.ActorUserID
+	}
+	switch entry.EventType {
+	case models.AuditEventSalaryCreated:
+		audit.Action = models.SalaryAuditCreated
+	case models.AuditEventSalaryChanged:
+		audit.Action = models.SalaryAuditAmountChanged
+	case models.AuditEventSalaryMoved:
+		audit.Action = models.SalaryAuditMoved
+	case models.AuditEventSalaryDeactivated:
+		audit.Action = models.SalaryAuditSwitchedOff
+	case models.AuditEventSalaryDeleted:
+		audit.Action = models.SalaryAuditDeleted
+	}
+	var before, after map[string]json.RawMessage
+	_ = json.Unmarshal(entry.BeforeData, &before)
+	_ = json.Unmarshal(entry.AfterData, &after)
+	decodeSalaryAuditDataForTest(before, &audit, true)
+	decodeSalaryAuditDataForTest(after, &audit, false)
+	return audit
+}
+
+func decodeSalaryAuditDataForTest(data map[string]json.RawMessage, audit *models.SalaryAudit, before bool) {
+	if raw, ok := data["base_salary"]; ok {
+		var amount float64
+		if json.Unmarshal(raw, &amount) == nil {
+			if before {
+				audit.FromAmount = &amount
+			} else {
+				audit.ToAmount = &amount
+			}
+		}
+	}
+	if raw, ok := data["effective_date"]; ok {
+		var key string
+		if json.Unmarshal(raw, &key) == nil {
+			if date, err := timeutil.ParseDayStart(key); err == nil {
+				if before {
+					audit.FromDate = &date
+				} else {
+					audit.ToDate = &date
+				}
+			}
+		}
+	}
 }
 
 // fakeSalaryEmployees answers the one employee lookup the salary service makes.
@@ -181,7 +238,7 @@ func TestSalarySaveLocksCyclesInsideOneTransaction(t *testing.T) {
 	if len(repo.outsideTx) != 0 {
 		t.Errorf("calls outside the transaction: %v", repo.outsideTx)
 	}
-	if repo.calls[len(repo.calls)-2] != "CreateRecord" || repo.calls[len(repo.calls)-1] != "AppendAudit" {
+	if repo.calls[len(repo.calls)-2] != "CreateRecord" || repo.calls[len(repo.calls)-1] != "AppendAuditLog" {
 		t.Errorf("calls = %v, want the write and its audit entry last", repo.calls)
 	}
 }
@@ -223,7 +280,7 @@ func TestSalaryDeleteRunsInsideOneTransaction(t *testing.T) {
 	if len(repo.outsideTx) != 1 || repo.outsideTx[0] != "FindRecord" {
 		t.Errorf("calls outside the transaction = %v, want only the FindRecord that resolves access", repo.outsideTx)
 	}
-	want := []string{"FindRecord", "LockCompanyCycles", "ClosedCyclesUsing", "DeleteRecord", "AppendAudit"}
+	want := []string{"FindRecord", "LockCompanyCycles", "ClosedCyclesUsing", "DeleteRecord", "AppendAuditLog"}
 	if len(repo.calls) != len(want) {
 		t.Fatalf("calls = %v, want %v", repo.calls, want)
 	}
@@ -300,7 +357,7 @@ func TestSalarySaveAcceptsCurrentVersion(t *testing.T) {
 		t.Fatalf("Save returned error: %v", err)
 	}
 	// The audit entry is written last, inside the same transaction: a change that cannot be recorded is not made.
-	if repo.calls[len(repo.calls)-2] != "CreateRecord" || repo.calls[len(repo.calls)-1] != "AppendAudit" {
+	if repo.calls[len(repo.calls)-2] != "CreateRecord" || repo.calls[len(repo.calls)-1] != "AppendAuditLog" {
 		t.Fatalf("calls = %v, want the write followed by its audit entry", repo.calls)
 	}
 	if repo.created.Version != 4 {
@@ -812,7 +869,7 @@ func TestSalaryMoveRunsInsideOneTransaction(t *testing.T) {
 	if repo.calls[1] != "LockCompanyCycles" {
 		t.Fatalf("calls = %v, want the cycle lock taken first inside the transaction", repo.calls)
 	}
-	if repo.calls[len(repo.calls)-2] != "MoveRecord" || repo.calls[len(repo.calls)-1] != "AppendAudit" {
+	if repo.calls[len(repo.calls)-2] != "MoveRecord" || repo.calls[len(repo.calls)-1] != "AppendAuditLog" {
 		t.Fatalf("calls = %v, want the move followed by its audit entry", repo.calls)
 	}
 }

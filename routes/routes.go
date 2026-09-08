@@ -80,6 +80,7 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 	api := r.Group("/api/v1")
 	api.Use(g.Auth())
 	api.Use(middleware.RequireXMLHttpRequest())
+	api.Use(g.ActiveCompanies())
 	{
 		// --- Employees ---
 		api.GET("/employees", g.CheckPermission("EmployeesListPage", "VIEW"), h.Employees.GetEmployees)
@@ -143,7 +144,7 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 		api.GET("/reports/payslips/transactions/:cycle_id", g.CheckPermission("PayslipsReportPage", "VIEW"), h.Payroll.GetPayrollTransactions)
 		api.GET("/reports/tax-forms/transactions/:cycle_id", g.CheckPermission("TaxFormsReportPage", "VIEW"), h.Payroll.GetPayrollTransactions)
 		api.GET("/payroll/slip/:transaction_id", g.CheckPermission("TransactionsPage", "VIEW"), h.Payroll.GetPayrollSlip)
-		api.GET("/payroll/my-slips", h.Payroll.GetMySlips)
+		api.GET("/payroll/my-slips", g.CheckPermission("MyPayslipsPage", "VIEW"), h.Payroll.GetMySlips)
 
 		api.GET("/cycle-earnings", g.CheckPermission("CycleEarningsPage", "VIEW"), h.Payroll.GetCycleEarnings)
 		api.POST("/cycle-earnings", g.CheckPermission("CycleEarningsPage", "CREATE"), h.Payroll.CreateCycleEarning)
@@ -214,11 +215,12 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 		api.DELETE("/employee-company-access/:id", g.CheckPermission("EmployeeCompanyAccessPage", "DELETE"), h.Settings.DeleteEmployeeCompanyAccess)
 
 		api.GET("/companies/all", g.CheckPermission("CompaniesPage", "VIEW"), h.Settings.GetAllCompanies)
+		api.GET("/audit-logs", g.CheckPermission("AuditLogsPage", "VIEW"), h.Settings.GetAuditLogs)
 		// No CheckPermission gate: the handler already limits the result to the caller's accessible companies, and every role needs this dropdown.
 		api.GET("/companies/options", h.Settings.GetCompanies)
 		api.POST("/companies", g.CheckPermission("CompaniesPage", "CREATE"), h.Settings.CreateCompanies)
 		api.PUT("/companies/:id", g.CheckPermission("CompaniesPage", "EDIT"), h.Settings.UpdateCompanies)
-		api.DELETE("/companies/:id", g.CheckPermission("CompaniesPage", "DELETE"), g.PreventDeleteIfReferenced("companies"), h.Settings.DeleteCompanies)
+		api.PATCH("/companies/:id/status", g.CheckPermission("CompaniesPage", "EDIT"), h.Settings.SetCompanyStatus)
 
 		api.GET("/master/banks", g.CheckPermission("MasterBankPage", "VIEW"), h.Settings.GetBanks)
 		// No CheckPermission gate: the handler returns global reference data, not company rows.

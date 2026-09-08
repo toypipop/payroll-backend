@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -9,7 +8,6 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 // SyncModuleCapabilities rewrites every module's capability columns from the moduleCapabilities registry in models/module_capability.go.
@@ -73,32 +71,16 @@ func SyncModuleCapabilities(db *gorm.DB) error {
 	return nil
 }
 
-// RemoveDashboardModule drops the DashboardPage module and its permission rows from databases seeded before Dashboard stopped being permission- controlled.
-func RemoveDashboardModule(db *gorm.DB) error {
-	var module models.AppModule
-	// A missing row is the expected result on any database seeded after Dashboard stopped being a module, so silence GORM's record-not-found log for this lookup only.
-	err := db.Session(&gorm.Session{Logger: db.Logger.LogMode(logger.Silent)}).
-		Where("module_key = ?", "DashboardPage").First(&module).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		return fmt.Errorf("look up DashboardPage module: %w", err)
-	}
-
-	if err := db.Unscoped().
-		Where("module_id = ?", module.ID).
-		Delete(&models.RolesModuleAccess{}).Error; err != nil {
-		return fmt.Errorf("delete DashboardPage permissions: %w", err)
-	}
-	if err := db.Unscoped().Delete(&models.AppModule{}, module.ID).Error; err != nil {
-		return fmt.Errorf("delete DashboardPage module: %w", err)
-	}
-	return nil
-}
-
 // PruneStaleRoleScopes rewrites saved permission rows whose DataScope a company-level module cannot honour.
 func PruneStaleRoleScopes(db *gorm.DB) error {
+	// All was retired in favour of explicit employee-company access. Convert legacy rows before resolving
+	// request scopes so no saved permission can bypass that access list during a rolling deployment.
+	if err := db.Model(&models.RolesModuleAccess{}).
+		Where("data_scope = ?", "All").
+		Update("data_scope", models.ScopeCompanies).Error; err != nil {
+		return fmt.Errorf("replace retired All scopes: %w", err)
+	}
+
 	var modules []models.AppModule
 	if err := db.Where("is_category = ?", false).Find(&modules).Error; err != nil {
 		return fmt.Errorf("load app modules: %w", err)

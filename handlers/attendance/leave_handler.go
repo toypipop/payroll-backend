@@ -113,9 +113,10 @@ func (h *Handler) DeleteLeaveRequest(c *gin.Context) {
 // pendingLeaveResponse adds yearly quota usage so the approval page can warn without blocking.
 type pendingLeaveResponse struct {
 	models.LeaveRequest
-	QuotaMaxDays  float64 `json:"quota_max_days"`
-	QuotaUsedDays float64 `json:"quota_used_days"`
-	QuotaExceeded bool    `json:"quota_exceeded"`
+	QuotaMaxDays  float64                  `json:"quota_max_days"`
+	QuotaUsedDays float64                  `json:"quota_used_days"`
+	QuotaExceeded bool                     `json:"quota_exceeded"`
+	QuotaYears    []service.LeaveQuotaYear `json:"quota_years"`
 }
 
 func (h *Handler) GetPendingLeaveRequests(c *gin.Context) {
@@ -137,6 +138,7 @@ func (h *Handler) GetPendingLeaveRequests(c *gin.Context) {
 			QuotaMaxDays:  entry.QuotaMaxDays,
 			QuotaUsedDays: entry.QuotaUsedDays,
 			QuotaExceeded: entry.QuotaExceeded,
+			QuotaYears:    entry.QuotaYears,
 		})
 	}
 	c.JSON(http.StatusOK, responses)

@@ -84,3 +84,12 @@ go test ./...
 - Keep changes small and domain-scoped; preserve route ordering in `routes/routes.go`.
 - CI enforces formatting, vet, build, tests, and layering import rules.
 - Backend deployment is manual through the backend repository workflow and deploys both backend and frontend from the same branch. Do not deploy unless explicitly asked.
+
+## Engineering standards for every change
+
+- Refactor within the touched domain: keep handler, service, repository, and model responsibilities clear; reuse existing abstractions; and remove newly introduced duplication. Do not combine an unrelated rewrite with a feature or fix.
+- Preserve data and transaction integrity. Validate API input before use, keep dependent multi-record writes atomic, use transactions and locks where consistency requires them, make retryable mutations idempotent where the contract requires it, and return explicit concurrency conflicts.
+- Treat security as part of the feature: enforce authentication, authorization, company scoping, and ownership server-side; validate untrusted input; use parameterized GORM queries; and never expose or log credentials, tokens, cookies, or sensitive personal data.
+- Avoid unnecessary database, API, and network work. Scope and paginate reads, prevent N+1 loading and duplicate queries, select only needed relations or columns, and avoid broad cache or state invalidation when a targeted update is sufficient.
+- Add useful observability without noise. Log actionable failures with safe request and domain context at an appropriate severity, preserve error wrapping for traceability, and avoid logging secrets or excessive success-path detail.
+- Apply these standards to the active product work, including System Permissions, leave-type annual limits, permission-save refresh behavior, and paired date inputs.

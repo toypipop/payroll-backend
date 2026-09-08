@@ -9,7 +9,7 @@ import (
 // Permission payload failures.
 var (
 	ErrPermissionModuleRequired = apperr.Validation("module_id is required")
-	ErrPermissionScopeInvalid   = apperr.Validation("data_scope must be one of Own, Department, Companies, All")
+	ErrPermissionScopeInvalid   = apperr.Validation("data_scope must be one of Own, Department, Companies")
 )
 
 // Re-exported so handlers import a single package.
@@ -61,7 +61,7 @@ func (s *PermissionService) Overview(scope repository.AccessScope, rolesID uint)
 // validScope reports whether a submitted scope is one the model defines at all.
 func validScope(scope models.DataScope) bool {
 	switch scope {
-	case models.ScopeOwn, models.ScopeDepartment, models.ScopeCompanies, models.ScopeAll:
+	case models.ScopeOwn, models.ScopeDepartment, models.ScopeCompanies:
 		return true
 	default:
 		return false

@@ -417,7 +417,11 @@ func main() {
 	// --- Modules ---
 	modules := []models.AppModule{
 		// --- Level 1: Main Categories ---
-		{ID: 8, ModuleName: "Help Center", ModuleKey: "HelpPage", RoutePath: "/help", Icon: "HelpOutline", Order: 2, IsCategory: false},
+		// General contains the entry pages users can access through their role permissions.
+		{ID: 1, ModuleName: "General", ModuleKey: "ModuleGeneral", RoutePath: "", Order: 2, IsCategory: true},
+		{ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, ParentID: ptr(1), IsCategory: false},
+		{ModuleName: "My Payslips", ModuleKey: "MyPayslipsPage", RoutePath: "/my-payslips", Icon: "ReceiptLong", Order: 2, ParentID: ptr(1), IsCategory: false},
+		{ID: 8, ModuleName: "Help Center", ModuleKey: "HelpPage", RoutePath: "/help", Icon: "HelpOutline", Order: 3, ParentID: ptr(1), IsCategory: false},
 		{ID: 2, ModuleName: "Employees", ModuleKey: "ModuleEmployees", RoutePath: "", Icon: "People", Order: 3, IsCategory: true},
 		{ID: 3, ModuleName: "Attendance", ModuleKey: "ModuleAttendance", RoutePath: "", Icon: "Event", Order: 4, IsCategory: true},
 		{ID: 4, ModuleName: "Payroll Processing", ModuleKey: "ModulePayroll", RoutePath: "", Icon: "AccountBalanceWallet", Order: 5, IsCategory: true},
@@ -464,6 +468,7 @@ func main() {
 		{ModuleName: "Day Off", ModuleKey: "DayOffPage", RoutePath: "/day-offs", Icon: "EventAvailable", Order: 11, ParentID: ptr(6)},
 		{ModuleName: "Work Locations", ModuleKey: "WorkLocationPage", RoutePath: "/work-locations", Icon: "LocationOn", Order: 12, ParentID: ptr(6)},
 		{ModuleName: "Leave Types", ModuleKey: "MasterLeaveTypePage", RoutePath: "/leave-types", Icon: "EventAvailable", Order: 13, ParentID: ptr(6)},
+		{ModuleName: "Audit Logs", ModuleKey: "AuditLogsPage", RoutePath: "/audit-logs", Icon: "FactCheck", Order: 14, ParentID: ptr(6)},
 
 		// Level 2: Sub-Menus under Reports
 		{ModuleName: "Payslips", ModuleKey: "PayslipsReportPage", RoutePath: "/payslips", Icon: "Description", Order: 1, ParentID: ptr(7)},
@@ -488,6 +493,7 @@ func main() {
 		}
 		moduleIDByKey[existingModule.ModuleKey] = existingModule.ID
 	}
+	// Audit Logs is view-only. Scope comes from each role's module permission, never from a role name in code.
 
 	// ─── Permission Matrix (least-privilege) ────────────────────────────────── One row per (role, module) the role may VIEW.
 	type modAcc struct {
@@ -503,6 +509,8 @@ func main() {
 
 	// Report pages have GET-only APIs, so they are granted View alone.
 	reportKeys := map[models.ModuleKey]bool{
+		"DashboardPage":          true,
+		"MyPayslipsPage":         true,
 		"PayslipsReportPage":     true,
 		"BankTransferReportPage": true,
 		"TaxFormsReportPage":     true,
@@ -535,9 +543,14 @@ func main() {
 		}
 		adminGrants[m.ModuleKey] = F(coScope)
 	}
+	// Audit Logs is view-only. Scope comes from each role's module permission, never from a role name in code.
+	sysAdminGrants["AuditLogsPage"] = V(models.ScopeCompanies)
+	adminGrants["AuditLogsPage"] = V(models.ScopeCompanies)
 
 	// HR: employees + attendance + leave + HR master-data (full); payroll
 	hrGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":          V(coScope),
+		"MyPayslipsPage":         V(coScope),
 		"EmployeesListPage":      F(coScope),
 		"SalariesStructurePage":  F(coScope),
 		"EmployeeEarningsPage":   F(coScope),
@@ -568,6 +581,8 @@ func main() {
 
 	// FINANCE: payroll processing + payroll config + all financial reports +
 	financeGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":             V(coScope),
+		"MyPayslipsPage":            V(coScope),
 		"EmployeesListPage":         V(coScope),
 		"SalariesStructurePage":     V(coScope),
 		"EmployeeEarningsPage":      V(coScope),
@@ -594,6 +609,8 @@ func main() {
 	// MANAGER: own team only (Department scope).
 	mgrScope := models.ScopeDepartment
 	managerGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":     V(coScope),
+		"MyPayslipsPage":    V(coScope),
 		"EmployeesListPage": V(mgrScope),
 		"TimelogsListPage":  VE(mgrScope),
 		"LeaveRequestsPage": VE(mgrScope),
@@ -604,6 +621,8 @@ func main() {
 	// STAFF: self only (Own scope).
 	ownScope := models.ScopeOwn
 	staffGrants := map[models.ModuleKey]modAcc{
+		"DashboardPage":          V(coScope),
+		"MyPayslipsPage":         V(coScope),
 		"EmployeesListPage":      V(ownScope),
 		"SalariesStructurePage":  V(ownScope),
 		"EmployeeEarningsPage":   V(ownScope),
@@ -1618,25 +1637,25 @@ func main() {
 			}
 
 			var already int64
-			config.DB.Model(&models.SalaryAudit{}).
-				Where("salaries_structure_id = ?", record.ID).Count(&already)
+			config.DB.Model(&models.AuditLog{}).
+				Where("entity_type = ? AND entity_id = ? AND event_type = ?", "employee", record.EmployeesID, models.AuditEventSalaryCreated).
+				Where("occurred_at = ?", record.CreatedAt).Count(&already)
 			if already > 0 {
 				continue
 			}
 
-			amount, on := record.BaseSalaries, record.EffectiveDate
-			config.DB.Create(&models.SalaryAudit{
-				CreatedAt:           record.CreatedAt,
-				CompaniesID:         record.CompaniesID,
-				EmployeesID:         record.EmployeesID,
-				SalariesStructureID: &record.ID,
-				Action:              models.SalaryAuditCreated,
-				Reason:              reason,
-				ActorID:             seedActor.ID,
-				ActorName:           actorName,
-				ToAmount:            &amount,
-				ToDate:              &on,
+			companyID, employeeID, actorID := record.CompaniesID, record.EmployeesID, seedActor.ID
+			entry, err := models.NewAuditLogInput(models.AuditLogInput{
+				OccurredAt: record.CreatedAt, ActorUserID: &actorID, ActorNameSnapshot: actorName,
+				CompaniesID: &companyID, EventType: models.AuditEventSalaryCreated, EntityType: "employee", EntityID: &employeeID,
+				Summary: "Salary record created", Reason: reason,
+				AfterData: map[string]any{
+					"base_salary": record.BaseSalaries, "effective_date": timeutil.DateKey(record.EffectiveDate), "salary_record_id": record.ID,
+				},
 			})
+			if err == nil {
+				config.DB.Create(&entry)
+			}
 		}
 	}
 
@@ -2165,11 +2184,6 @@ func main() {
 			}
 			config.DB.Create(&details)
 		}
-	}
-
-	// Seed only creates and updates module rows, so a database seeded before Dashboard stopped being permission-controlled still carries that row.
-	if err := migrations.RemoveDashboardModule(config.DB); err != nil {
-		log.Fatalf("Dashboard module removal failed: %v", err)
 	}
 
 	// Project the capability registry onto the freshly seeded module rows, so the permission UI works immediately without waiting for a server restart.

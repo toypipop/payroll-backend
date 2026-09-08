@@ -12,7 +12,6 @@ const (
 	ScopeOwn        DataScope = "Own"
 	ScopeDepartment DataScope = "Department"
 	ScopeCompanies  DataScope = "Companies"
-	ScopeAll        DataScope = "All"
 )
 
 type ModuleKey string

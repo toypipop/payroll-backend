@@ -197,9 +197,50 @@ func auditActor(scope repository.AccessScope) (uint, string) {
 }
 
 // recordAudit appends one trail entry for a change that has just been made in the same transaction.
-func recordAudit(repo repository.SalariesStructureRepository, scope repository.AccessScope, entry models.SalaryAudit) error {
-	entry.ActorID, entry.ActorName = auditActor(scope)
-	return repo.AppendAudit(&entry)
+func recordAudit(repo repository.SalariesStructureRepository, scope repository.AccessScope, legacy models.SalaryAudit) error {
+	event, summary := salaryAuditEvent(legacy.Action)
+	before := salaryAuditData(legacy.FromAmount, legacy.FromDate, legacy.SalariesStructureID)
+	after := salaryAuditData(legacy.ToAmount, legacy.ToDate, legacy.SalariesStructureID)
+	companyID, employeeID := legacy.CompaniesID, legacy.EmployeesID
+	entry, err := BuildAuditLog(scope, models.AuditLogInput{
+		CompaniesID: &companyID, EventType: event, EntityType: "employee", EntityID: &employeeID,
+		Summary: summary, Reason: legacy.Reason, BeforeData: before, AfterData: after,
+	})
+	if err != nil {
+		return err
+	}
+	return repo.AppendAuditLog(&entry)
+}
+
+func salaryAuditEvent(action models.SalaryAuditAction) (models.AuditEventType, string) {
+	switch action {
+	case models.SalaryAuditCreated:
+		return models.AuditEventSalaryCreated, "Salary record created"
+	case models.SalaryAuditAmountChanged:
+		return models.AuditEventSalaryChanged, "Salary amount changed"
+	case models.SalaryAuditMoved:
+		return models.AuditEventSalaryMoved, "Salary record moved"
+	case models.SalaryAuditSwitchedOff:
+		return models.AuditEventSalaryDeactivated, "Salary deactivated"
+	case models.SalaryAuditDeleted:
+		return models.AuditEventSalaryDeleted, "Salary record deleted"
+	default:
+		return "", "Salary changed"
+	}
+}
+
+func salaryAuditData(amount *float64, date *time.Time, salaryRecordID *uint) map[string]any {
+	data := make(map[string]any)
+	if amount != nil {
+		data["base_salary"] = *amount
+	}
+	if date != nil {
+		data["effective_date"] = timeutil.DateKey(*date)
+	}
+	if salaryRecordID != nil {
+		data["salary_record_id"] = *salaryRecordID
+	}
+	return data
 }
 
 // cleanReason is the reason a write may proceed with, or the error saying it may not.

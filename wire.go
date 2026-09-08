@@ -20,7 +20,7 @@ import (
 
 // buildGuard assembles the request-gating middleware from the lookups it needs.
 func buildGuard(db *gorm.DB) *middleware.Guard {
-	return middleware.NewGuard(repository.NewAccessRepository(db), repository.NewDeleteGuardRepository(db))
+	return middleware.NewGuard(repository.NewAccessRepository(db), repository.NewDeleteGuardRepository(db), service.NewCompanyAccessService(repository.NewCompanyAccessRepository(db)))
 }
 
 // buildHandlers is the composition root: repositories and services are built here so nothing below main needs a database handle of its own.
@@ -98,6 +98,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 			Report: service.NewReportService(repository.NewReportRepository(db)),
 		},
 		Settings: &sethandler.Handler{
+			AuditLog:              service.NewAuditLogService(repository.NewAuditLogRepository(db)),
 			Bank:                  service.NewBankService(repository.NewBankRepository(db)),
 			Company:               service.NewCompanyService(companyRepo),
 			DayOff:                service.NewDayOffService(repository.NewDayOffRepository(db), companyRepo),

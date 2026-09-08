@@ -450,6 +450,7 @@ func (r *gormPayrollRunRepository) ListClosedCycleTransactionsForEmployee(employ
 	var transactions []models.PayrollTransaction
 	err := r.db.
 		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id AND payroll_cycle.is_closed = true AND payroll_cycle.deleted_at = 0").
+		Joins("JOIN companies ON companies.id = payroll_cycle.companies_id AND companies.is_active = true AND companies.deleted_at = 0").
 		Where("payroll_transaction.employees_id = ? AND payroll_transaction.deleted_at = 0", employeeID).
 		Preload("Details").
 		Order("payroll_transaction.id DESC").
