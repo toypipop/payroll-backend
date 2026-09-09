@@ -7,13 +7,17 @@ import (
 	"payroll-backend/repository"
 )
 
-type auditLogRepoFake struct{ entries []models.AuditLog }
+type auditLogRepoFake struct {
+	entries []models.AuditLog
+	query   repository.AuditLogQuery
+}
 
 func (r *auditLogRepoFake) Append(entry *models.AuditLog) error {
 	r.entries = append(r.entries, *entry)
 	return nil
 }
-func (r *auditLogRepoFake) ListScoped(repository.AccessScope, *uint) ([]models.AuditLog, error) {
+func (r *auditLogRepoFake) ListScoped(_ repository.AccessScope, query repository.AuditLogQuery) ([]models.AuditLog, error) {
+	r.query = query
 	return r.entries, nil
 }
 
@@ -30,5 +34,18 @@ func TestAuditLogServiceSnapshotsActorFromScope(t *testing.T) {
 	}
 	if len(repo.entries) != 1 || repo.entries[0].ActorNameSnapshot != "Ada Admin" {
 		t.Fatalf("entries = %#v", repo.entries)
+	}
+}
+
+func TestAuditLogServiceListsSharedDataWithoutCompanyScope(t *testing.T) {
+	repo := &auditLogRepoFake{}
+	svc := NewAuditLogService(repo)
+
+	_, err := svc.List(repository.NewAccessScope(models.Employees{ID: 9}, models.ScopeCompanies, []uint{2}), repository.AuditLogQuery{Scope: repository.AuditLogScopeShared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.query.Scope != repository.AuditLogScopeShared || repo.query.CompanyID != nil {
+		t.Fatalf("query = %#v, want shared data only", repo.query)
 	}
 }
