@@ -5,7 +5,7 @@ Go + Gin + PostgreSQL API. It runs on `http://localhost:8000` and serves `/api/v
 ## Setup
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.local.example .env
 docker compose -f docker-compose.local.yml up -d postgres
 go run ./migrate
 go run ./seed
@@ -22,4 +22,4 @@ go build ./...
 go test ./...
 ```
 
-`.env` is ignored by Git. Copy `.env.example` after every fresh clone; never commit real credentials or environment values. `go run ./seed --reset` deletes all database rows and is only for a local non-production database.
+`.env` is ignored by Git. Copy `.env.local.example` for local work. For UAT deployment, copy `.env.uat.example` to `.env` on the host and replace every placeholder, preferably injecting secrets from the deployment system. Never commit real credentials or environment values. `go run ./seed --reset` deletes all database rows and is only for a local non-production database.
