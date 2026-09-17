@@ -1,11 +1,12 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	authhandler "payroll-backend/handlers/auth"
 	"payroll-backend/models"
+	"payroll-backend/observability"
 	"payroll-backend/repository"
 	"payroll-backend/service"
 
@@ -183,8 +184,18 @@ func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc
 		}
 
 		accesses, err := g.access.ModuleAccesses(roleIDs, moduleKey)
-		if err != nil || len(accesses) == 0 {
-			log.Printf("[DEBUG] ModuleKey: %s, RoleIDs: %v, Error: %v", moduleKey, roleIDs, err)
+		if err != nil {
+			slog.Error("permission lookup failed",
+				"request_id", observability.RequestID(c),
+				"module", moduleKey,
+				"action", action,
+				"error", err,
+			)
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			c.Abort()
+			return
+		}
+		if len(accesses) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 			c.Abort()
 			return

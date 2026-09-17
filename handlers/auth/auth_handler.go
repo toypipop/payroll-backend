@@ -2,13 +2,16 @@ package auth
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"payroll-backend/apperr"
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
+	"payroll-backend/observability"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -137,6 +140,13 @@ func (h *Handler) Login(c *gin.Context) {
 
 	employee, err := h.Auth.Authenticate(input.Email, input.Password)
 	if err != nil {
+		if apperr.KindOf(err) == apperr.KindUnauthorized {
+			slog.Warn("login failed",
+				"request_id", observability.RequestID(c),
+				"client_ip", c.ClientIP(),
+				"reason", "invalid_credentials",
+			)
+		}
 		httpx.RespondError(c, err)
 		return
 	}

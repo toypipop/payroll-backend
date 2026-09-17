@@ -1,11 +1,13 @@
 package httpx
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"payroll-backend/apperr"
 	"payroll-backend/models"
+	"payroll-backend/observability"
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
@@ -78,11 +80,22 @@ func BindJSON(c *gin.Context, dst any) bool {
 
 // RespondError maps a domain error onto a status code without leaking driver or SQL detail.
 func RespondError(c *gin.Context, err error) {
+	status := statusFor(apperr.KindOf(err))
+	if status >= http.StatusInternalServerError {
+		slog.Error("request failed",
+			"request_id", observability.RequestID(c),
+			"status", status,
+			"method", c.Request.Method,
+			"route", c.FullPath(),
+			"path", c.Request.URL.Path,
+			"error", err,
+		)
+	}
 	body := gin.H{"error": apperr.Message(err)}
 	if code := apperr.Code(err); code != "" {
 		body["code"] = code
 	}
-	c.JSON(statusFor(apperr.KindOf(err)), body)
+	c.JSON(status, body)
 }
 
 // statusFor is the single place the whole API decides which status an error kind deserves.

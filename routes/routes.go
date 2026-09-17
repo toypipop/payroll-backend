@@ -51,13 +51,14 @@ type Handlers struct {
 }
 
 func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.RequestID(), middleware.RequestLogger(), gin.Recovery())
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins(),
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "X-Requested-With"},
-		ExposeHeaders:    []string{"Content-Length"},
+		ExposeHeaders:    []string{"Content-Length", "X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))

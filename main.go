@@ -3,14 +3,19 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/routes"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	config.LoadDotEnv()
+	configureGinMode()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 
 	if secret := os.Getenv("JWT_SECRET"); secret == "" {
 		log.Fatal("FATAL: JWT_SECRET environment variable is not set")
@@ -61,6 +66,14 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func configureGinMode() {
+	mode := os.Getenv("GIN_MODE")
+	if mode == "" {
+		mode = gin.ReleaseMode
+	}
+	gin.SetMode(mode)
 }
 
 // All Modules seeded by seed/main.go.
