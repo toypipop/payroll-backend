@@ -100,6 +100,9 @@ func (r *gormLeaveRequestRepository) FindDetail(id uint) (models.LeaveRequest, e
 
 func (r *gormLeaveRequestRepository) Create(leave *models.LeaveRequest, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, leave.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Create(leave).Error; err != nil {
 			return err
 		}
@@ -118,6 +121,12 @@ func (r *gormLeaveRequestRepository) UpdateFields(leave *models.LeaveRequest, fi
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Rejection remains available to clean up pending requests for retired employees.
+		if fields["status"] != string(models.LeaveStatusRejected) && fields["status"] != models.LeaveStatusRejected {
+			if err := lockEmployeeUpdate(tx, leave.EmployeesID, fields, "employees_id"); err != nil {
+				return err
+			}
+		}
 		if err := tx.Model(leave).Updates(fields).Error; err != nil {
 			return err
 		}
@@ -188,11 +197,26 @@ func daysByCalendarYear(start, end time.Time) map[int]float64 {
 func (r *gormLeaveRequestRepository) ApproveWithinQuota(id uint, approverID uint, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var leave models.LeaveRequest
+		if err := tx.First(&leave, id).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrLeaveRequestNotApprovable
+			}
+			return err
+		}
+		// Also serialize quota checks for this employee; UPDATE avoids upgrading a
+		// shared lock later. All writers lock the employee before the request.
+		if err := lockEmployeeStatus(tx, leave.EmployeesID, "UPDATE"); err != nil {
+			return err
+		}
+		lockedEmployeeID := leave.EmployeesID
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&leave, id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrLeaveRequestNotApprovable
 			}
 			return err
+		}
+		if leave.EmployeesID != lockedEmployeeID {
+			return apperr.Conflict("This leave request was changed by someone else. Reload and try again.")
 		}
 		if leave.Status != models.LeaveStatusPending {
 			return apperr.Validation("This request has already been processed")
@@ -204,10 +228,6 @@ func (r *gormLeaveRequestRepository) ApproveWithinQuota(id uint, approverID uint
 				return err
 			}
 			if leaveType.MaxDaysPerYear > 0 {
-				var employee models.Employees
-				if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&employee, leave.EmployeesID).Error; err != nil {
-					return err
-				}
 				firstYearStart := time.Date(leave.StartDate.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
 				lastYearEnd := time.Date(leave.EndDate.Year(), time.December, 31, 23, 59, 59, 0, time.UTC)
 				var approved []models.LeaveRequest

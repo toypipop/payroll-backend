@@ -24,13 +24,26 @@ func (h *Handler) GetEmployees(c *gin.Context) {
 	c.JSON(http.StatusOK, employees)
 }
 
+func (h *Handler) GetEmployeeOptions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+	options, err := h.Employees.Options(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, options)
+}
+
 func (h *Handler) CreateEmployees(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
 		return
 	}
 
-	var input models.Employees
+	input := models.Employees{IsActive: true}
 	if !httpx.BindJSON(c, &input) {
 		return
 	}

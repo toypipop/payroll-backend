@@ -12,6 +12,7 @@ import (
 var (
 	ErrAuthPasswordWrong = apperr.Unauthorized("Invalid password")
 	ErrAuthNoRoleAccess  = apperr.Forbidden("No role access configured")
+	ErrAuthInactive      = apperr.Unauthorized("This employee account is inactive. Please contact your administrator.")
 )
 
 // Re-exported so handlers import a single package.
@@ -46,6 +47,9 @@ func (s *AuthService) Authenticate(email string, password string) (models.Employ
 	if err := bcrypt.CompareHashAndPassword([]byte(employee.Password), []byte(password)); err != nil {
 		return models.Employees{}, ErrAuthPasswordWrong
 	}
+	if !employee.IsActive {
+		return models.Employees{}, ErrAuthInactive
+	}
 	return employee, nil
 }
 
@@ -78,6 +82,9 @@ func (s *AuthService) IdentityByID(userID uint) (models.LoginResponse, error) {
 	employee, err := s.repo.FindEmployee(userID)
 	if err != nil {
 		return models.LoginResponse{}, err
+	}
+	if !employee.IsActive {
+		return models.LoginResponse{}, ErrAuthInactive
 	}
 	return s.Identity(employee), nil
 }

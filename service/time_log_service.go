@@ -93,6 +93,9 @@ func (s *TimeLogService) resolveEmployee(scope repository.AccessScope, employeeI
 	if err != nil || employee.CompaniesID != companyID {
 		return models.Employees{}, ErrTimeLogEmployeeCompany
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return models.Employees{}, err
+	}
 	return employee, nil
 }
 

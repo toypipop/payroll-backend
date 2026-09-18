@@ -66,6 +66,9 @@ func (r *gormTimeLogRepository) FindScoped(scope AccessScope, id uint) (models.T
 
 func (r *gormTimeLogRepository) Create(log *models.TimeLog, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, log.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Create(log).Error; err != nil {
 			return err
 		}
@@ -85,6 +88,13 @@ func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog, audit *models.
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		ids := make([]uint, 0, len(logs))
+		for _, log := range logs {
+			ids = append(ids, log.EmployeesID)
+		}
+		if err := lockActiveEmployees(tx, ids...); err != nil {
+			return err
+		}
 		if err := tx.Create(&logs).Error; err != nil {
 			return err
 		}
@@ -97,6 +107,9 @@ func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog, audit *models.
 
 func (r *gormTimeLogRepository) Save(log *models.TimeLog, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, log.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Save(log).Error; err != nil {
 			return err
 		}

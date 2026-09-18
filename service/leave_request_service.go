@@ -100,6 +100,9 @@ func (s *LeaveRequestService) resolveTarget(scope repository.AccessScope, input 
 	if err != nil || employee.CompaniesID != input.CompaniesID {
 		return models.Employees{}, models.LeaveTypeSetting{}, ErrLeaveEmployeeInvalid
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return models.Employees{}, models.LeaveTypeSetting{}, err
+	}
 
 	leaveType, err := s.leaveTypes.FindScoped(scope, input.LeaveTypeID)
 	if err != nil {
@@ -292,6 +295,9 @@ func (s *LeaveRequestService) Decide(scope repository.AccessScope, id uint, stat
 	}
 
 	if status == string(models.LeaveStatusApproved) {
+		if err := activeEmployeeByID(s.employees, scope, leave.EmployeesID); err != nil {
+			return err
+		}
 		approvedBy := scope.User.ID
 		updated := leave
 		updated.Status, updated.ApprovedBy = models.LeaveStatusApproved, &approvedBy

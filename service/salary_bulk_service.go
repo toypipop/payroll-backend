@@ -122,6 +122,9 @@ func (s *SalariesStructureService) resolveBulkPeople(scope repository.AccessScop
 		if _, ok := scope.ResolveCompanyID(employee.CompaniesID); !ok {
 			return nil, ErrSalaryEmployeeTarget
 		}
+		if err := requireActiveEmployee(employee); err != nil {
+			return nil, err
+		}
 		people = append(people, bulkPerson{employee: employee, target: target})
 	}
 	return people, nil

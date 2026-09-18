@@ -49,6 +49,13 @@ func (s *CycleDeductionService) openCycle(scope repository.AccessScope, cycleID 
 	cycle, err := s.cycles.FindOpenCycleScoped(scope, cycleID)
 	switch {
 	case err == nil:
+		cycle, err = s.cycles.LockCycleForUpdate(cycle.ID)
+		if err != nil {
+			return models.PayrollCycle{}, err
+		}
+		if cycle.IsClosed {
+			return models.PayrollCycle{}, closedErr
+		}
 		return cycle, nil
 	case errors.Is(err, repository.ErrPayrollCycleClosed):
 		return models.PayrollCycle{}, closedErr
@@ -69,6 +76,18 @@ func (s *CycleDeductionService) List(scope repository.AccessScope, cycleID uint)
 
 // Create attaches a one-off deduction to an open cycle.
 func (s *CycleDeductionService) Create(scope repository.AccessScope, input models.PayrollCycleDeduction) (models.PayrollCycleDeduction, error) {
+	var saved models.PayrollCycleDeduction
+	err := s.repo.WithinTx(func(repo repository.CycleDeductionRepository, cycles repository.PayrollRunRepository) error {
+		txService := *s
+		txService.repo, txService.cycles = repo, cycles
+		var err error
+		saved, err = txService.create(scope, input)
+		return err
+	})
+	return saved, err
+}
+
+func (s *CycleDeductionService) create(scope repository.AccessScope, input models.PayrollCycleDeduction) (models.PayrollCycleDeduction, error) {
 	deductionType, err := s.deductionTypes.Find(input.DeductionTypeID)
 	if err != nil {
 		return models.PayrollCycleDeduction{}, err
@@ -85,10 +104,16 @@ func (s *CycleDeductionService) Create(scope repository.AccessScope, input model
 	if err != nil || employee.CompaniesID != cycle.CompaniesID {
 		return models.PayrollCycleDeduction{}, ErrCycleDeductionEmployeeCompany
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
 	if deductionType.CompaniesID != cycle.CompaniesID {
 		return models.PayrollCycleDeduction{}, ErrCycleDeductionTypeCompany
 	}
 
+	if err := validateCycleEmployeeSalary(s.cycles, cycle, input.EmployeesID); err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
 	item := models.PayrollCycleDeduction{
 		CycleID:         input.CycleID,
 		CompaniesID:     cycle.CompaniesID,
@@ -108,6 +133,18 @@ func (s *CycleDeductionService) Create(scope repository.AccessScope, input model
 
 // Update rewrites a one-off deduction, which is only possible while its cycle is open.
 func (s *CycleDeductionService) Update(scope repository.AccessScope, id uint, input models.PayrollCycleDeduction) (models.PayrollCycleDeduction, error) {
+	var saved models.PayrollCycleDeduction
+	err := s.repo.WithinTx(func(repo repository.CycleDeductionRepository, cycles repository.PayrollRunRepository) error {
+		txService := *s
+		txService.repo, txService.cycles = repo, cycles
+		var err error
+		saved, err = txService.update(scope, id, input)
+		return err
+	})
+	return saved, err
+}
+
+func (s *CycleDeductionService) update(scope repository.AccessScope, id uint, input models.PayrollCycleDeduction) (models.PayrollCycleDeduction, error) {
 	item, err := s.repo.FindScoped(scope, id)
 	if err != nil {
 		return models.PayrollCycleDeduction{}, err
@@ -131,6 +168,12 @@ func (s *CycleDeductionService) Update(scope repository.AccessScope, id uint, in
 		return models.PayrollCycleDeduction{}, ErrCycleDeductionEmployeeCompany
 	}
 
+	if err := requireActiveEmployee(employee); err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
+	if err := validateCycleEmployeeSalary(s.cycles, cycle, input.EmployeesID); err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
 	before := cycleDeductionAuditData(item)
 	updated := item
 	updated.CompaniesID, updated.EmployeesID, updated.DeductionTypeID = cycle.CompaniesID, input.EmployeesID, input.DeductionTypeID
@@ -152,6 +195,14 @@ func (s *CycleDeductionService) Update(scope repository.AccessScope, id uint, in
 
 // Delete removes a one-off deduction, which is only possible while its cycle is open.
 func (s *CycleDeductionService) Delete(scope repository.AccessScope, id uint) error {
+	return s.repo.WithinTx(func(repo repository.CycleDeductionRepository, cycles repository.PayrollRunRepository) error {
+		txService := *s
+		txService.repo, txService.cycles = repo, cycles
+		return txService.delete(scope, id)
+	})
+}
+
+func (s *CycleDeductionService) delete(scope repository.AccessScope, id uint) error {
 	item, err := s.repo.FindScoped(scope, id)
 	if err != nil {
 		return ErrCycleDeductionNotDeletable

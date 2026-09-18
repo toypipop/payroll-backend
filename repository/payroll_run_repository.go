@@ -52,6 +52,7 @@ type PayrollRunRepository interface {
 	FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	FindOpenCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	ListCyclesScoped(scope AccessScope) ([]models.PayrollCycle, error)
+	ListCycleEmployeeOptions(scope AccessScope, cycle models.PayrollCycle) ([]CycleEmployeeOption, error)
 	CreateCycle(cycle *models.PayrollCycle) error
 	MarkCycleClosed(cycle *models.PayrollCycle) error
 
@@ -64,6 +65,7 @@ type PayrollRunRepository interface {
 	FindSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
 	FindEarliestSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
 	DeleteTransactionForEmployee(cycleID uint, employeeID uint) error
+	DeleteTransactionsOutsideEmployees(cycleID uint, employeeIDs []uint) error
 
 	ListEmployeeEarnings(employeeID uint) ([]models.EmployeeEarning, error)
 	ListCycleEarnings(employeeID uint, cycleID uint) ([]models.PayrollCycleEarning, error)
@@ -213,7 +215,7 @@ func (r *gormPayrollRunRepository) ListDayOffs(companiesID uint) ([]models.DayOf
 // Deleted records are excluded by soft delete, as everywhere else.
 func (r *gormPayrollRunRepository) FindSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
 	var record models.SalariesStructure
-	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
+	err := r.db.Where("employees_id = ?", employeeID).Scopes(usableSalaryBy(date)).
 		Order("effective_date DESC, created_at DESC").
 		First(&record).Error
 	return record, salaryLookupError(err)
@@ -224,7 +226,7 @@ func (r *gormPayrollRunRepository) FindSalaryOnOrBefore(employeeID uint, date ti
 // the cycle — a new hire — so the run can pro-rate from the day it takes effect.
 func (r *gormPayrollRunRepository) FindEarliestSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
 	var record models.SalariesStructure
-	err := r.db.Where("employees_id = ? AND is_active = ? AND effective_date <= ?", employeeID, true, date).
+	err := r.db.Where("employees_id = ?", employeeID).Scopes(usableSalaryBy(date)).
 		Order("effective_date ASC, created_at ASC").
 		First(&record).Error
 	return record, salaryLookupError(err)
@@ -251,6 +253,25 @@ func (r *gormPayrollRunRepository) DeleteTransactionForEmployee(cycleID uint, em
 		return err
 	}
 	return r.db.Delete(&stale).Error
+}
+
+// Called only for an open, locked cycle inside the payroll transaction.
+func (r *gormPayrollRunRepository) DeleteTransactionsOutsideEmployees(cycleID uint, employeeIDs []uint) error {
+	stale := r.db.Model(&models.PayrollTransaction{}).Where("cycle_id = ?", cycleID)
+	if len(employeeIDs) > 0 {
+		stale = stale.Where("employees_id NOT IN ?", employeeIDs)
+	}
+	var ids []uint
+	if err := stale.Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := r.db.Where("transaction_id IN ?", ids).Delete(&models.PayrollTransactionDetail{}).Error; err != nil {
+		return err
+	}
+	return r.db.Where("id IN ?", ids).Delete(&models.PayrollTransaction{}).Error
 }
 
 func (r *gormPayrollRunRepository) ListEmployeeEarnings(employeeID uint) ([]models.EmployeeEarning, error) {
@@ -381,7 +402,7 @@ func (r *gormPayrollRunRepository) ListEmployeeIDsWithSalaryUpTo(employeeIDs []u
 	}
 	err := r.db.Model(&models.SalariesStructure{}).
 		Distinct().
-		Where("employees_id IN ? AND is_active = ? AND effective_date <= ?", employeeIDs, true, date).
+		Where("employees_id IN ?", employeeIDs).Scopes(usableSalaryBy(date)).
 		Pluck("employees_id", &ids).Error
 	return ids, err
 }

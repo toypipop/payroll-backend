@@ -8,6 +8,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ErrEmployeeNotFound covers both "no such row" and "out of the caller's scope" so scoping never leaks other tenants' records.
@@ -23,6 +24,7 @@ var ClearField = struct{}{}
 type EmployeesRepository interface {
 	WithinTx(func(EmployeesRepository) error) error
 	ListScoped(scope AccessScope) ([]models.Employees, error)
+	ListActiveOptions(scope AccessScope) ([]EmployeeOption, error)
 	FindScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindBriefScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindRole(roleID uint) (models.Roles, error)
@@ -81,7 +83,7 @@ func (r *gormEmployeesRepository) FindBriefScoped(scope AccessScope, id uint) (m
 	// The name and code travel with the scoping columns because the bulk raise has to name the people it is
 	// blocking, and asking again per employee would be a second query for what the first one already read.
 	// The selection stays explicit so the password hash never rides along.
-	if err := r.scoped(scope).Select("id, companies_id, employees_code, first_name, last_name").First(&employee, id).Error; err != nil {
+	if err := r.scoped(scope).Select("id, companies_id, employees_code, first_name, last_name, is_active").First(&employee, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Employees{}, ErrEmployeeNotFound
 		}
@@ -102,12 +104,30 @@ func (r *gormEmployeesRepository) FindRole(roleID uint) (models.Roles, error) {
 }
 
 func (r *gormEmployeesRepository) Create(employee *models.Employees) error {
-	return r.db.Create(employee).Error
+	// A non-nil pointer keeps an explicit false from becoming GORM's default true.
+	// Keep the persisted schema/default unchanged for seeds and other DB clients.
+	active := employee.IsActive
+	row := struct {
+		models.Employees `gorm:"embedded"`
+		IsActive         *bool `gorm:"column:is_active"`
+	}{Employees: *employee, IsActive: &active}
+	if err := r.db.Table("employees").Create(&row).Error; err != nil {
+		return err
+	}
+	*employee = row.Employees
+	employee.IsActive = active
+	return nil
 }
 
 func (r *gormEmployeesRepository) UpdateFields(employee *models.Employees, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
+	}
+	// Employee status changes serialize with payroll runs and cycle adjustments.
+	if _, changingStatus := fields["is_active"]; changingStatus {
+		if err := lockEmployeeCompanyCycles(r.db, employee.CompaniesID); err != nil {
+			return err
+		}
 	}
 	// Translate the layer-neutral ClearField marker into a SQL NULL here, so the service never has to name a GORM type.
 	patch := make(map[string]any, len(fields))
@@ -127,6 +147,18 @@ func (r *gormEmployeesRepository) UpdateFields(employee *models.Employees, field
 // statement, since a deleted record that still reads as current is the state every write path refuses to touch.
 func (r *gormEmployeesRepository) Delete(employee *models.Employees) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockEmployeeCompanyCycles(tx, employee.CompaniesID); err != nil {
+			return err
+		}
+		// Match salary writes: cycles -> employee -> salary rows. Retired employees
+		// can still be deleted; this lock deliberately does not require active status.
+		var locked models.Employees
+		if err := tx.Select("id").Clauses(clause.Locking{Strength: "UPDATE"}).First(&locked, employee.ID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrEmployeeNotFound
+			}
+			return err
+		}
 		if err := tx.Model(&models.SalariesStructure{}).
 			Where("employees_id = ?", employee.ID).
 			Updates(map[string]any{"is_active": false, "deleted_at": time.Now().UnixNano()}).Error; err != nil {
@@ -134,6 +166,12 @@ func (r *gormEmployeesRepository) Delete(employee *models.Employees) error {
 		}
 		return tx.Delete(employee).Error
 	})
+}
+
+func lockEmployeeCompanyCycles(tx *gorm.DB, companyID uint) error {
+	var ids []uint
+	return tx.Model(&models.PayrollCycle{}).Clauses(clause.Locking{Strength: "SHARE"}).
+		Where("companies_id = ?", companyID).Order("id").Pluck("id", &ids).Error
 }
 
 func (r *gormEmployeesRepository) FindDetail(id uint) (models.Employees, error) {

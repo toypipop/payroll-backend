@@ -46,7 +46,7 @@ func (h *Handler) CreateEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	var input employeeCompanyAccessInput
+	input := employeeCompanyAccessInput{IsActive: true}
 	if !httpx.BindJSON(c, &input) {
 		return
 	}

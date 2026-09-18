@@ -72,6 +72,7 @@ func (b *bulkRepo) AppendAuditLog(*models.AuditLog) error { return nil }
 
 // bulkEmployees answers the authorization lookup for several people.
 type bulkEmployees struct {
+	repository.EmployeesRepository
 	byID map[uint]models.Employees
 }
 
@@ -111,9 +112,9 @@ func bulkFixture() (*bulkRepo, *bulkEmployees) {
 	repo.perEmployee[7] = nil
 
 	return repo, &bulkEmployees{byID: map[uint]models.Employees{
-		5: {ID: 5, CompaniesID: 1, EmployeesCode: "E-05", FirstName: "Ann", LastName: "Lee"},
-		6: {ID: 6, CompaniesID: 1, EmployeesCode: "E-06", FirstName: "Ben", LastName: "Ko"},
-		7: {ID: 7, CompaniesID: 1, EmployeesCode: "E-07", FirstName: "Cat", LastName: "Ng"},
+		5: {ID: 5, CompaniesID: 1, IsActive: true, EmployeesCode: "E-05", FirstName: "Ann", LastName: "Lee"},
+		6: {ID: 6, CompaniesID: 1, IsActive: true, EmployeesCode: "E-06", FirstName: "Ben", LastName: "Ko"},
+		7: {ID: 7, CompaniesID: 1, IsActive: true, EmployeesCode: "E-07", FirstName: "Cat", LastName: "Ng"},
 	}}
 }
 

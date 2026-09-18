@@ -34,6 +34,8 @@ type SalariesStructureRepository interface {
 	ClosedCyclesUsing(recordIDs []uint) (map[uint][]string, error)
 	FindRecord(id uint) (models.SalariesStructure, error)
 	CountClosedCyclesCovering(companyID uint, date time.Time) (int64, error)
+	// Mutations require WithinTx; employee status locks and audit writes must
+	// share the caller's transaction (including the entire bulk salary batch).
 	CreateRecord(next *models.SalariesStructure) error
 	UpdateAmount(record models.SalariesStructure, amount float64, switchOn bool) error
 	MoveRecord(record models.SalariesStructure, effectiveDate time.Time, amount float64) error
@@ -256,6 +258,9 @@ func (r *gormSalariesStructureRepository) CountClosedCyclesCovering(companyID ui
 // CreateRecord adds a record to the employee's timeline. Nothing else moves: which record is in force is read
 // from the effective dates, so adding one never means editing another.
 func (r *gormSalariesStructureRepository) CreateRecord(next *models.SalariesStructure) error {
+	if err := lockActiveEmployees(r.db, next.EmployeesID); err != nil {
+		return err
+	}
 	return r.db.Create(next).Error
 }
 
@@ -269,6 +274,9 @@ func (r *gormSalariesStructureRepository) CreateRecord(next *models.SalariesStru
 // The version in the WHERE is the whole guard. A second writer that read the same record before this one
 // committed finds the version has moved and gets a conflict instead of overwriting the correction.
 func (r *gormSalariesStructureRepository) UpdateAmount(record models.SalariesStructure, amount float64, switchOn bool) error {
+	if err := lockActiveEmployees(r.db, record.EmployeesID); err != nil {
+		return err
+	}
 	update := map[string]any{"base_salaries": amount, "version": record.Version + 1}
 	if switchOn {
 		update["is_active"] = true
@@ -291,6 +299,9 @@ func (r *gormSalariesStructureRepository) UpdateAmount(record models.SalariesStr
 //
 // It does not touch `is_active`: moving a record says when its figure applies, not whether it is in use.
 func (r *gormSalariesStructureRepository) MoveRecord(record models.SalariesStructure, effectiveDate time.Time, amount float64) error {
+	if err := lockActiveEmployees(r.db, record.EmployeesID); err != nil {
+		return err
+	}
 	result := r.db.Model(&models.SalariesStructure{}).
 		Where("id = ? AND version = ?", record.ID, record.Version).
 		Updates(map[string]any{
@@ -310,6 +321,9 @@ func (r *gormSalariesStructureRepository) MoveRecord(record models.SalariesStruc
 // SwitchOffAll turns every one of the employee's records off, which is what disabling a salary means: no record
 // counts any more, so a run finds nothing to pay them from. Turning one back on is a save on that record's date.
 func (r *gormSalariesStructureRepository) SwitchOffAll(employeesID uint) error {
+	if err := lockActiveEmployees(r.db, employeesID); err != nil {
+		return err
+	}
 	return r.db.Model(&models.SalariesStructure{}).
 		Where("employees_id = ? AND is_active = ?", employeesID, true).
 		Update("is_active", false).Error

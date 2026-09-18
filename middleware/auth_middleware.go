@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	authhandler "payroll-backend/handlers/auth"
+	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/observability"
 	"payroll-backend/repository"
@@ -59,6 +60,22 @@ func (g *Guard) Auth() gin.HandlerFunc {
 			return
 		}
 
+		// Re-read account status on every request, including existing cookie sessions.
+		user, err := g.access.FindScopeUser(claims.UserID)
+		if err != nil {
+			authhandler.ClearAuthCookie(c)
+			httpx.RespondError(c, service.ErrAuthUserNotLoaded)
+			c.Abort()
+			return
+		}
+		if !user.IsActive {
+			authhandler.ClearAuthCookie(c)
+			httpx.RespondError(c, service.ErrAuthInactive)
+			c.Abort()
+			return
+		}
+		c.Set("scope_user", user)
+
 		// Set tenant data to context
 		c.Set("user_id", claims.UserID)
 		companyIDs := g.access.AccessibleCompanyIDs(claims.UserID)
@@ -74,15 +91,6 @@ func (g *Guard) Auth() gin.HandlerFunc {
 		if len(roleIDs) > 0 {
 			c.Set("roles_id", roleIDs[0])
 		}
-
-		// The scoping columns are read once here so httpx.RequestScope can build an AccessScope without a query of its own.
-		user, err := g.access.FindScopeUser(claims.UserID)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Current user not found"})
-			c.Abort()
-			return
-		}
-		c.Set("scope_user", user)
 
 		c.Next()
 	}

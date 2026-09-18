@@ -84,6 +84,7 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 	api.Use(g.ActiveCompanies())
 	{
 		// --- Employees ---
+		api.GET("/employees/options", h.Employees.GetEmployeeOptions)
 		api.GET("/employees", g.CheckPermission("EmployeesListPage", "VIEW"), h.Employees.GetEmployees)
 		api.POST("/employees", g.CheckPermission("EmployeesListPage", "CREATE"), h.Employees.CreateEmployees)
 		api.PUT("/employees/:id", g.CheckPermission("EmployeesListPage", "EDIT"), h.Employees.UpdateEmployees)
@@ -133,6 +134,8 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 		// --- Payroll Processing ---
 		api.GET("/payroll/cycles", g.CheckPermission("PayrollCyclesPage", "VIEW"), h.Payroll.GetPayrollCycles)
 		api.GET("/payroll/cycles/options", h.Payroll.GetPayrollCycleOptions)
+		// Minimal cross-page options; Auth and company scope still apply.
+		api.GET("/payroll/cycles/:id/employees/options", h.Payroll.GetCycleEmployeeOptions)
 		api.POST("/payroll/cycles", g.CheckPermission("PayrollCyclesPage", "CREATE"), h.Payroll.CreatePayrollCycle)
 		api.PATCH("/payroll/cycles/:id/close", g.CheckPermission("PayrollCyclesPage", "EDIT"), h.Payroll.ClosePayrollCycle)
 		api.GET("/payroll/pre-check/:cycle_id", g.CheckPermission("RunPayrollPage", "EDIT"), h.Payroll.PreCheckPayroll)

@@ -17,6 +17,7 @@ var (
 
 // CycleDeductionRepository is the persistence boundary for one-off deductions attached to a cycle.
 type CycleDeductionRepository interface {
+	WithinTx(func(CycleDeductionRepository, PayrollRunRepository) error) error
 	ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleDeduction, error)
 	FindScoped(scope AccessScope, id uint) (models.PayrollCycleDeduction, error)
 	FindDetail(id uint) (models.PayrollCycleDeduction, error)
@@ -32,6 +33,12 @@ type gormCycleDeductionRepository struct {
 // NewCycleDeductionRepository returns the GORM-backed implementation on the given connection.
 func NewCycleDeductionRepository(db *gorm.DB) CycleDeductionRepository {
 	return &gormCycleDeductionRepository{db: db}
+}
+
+func (r *gormCycleDeductionRepository) WithinTx(fn func(CycleDeductionRepository, PayrollRunRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&gormCycleDeductionRepository{db: tx}, NewPayrollRunRepository(tx))
+	})
 }
 
 // scoped filters by company and by employee: the table has a real employee column and CycleDeductionsPage is declared employee-level, so Own and Department bite.
@@ -75,6 +82,9 @@ func (r *gormCycleDeductionRepository) FindDetail(id uint) (models.PayrollCycleD
 
 func (r *gormCycleDeductionRepository) Create(item *models.PayrollCycleDeduction, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, item.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
@@ -93,6 +103,9 @@ func (r *gormCycleDeductionRepository) UpdateFields(item *models.PayrollCycleDed
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockEmployeeUpdate(tx, item.EmployeesID, fields, "employees_id"); err != nil {
+			return err
+		}
 		if err := tx.Model(item).Updates(fields).Error; err != nil {
 			return err
 		}

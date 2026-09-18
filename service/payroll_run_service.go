@@ -419,12 +419,22 @@ func (s *PayrollRunService) Snapshot(cycle models.PayrollCycle) (RunResult, erro
 // snapshot is the body of a run. It must be called on a service bound to a transaction: it stops at the first failure so the caller can roll the whole cycle back.
 // Reporting an error while letting the employees after it commit anyway is what left a cycle half-recalculated with the client seeing only a 500.
 func (s *PayrollRunService) snapshot(cycle models.PayrollCycle) (RunResult, error) {
+	if cycle.IsClosed {
+		return RunResult{}, ErrPayrollCycleIsClosed
+	}
 	run, err := s.newRunContext(cycle)
 	if err != nil {
 		return RunResult{}, err
 	}
 	employees, err := s.repo.ListActiveEmployees(cycle.CompaniesID)
 	if err != nil {
+		return RunResult{}, err
+	}
+	employeeIDs := make([]uint, 0, len(employees))
+	for _, employee := range employees {
+		employeeIDs = append(employeeIDs, employee.ID)
+	}
+	if err := s.repo.DeleteTransactionsOutsideEmployees(cycle.ID, employeeIDs); err != nil {
 		return RunResult{}, err
 	}
 

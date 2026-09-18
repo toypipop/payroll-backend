@@ -21,11 +21,12 @@ import (
 
 // A scripted SQL boundary exercises the real GORM repository without a live database.
 type companySQLStep struct {
-	contains []string
-	excludes []string
-	columns  []string
-	values   []driver.Value
-	args     []driver.Value
+	contains  []string
+	excludes  []string
+	columns   []string
+	values    []driver.Value
+	args      []driver.Value
+	checkArgs func([]driver.NamedValue)
 }
 type companySQL struct {
 	t                     *testing.T
@@ -64,6 +65,9 @@ func (s *companySQL) next(query string) companySQLStep {
 }
 func (s *companySQL) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	step := s.next(query)
+	if step.checkArgs != nil {
+		step.checkArgs(args)
+	}
 	if step.args != nil {
 		actual := make([]driver.Value, len(args))
 		for i, arg := range args {

@@ -360,6 +360,9 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 	if err != nil || employee.CompaniesID != input.CompaniesID {
 		return SaveResult{}, ErrSalaryEmployeeTarget
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return SaveResult{}, err
+	}
 
 	// Every rule below is a check the write depends on, so the reads, the checks and the write share one transaction — and the cycle lock holds the closed/open state still for its duration.
 	result := SaveResult{}
@@ -432,6 +435,9 @@ func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id
 	}
 	if !scope.CanAccessCompany(record.CompaniesID) {
 		return ErrSalaryCompanyDenied
+	}
+	if err := activeEmployeeByID(s.employees, scope, record.EmployeesID); err != nil {
+		return err
 	}
 
 	return s.repo.WithinTx(func(repo repository.SalariesStructureRepository) error {

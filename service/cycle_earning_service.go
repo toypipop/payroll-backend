@@ -50,6 +50,13 @@ func (s *CycleEarningService) openCycle(scope repository.AccessScope, cycleID ui
 	cycle, err := s.cycles.FindOpenCycleScoped(scope, cycleID)
 	switch {
 	case err == nil:
+		cycle, err = s.cycles.LockCycleForUpdate(cycle.ID)
+		if err != nil {
+			return models.PayrollCycle{}, err
+		}
+		if cycle.IsClosed {
+			return models.PayrollCycle{}, closedErr
+		}
 		return cycle, nil
 	case errors.Is(err, repository.ErrPayrollCycleClosed):
 		return models.PayrollCycle{}, closedErr
@@ -77,6 +84,9 @@ func (s *CycleEarningService) validateAgainstCycle(scope repository.AccessScope,
 	if err != nil || employee.CompaniesID != cycle.CompaniesID {
 		return ErrCycleEarningEmployeeCompany
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return err
+	}
 	if earningType.CompaniesID != cycle.CompaniesID {
 		return ErrCycleEarningTypeCompany
 	}
@@ -85,6 +95,18 @@ func (s *CycleEarningService) validateAgainstCycle(scope repository.AccessScope,
 
 // Create attaches a one-off earning to an open cycle.
 func (s *CycleEarningService) Create(scope repository.AccessScope, input models.PayrollCycleEarning) (models.PayrollCycleEarning, error) {
+	var saved models.PayrollCycleEarning
+	err := s.repo.WithinTx(func(repo repository.CycleEarningRepository, cycles repository.PayrollRunRepository) error {
+		txService := *s
+		txService.repo, txService.cycles = repo, cycles
+		var err error
+		saved, err = txService.create(scope, input)
+		return err
+	})
+	return saved, err
+}
+
+func (s *CycleEarningService) create(scope repository.AccessScope, input models.PayrollCycleEarning) (models.PayrollCycleEarning, error) {
 	earningType, err := s.earningTypes.Find(input.EarningTypeID)
 	if err != nil {
 		return models.PayrollCycleEarning{}, err
@@ -98,6 +120,9 @@ func (s *CycleEarningService) Create(scope repository.AccessScope, input models.
 		return models.PayrollCycleEarning{}, err
 	}
 
+	if err := validateCycleEmployeeSalary(s.cycles, cycle, input.EmployeesID); err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
 	item := models.PayrollCycleEarning{
 		CycleID:       input.CycleID,
 		CompaniesID:   cycle.CompaniesID,
@@ -117,6 +142,18 @@ func (s *CycleEarningService) Create(scope repository.AccessScope, input models.
 
 // Update rewrites a one-off earning, which is only possible while its cycle is open.
 func (s *CycleEarningService) Update(scope repository.AccessScope, id uint, input models.PayrollCycleEarning) (models.PayrollCycleEarning, error) {
+	var saved models.PayrollCycleEarning
+	err := s.repo.WithinTx(func(repo repository.CycleEarningRepository, cycles repository.PayrollRunRepository) error {
+		txService := *s
+		txService.repo, txService.cycles = repo, cycles
+		var err error
+		saved, err = txService.update(scope, id, input)
+		return err
+	})
+	return saved, err
+}
+
+func (s *CycleEarningService) update(scope repository.AccessScope, id uint, input models.PayrollCycleEarning) (models.PayrollCycleEarning, error) {
 	item, err := s.repo.FindScoped(scope, id)
 	if err != nil {
 		return models.PayrollCycleEarning{}, err
@@ -139,7 +176,13 @@ func (s *CycleEarningService) Update(scope repository.AccessScope, id uint, inpu
 	if err != nil || employee.CompaniesID != cycle.CompaniesID {
 		return models.PayrollCycleEarning{}, ErrCycleEarningEmployeeCompany
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
 
+	if err := validateCycleEmployeeSalary(s.cycles, cycle, input.EmployeesID); err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
 	before := cycleEarningAuditData(item)
 	updated := item
 	updated.CompaniesID, updated.EmployeesID, updated.EarningTypeID = cycle.CompaniesID, input.EmployeesID, input.EarningTypeID
@@ -161,6 +204,14 @@ func (s *CycleEarningService) Update(scope repository.AccessScope, id uint, inpu
 
 // Delete removes a one-off earning, which is only possible while its cycle is open.
 func (s *CycleEarningService) Delete(scope repository.AccessScope, id uint) error {
+	return s.repo.WithinTx(func(repo repository.CycleEarningRepository, cycles repository.PayrollRunRepository) error {
+		txService := *s
+		txService.repo, txService.cycles = repo, cycles
+		return txService.delete(scope, id)
+	})
+}
+
+func (s *CycleEarningService) delete(scope repository.AccessScope, id uint) error {
 	item, err := s.repo.FindScoped(scope, id)
 	if err != nil {
 		return ErrCycleEarningNotDeletable

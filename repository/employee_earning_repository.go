@@ -74,6 +74,9 @@ func (r *gormEmployeeEarningRepository) FindDetail(id uint) (models.EmployeeEarn
 
 func (r *gormEmployeeEarningRepository) Create(earning *models.EmployeeEarning, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, earning.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Create(earning).Error; err != nil {
 			return err
 		}
@@ -92,6 +95,9 @@ func (r *gormEmployeeEarningRepository) UpdateFields(earning *models.EmployeeEar
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockEmployeeUpdate(tx, earning.EmployeesID, fields, "employees_id"); err != nil {
+			return err
+		}
 		if err := tx.Model(earning).Updates(fields).Error; err != nil {
 			return err
 		}

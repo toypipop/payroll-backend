@@ -38,6 +38,9 @@ type fakeRunRepo struct {
 	lockedCycle       models.PayrollCycle
 	txDepth           int
 	sawSaveOutsideTx  bool
+	prunedCycle       uint
+	retainedEmployees []uint
+	pruneErr          error
 }
 
 // savedSnapshot is one call the run made to SaveSnapshot.
@@ -92,6 +95,15 @@ func (f *fakeRunRepo) FindEarliestSalaryOnOrBefore(employeeID uint, _ time.Time)
 func (f *fakeRunRepo) DeleteTransactionForEmployee(_ uint, employeeID uint) error {
 	f.deletedEmployees = append(f.deletedEmployees, employeeID)
 	return nil
+}
+
+func (f *fakeRunRepo) DeleteTransactionsOutsideEmployees(cycleID uint, employeeIDs []uint) error {
+	if f.txDepth == 0 {
+		f.sawSaveOutsideTx = true
+	}
+	f.prunedCycle = cycleID
+	f.retainedEmployees = append([]uint{}, employeeIDs...)
+	return f.pruneErr
 }
 
 func (f *fakeRunRepo) ListEmployeeEarnings(uint) ([]models.EmployeeEarning, error) {
@@ -186,6 +198,10 @@ func (f *fakeRunRepo) ListClosedCycleTransactionsForEmployee(uint) ([]models.Pay
 }
 
 func (f *fakeRunRepo) ListCyclesByIDs([]uint) ([]models.PayrollCycle, error) { return nil, nil }
+
+func (f *fakeRunRepo) ListCycleEmployeeOptions(repository.AccessScope, models.PayrollCycle) ([]repository.CycleEmployeeOption, error) {
+	return nil, nil
+}
 
 // utcDay is a stored calendar date, the shape the cycle and leave columns hold.
 func utcDay(year int, month time.Month, day int) time.Time {

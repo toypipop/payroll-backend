@@ -78,7 +78,7 @@ func (r *gormEmployeeCompanyAccessRepository) FindDetail(id uint) (models.Employ
 // FindEmployeeBrief confirms the target employee exists without loading the whole row.
 func (r *gormEmployeeCompanyAccessRepository) FindEmployeeBrief(id uint) (models.Employees, error) {
 	var employee models.Employees
-	if err := r.db.Select("id, companies_id").First(&employee, id).Error; err != nil {
+	if err := r.db.Select("id, companies_id, is_active").First(&employee, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Employees{}, ErrEmployeeNotFound
 		}
@@ -89,9 +89,20 @@ func (r *gormEmployeeCompanyAccessRepository) FindEmployeeBrief(id uint) (models
 
 func (r *gormEmployeeCompanyAccessRepository) Create(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(mapping).Error; err != nil {
+		if err := lockActiveEmployees(tx, mapping.EmployeeID); err != nil {
 			return err
 		}
+		// Preserve explicit false instead of letting GORM substitute default:true.
+		active := mapping.IsActive
+		row := struct {
+			models.EmployeeCompanyAccess `gorm:"embedded"`
+			IsActive                     *bool `gorm:"column:is_active"`
+		}{EmployeeCompanyAccess: *mapping, IsActive: &active}
+		if err := tx.Table("employee_company_access").Create(&row).Error; err != nil {
+			return err
+		}
+		*mapping = row.EmployeeCompanyAccess
+		mapping.IsActive = active
 		if audit != nil && audit.EntityID != nil {
 			*audit.EntityID = mapping.ID
 		}
@@ -107,6 +118,9 @@ func (r *gormEmployeeCompanyAccessRepository) UpdateFields(mapping *models.Emplo
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockEmployeeUpdate(tx, mapping.EmployeeID, fields, "employee_id"); err != nil {
+			return err
+		}
 		if err := tx.Model(mapping).Updates(fields).Error; err != nil {
 			return err
 		}

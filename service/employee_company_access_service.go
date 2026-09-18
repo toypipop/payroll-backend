@@ -65,8 +65,12 @@ func (s *EmployeeCompanyAccessService) validate(scope repository.AccessScope, in
 	if _, ok := scope.ResolveCompanyID(input.CompanyID); !ok {
 		return ErrCompanyAccessDenied
 	}
-	if _, err := s.repo.FindEmployeeBrief(input.EmployeeID); err != nil {
+	employee, err := s.repo.FindEmployeeBrief(input.EmployeeID)
+	if err != nil {
 		return ErrAccessEmployeeMissing
+	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return err
 	}
 
 	role, err := s.roles.FindScoped(scope, input.RoleID)

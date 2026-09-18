@@ -52,6 +52,9 @@ func (s *EmployeeDeductionService) resolveTarget(scope repository.AccessScope, e
 	if err != nil || employee.CompaniesID != companyID {
 		return 0, ErrDeductionEmployeeCompany
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return 0, err
+	}
 
 	deductionType, err := s.deductionTypes.FindScoped(scope, deductionTypeID)
 	if err != nil || deductionType.CompaniesID != employee.CompaniesID {

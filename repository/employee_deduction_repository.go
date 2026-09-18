@@ -74,6 +74,9 @@ func (r *gormEmployeeDeductionRepository) FindDetail(id uint) (models.EmployeeDe
 
 func (r *gormEmployeeDeductionRepository) Create(deduction *models.EmployeeDeduction, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, deduction.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Create(deduction).Error; err != nil {
 			return err
 		}
@@ -92,6 +95,9 @@ func (r *gormEmployeeDeductionRepository) UpdateFields(deduction *models.Employe
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockEmployeeUpdate(tx, deduction.EmployeesID, fields, "employees_id"); err != nil {
+			return err
+		}
 		if err := tx.Model(deduction).Updates(fields).Error; err != nil {
 			return err
 		}

@@ -17,6 +17,7 @@ var (
 
 // CycleEarningRepository is the persistence boundary for one-off earnings attached to a cycle.
 type CycleEarningRepository interface {
+	WithinTx(func(CycleEarningRepository, PayrollRunRepository) error) error
 	ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleEarning, error)
 	FindScoped(scope AccessScope, id uint) (models.PayrollCycleEarning, error)
 	FindDetail(id uint) (models.PayrollCycleEarning, error)
@@ -32,6 +33,12 @@ type gormCycleEarningRepository struct {
 // NewCycleEarningRepository returns the GORM-backed implementation on the given connection.
 func NewCycleEarningRepository(db *gorm.DB) CycleEarningRepository {
 	return &gormCycleEarningRepository{db: db}
+}
+
+func (r *gormCycleEarningRepository) WithinTx(fn func(CycleEarningRepository, PayrollRunRepository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&gormCycleEarningRepository{db: tx}, NewPayrollRunRepository(tx))
+	})
 }
 
 // scoped filters by company and by employee: the table has a real employee column and CycleEarningsPage is declared employee-level, so Own and Department bite.
@@ -75,6 +82,9 @@ func (r *gormCycleEarningRepository) FindDetail(id uint) (models.PayrollCycleEar
 
 func (r *gormCycleEarningRepository) Create(item *models.PayrollCycleEarning, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockActiveEmployees(tx, item.EmployeesID); err != nil {
+			return err
+		}
 		if err := tx.Create(item).Error; err != nil {
 			return err
 		}
@@ -93,6 +103,9 @@ func (r *gormCycleEarningRepository) UpdateFields(item *models.PayrollCycleEarni
 		return nil
 	}
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := lockEmployeeUpdate(tx, item.EmployeesID, fields, "employees_id"); err != nil {
+			return err
+		}
 		if err := tx.Model(item).Updates(fields).Error; err != nil {
 			return err
 		}

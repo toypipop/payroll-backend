@@ -37,7 +37,10 @@ func (r *bulkTimeLogRepo) FindAttendanceConfig(uint) (models.AttendanceConfig, e
 	return models.AttendanceConfig{}, repository.ErrAttendanceConfigNotFound
 }
 
-type bulkTimeLogEmployees struct{ employee models.Employees }
+type bulkTimeLogEmployees struct {
+	repository.EmployeesRepository
+	employee models.Employees
+}
 
 func (r *bulkTimeLogEmployees) ListScoped(repository.AccessScope) ([]models.Employees, error) {
 	return nil, nil
@@ -59,7 +62,7 @@ func (r *bulkTimeLogEmployees) FindDetail(uint) (models.Employees, error) {
 // Removing the holiday check would create a log for 2027-07-28, so this protects the bulk-generation rule.
 func TestBulkCreateSkipsCompanyHoliday(t *testing.T) {
 	repo := &bulkTimeLogRepo{holidays: map[string]int64{"2027-07-28": 1}}
-	employees := &bulkTimeLogEmployees{employee: models.Employees{ID: 10, CompaniesID: 1}}
+	employees := &bulkTimeLogEmployees{employee: models.Employees{ID: 10, CompaniesID: 1, IsActive: true}}
 	service := NewTimeLogService(repo, employees)
 	scope := repository.NewAccessScope(models.Employees{ID: 99, CompaniesID: 1}, models.ScopeCompanies, []uint{1})
 

@@ -52,6 +52,9 @@ func (s *EmployeeEarningService) resolveTarget(scope repository.AccessScope, emp
 	if err != nil || employee.CompaniesID != companyID {
 		return 0, ErrEarningEmployeeCompany
 	}
+	if err := requireActiveEmployee(employee); err != nil {
+		return 0, err
+	}
 
 	earningType, err := s.earningTypes.FindScoped(scope, earningTypeID)
 	if err != nil || earningType.CompaniesID != employee.CompaniesID {

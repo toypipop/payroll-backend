@@ -186,6 +186,7 @@ func decodeSalaryAuditDataForTest(data map[string]json.RawMessage, audit *models
 
 // fakeSalaryEmployees answers the one employee lookup the salary service makes.
 type fakeSalaryEmployees struct {
+	repository.EmployeesRepository
 	employee models.Employees
 }
 
@@ -223,7 +224,7 @@ func salaryScope() repository.AccessScope {
 // TestSalarySaveLocksCyclesInsideOneTransaction pins the rule the closed-cycle check depends on: the lock is taken first, and every read and write of the save runs inside the same transaction.
 func TestSalarySaveLocksCyclesInsideOneTransaction(t *testing.T) {
 	repo := &fakeSalaryRepo{}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	_, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID:   5,
@@ -250,7 +251,7 @@ func TestSalarySaveLocksCyclesInsideOneTransaction(t *testing.T) {
 // TestSalarySaveRejectsDateInClosedCycleWithoutWriting covers the check itself: a date inside a closed cycle must fail before anything is written.
 func TestSalarySaveRejectsDateInClosedCycleWithoutWriting(t *testing.T) {
 	repo := &fakeSalaryRepo{closedCycles: 1}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	_, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID:   5,
@@ -275,7 +276,7 @@ func TestSalaryDeleteRunsInsideOneTransaction(t *testing.T) {
 	repo := &fakeSalaryRepo{
 		findRecord: models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if err := NewSalariesStructureService(repo, employees).DeleteRecord(salaryScope(), 9, "test reason"); err != nil {
 		t.Fatalf("DeleteRecord returned error: %v", err)
@@ -301,7 +302,7 @@ func TestSalaryDeleteLeavesTheRestOfTheTimelineAlone(t *testing.T) {
 	repo := &fakeSalaryRepo{
 		findRecord: models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 4},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if err := NewSalariesStructureService(repo, employees).DeleteRecord(salaryScope(), 9, "test reason"); err != nil {
 		t.Fatalf("DeleteRecord returned error: %v", err)
@@ -321,7 +322,7 @@ func TestSalarySaveRefusesStaleVersion(t *testing.T) {
 			{ID: 7, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	_, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID:   5,
@@ -348,7 +349,7 @@ func TestSalarySaveAcceptsCurrentVersion(t *testing.T) {
 			{ID: 7, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID:   5,
@@ -373,7 +374,7 @@ func TestSalarySaveAcceptsCurrentVersion(t *testing.T) {
 // the same record, the first save supersedes it with a new row, and the second must be refused even though the
 // row it now faces is brand new. A version that counted per row would restart at 1 here and let the second win.
 func TestSalarySaveRefusesSecondEditOfTheSameVersion(t *testing.T) {
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 	repo := &fakeSalaryRepo{
 		records: []models.SalariesStructure{
 			{ID: 7, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 1},
@@ -422,7 +423,7 @@ func TestSalarySaveIgnoresErasedRecords(t *testing.T) {
 			{ID: 20, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 52003, EffectiveDate: "2028-04-01", Version: 3, Reason: "test reason",
@@ -450,7 +451,7 @@ func TestSalarySaveAfterADeleteLeftAnOlderRecordInForce(t *testing.T) {
 			{ID: 27, EmployeesID: 5, CompaniesID: 1, DeletedAt: 1787565590399885000, Version: 7},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	// The page shows record #11, so the form was seeded with 2.
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
@@ -472,7 +473,7 @@ func TestSalarySaveOnTheSameEffectiveDateCorrectsInPlace(t *testing.T) {
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 31000, EffectiveDate: "2029-01-01", Version: 2, Reason: "test reason",
@@ -498,7 +499,7 @@ func TestSalarySaveOnALaterDateKeepsThePreviousRecord(t *testing.T) {
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 35000, EffectiveDate: "2029-06-01", Version: 2, Reason: "test reason",
@@ -527,7 +528,7 @@ func TestSalarySaveMayGoBackOverADeletedRecord(t *testing.T) {
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 39000, EffectiveDate: "2027-01-01", Version: 1, Reason: "test reason",
@@ -551,7 +552,7 @@ func TestSalarySaveFillsInAnEarlierDateWithoutTakingOver(t *testing.T) {
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 39000, EffectiveDate: "2027-01-01", Version: 2, Reason: "test reason",
@@ -581,7 +582,7 @@ func TestSalaryCorrectionOfAnOlderRecordLeavesTodaysSalaryAlone(t *testing.T) {
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 37000, EffectiveDate: "2026-01-01", Version: 2, Reason: "test reason",
@@ -603,7 +604,7 @@ func TestSalarySaveOnTheDateOfASwitchedOffRecordRevivesIt(t *testing.T) {
 				EffectiveDate: time.Date(2029, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 39000, EffectiveDate: "2029-01-01", Version: 0, Reason: "test reason",
@@ -628,7 +629,7 @@ func TestSalarySaveRefusesToCorrectADatePaidAgainst(t *testing.T) {
 		},
 		usage: map[uint][]string{5: {"March 2027"}},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	_, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 39000, EffectiveDate: "2029-01-01", Version: 3, Reason: "test reason",
@@ -651,7 +652,7 @@ func TestSalarySaveWhenEverySalaryWasDeleted(t *testing.T) {
 			{ID: 2, EmployeesID: 5, CompaniesID: 1, DeletedAt: 1787565261329692800, Version: 2},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	// The page shows no salary at all, so the form sends no version.
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
@@ -667,7 +668,7 @@ func TestSalarySaveWhenEverySalaryWasDeleted(t *testing.T) {
 // TestSalarySaveNeverReusesAVersion covers the number handed to a record added behind the one in force. Counting
 // from the record in force would hand the same number out twice, since adding to the past leaves it untouched.
 func TestSalarySaveNeverReusesAVersion(t *testing.T) {
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 	repo := &fakeSalaryRepo{
 		records: []models.SalariesStructure{
 			{ID: 10, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3,
@@ -709,7 +710,7 @@ func TestSalaryCorrectionOfAnOlderRecordDoesNotSwitchItOn(t *testing.T) {
 				EffectiveDate: time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 37000, EffectiveDate: "2026-01-01", Version: 0, Reason: "test reason",
@@ -735,7 +736,7 @@ func TestSalaryCorrectionOfTheLatestRecordSwitchesItOn(t *testing.T) {
 				EffectiveDate: time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 42000, EffectiveDate: "2030-01-01", Version: 0, Reason: "test reason",
@@ -766,7 +767,7 @@ func TestSalaryMoveShiftsARecordAlongTheTimeline(t *testing.T) {
 		salaryOn(23, 2, 35000, 2030, time.July),
 		salaryOn(5, 1, 30000, 2029, time.January),
 	)
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
 		EffectiveDate: "2030-06-01", BaseSalaries: 35000, Version: 2, Reason: "test reason",
@@ -790,7 +791,7 @@ func TestSalaryMoveRefusesADateAnotherRecordHolds(t *testing.T) {
 		salaryOn(23, 2, 35000, 2030, time.July),
 		salaryOn(5, 1, 30000, 2029, time.January),
 	)
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
 		EffectiveDate: "2029-01-01", BaseSalaries: 35000, Version: 2, Reason: "test reason",
@@ -808,7 +809,7 @@ func TestSalaryMoveRefusesADateAnotherRecordHolds(t *testing.T) {
 func TestSalaryMoveRefusesARecordAlreadyPaidAgainst(t *testing.T) {
 	repo := timeline(salaryOn(23, 2, 35000, 2030, time.July))
 	repo.usage = map[uint][]string{23: {"March 2027"}}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
 		EffectiveDate: "2030-06-01", BaseSalaries: 35000, Version: 2, Reason: "test reason",
@@ -826,7 +827,7 @@ func TestSalaryMoveRefusesARecordAlreadyPaidAgainst(t *testing.T) {
 func TestSalaryMoveRefusesLandingInAClosedPeriod(t *testing.T) {
 	repo := timeline(salaryOn(23, 2, 35000, 2030, time.July))
 	repo.closedCycles = 1
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
 		EffectiveDate: "2026-03-01", BaseSalaries: 35000, Version: 2, Reason: "test reason",
@@ -843,7 +844,7 @@ func TestSalaryMoveRefusesLandingInAClosedPeriod(t *testing.T) {
 // the one the screen was drawn from, and the edit is refused once the record has moved on from it.
 func TestSalaryMoveRefusesAStaleEdit(t *testing.T) {
 	repo := timeline(salaryOn(23, 4, 35000, 2030, time.July))
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
 		EffectiveDate: "2030-06-01", BaseSalaries: 35000, Version: 2, Reason: "test reason",
@@ -860,7 +861,7 @@ func TestSalaryMoveRefusesAStaleEdit(t *testing.T) {
 // lock taken first: every rule a move enforces is a question about cycles that could otherwise close underneath it.
 func TestSalaryMoveRunsInsideOneTransaction(t *testing.T) {
 	repo := timeline(salaryOn(23, 2, 35000, 2030, time.July))
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 23, SalaryRecordEdit{
 		EffectiveDate: "2030-06-01", BaseSalaries: 36000, Version: 2, Reason: "test reason",
@@ -884,7 +885,7 @@ func TestSalaryDeleteRefusesRecordUsedByClosedCycle(t *testing.T) {
 		findRecord: models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true},
 		usage:      map[uint][]string{9: {"March 2027"}},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	err := NewSalariesStructureService(repo, employees).DeleteRecord(salaryScope(), 9, "test reason")
 	if !errors.Is(err, ErrSalaryRecordInUse) {
@@ -910,7 +911,7 @@ func TestSalaryHistoryNamesTheClosedCyclesThatLockARow(t *testing.T) {
 		},
 		usage: map[uint][]string{5: {"January 2027", "February 2027", "March 2027"}},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	entries, err := NewSalariesStructureService(repo, employees).History(salaryScope(), 5)
 	if err != nil {
@@ -954,7 +955,7 @@ func TestSalaryMoveRefusesAnEditThatOmitsTheVersion(t *testing.T) {
 	record := models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 3,
 		EffectiveDate: time.Date(2027, time.March, 1, 0, 0, 0, 0, timeutil.BangkokLocation)}
 	repo := timeline(record)
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 9, SalaryRecordEdit{
 		EffectiveDate: "2027-04-01", BaseSalaries: 50000, Version: 0, Reason: "test reason",
@@ -973,7 +974,7 @@ func TestSalaryMoveAcceptsAZeroVersionWhenTheRecordCarriesOne(t *testing.T) {
 	record := models.SalariesStructure{ID: 9, EmployeesID: 5, CompaniesID: 1, IsActive: true, Version: 0,
 		EffectiveDate: time.Date(2027, time.March, 1, 0, 0, 0, 0, timeutil.BangkokLocation)}
 	repo := timeline(record)
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if err := NewSalariesStructureService(repo, employees).UpdateRecord(salaryScope(), 9, SalaryRecordEdit{
 		EffectiveDate: "2027-04-01", BaseSalaries: 50000, Version: 0, Reason: "test reason",
@@ -991,7 +992,7 @@ func TestSalaryMoveAcceptsAZeroVersionWhenTheRecordCarriesOne(t *testing.T) {
 // anything legitimate out.
 func TestSalarySaveAcceptsAZeroVersionForAnEmployeeWithNoSalary(t *testing.T) {
 	repo := &fakeSalaryRepo{}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 30000, EffectiveDate: "2029-02-01", Version: 0, Reason: "test reason",
@@ -1012,7 +1013,7 @@ func TestSalarySaveAcceptsAZeroVersionWhenEverythingIsSwitchedOff(t *testing.T) 
 				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 41000, EffectiveDate: "2029-02-01", Version: 0, Reason: "test reason",
@@ -1030,7 +1031,7 @@ func TestSalarySaveRefusesAZeroVersionWhenARecordIsInForce(t *testing.T) {
 				EffectiveDate: time.Date(2027, time.January, 1, 0, 0, 0, 0, timeutil.BangkokLocation)},
 		},
 	}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	_, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 41000, EffectiveDate: "2029-02-01", Version: 0, Reason: "test reason",
@@ -1049,7 +1050,7 @@ func TestSalaryWritesRecordWhoChangedItAndWhy(t *testing.T) {
 	actor := repository.NewAccessScope(
 		models.Employees{ID: 7, CompaniesID: 1, FirstName: "Grace", LastName: "Hall"},
 		models.ScopeCompanies, []uint{1})
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	t.Run("creating a record", func(t *testing.T) {
 		repo := &fakeSalaryRepo{}
@@ -1128,7 +1129,7 @@ func TestSalaryWritesRecordWhoChangedItAndWhy(t *testing.T) {
 
 // A write with nothing said about why is refused before anything is touched.
 func TestSalaryWritesRefuseAnEmptyReason(t *testing.T) {
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	for _, reason := range []string{"", "   ", "\t\n"} {
 		repo := &fakeSalaryRepo{}
@@ -1154,7 +1155,7 @@ func TestSalaryWritesRefuseAnEmptyReason(t *testing.T) {
 // The reason is stored trimmed, so a trail is not padded with whatever the field happened to contain.
 func TestSalaryAuditTrimsTheReason(t *testing.T) {
 	repo := &fakeSalaryRepo{}
-	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1}}
+	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
 
 	if _, err := NewSalariesStructureService(repo, employees).Save(salaryScope(), SalaryInput{
 		EmployeesID: 5, CompaniesID: 1, BaseSalaries: 30000, EffectiveDate: "2029-02-01",

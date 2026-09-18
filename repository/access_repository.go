@@ -42,7 +42,7 @@ func (r *gormAccessRepository) FindScopeUser(userID uint) (models.Employees, err
 	// The name travels with the scoping columns because the salary audit trail snapshots who made a change,
 	// and looking it up again per write would be a query to learn something the request already knew. The
 	// selection stays explicit so the password hash never rides along.
-	if err := r.db.Select("id, dept_id, companies_id, first_name, last_name").First(&user, userID).Error; err != nil {
+	if err := r.db.Select("id, dept_id, companies_id, first_name, last_name, is_active").First(&user, userID).Error; err != nil {
 		return models.Employees{}, err
 	}
 	return user, nil
