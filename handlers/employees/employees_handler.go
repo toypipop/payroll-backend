@@ -15,7 +15,11 @@ func (h *Handler) GetEmployees(c *gin.Context) {
 		return
 	}
 
-	employees, err := h.Employees.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	employees, err := h.Employees.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

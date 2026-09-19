@@ -23,7 +23,7 @@ var ClearField = struct{}{}
 // EmployeesRepository is the persistence boundary for the employees domain.
 type EmployeesRepository interface {
 	WithinTx(func(EmployeesRepository) error) error
-	ListScoped(scope AccessScope) ([]models.Employees, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.Employees], error)
 	ListActiveOptions(scope AccessScope) ([]EmployeeOption, error)
 	FindScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindBriefScoped(scope AccessScope, id uint) (models.Employees, error)
@@ -52,18 +52,24 @@ func (r *gormEmployeesRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("employees.companies_id", "employees.id"))
 }
 
-func (r *gormEmployeesRepository) ListScoped(scope AccessScope) ([]models.Employees, error) {
-	var employees []models.Employees
-	err := r.scoped(scope).
-		Preload("Department").
-		Preload("Position").
-		Preload("Companies").
-		Preload("Roles").
-		Preload("SalariesStructure", currentSalaryCondition).
-		Preload("Bank").
-		Preload("EmploymentType").
-		Find(&employees).Error
-	return employees, err
+func (r *gormEmployeesRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.Employees], error) {
+	name := "concat_ws(' ', employees.first_name, employees.last_name)"
+	order, err := pageOrder(q, map[string]string{
+		"employees_code": "employees.employees_code", "first_name": name, "position.pos_name": "p.pos_name",
+		"department.dept_name": "d.dept_name", "companies.name": "c.name", "is_active": "employees.is_active",
+	}, "employees.id", "employees.id")
+	if err != nil {
+		return Page[models.Employees]{}, err
+	}
+	query := r.scoped(scope).Model(&models.Employees{}).Omit("Password").
+		Joins("LEFT JOIN department d ON d.id = employees.dept_id AND d.deleted_at = 0").
+		Joins("LEFT JOIN position p ON p.id = employees.pos_id AND p.deleted_at = 0").
+		Joins("LEFT JOIN companies c ON c.id = employees.companies_id AND c.deleted_at = 0")
+	if q.Search != "" {
+		pattern := searchPattern(q.Search)
+		query = query.Where("("+name+" ILIKE ? OR employees.employees_code ILIKE ? OR p.pos_name ILIKE ? OR d.dept_name ILIKE ? OR c.name ILIKE ? OR (CASE WHEN employees.is_active THEN 'active' ELSE 'inactive' END) ILIKE ?)", pattern, pattern, pattern, pattern, pattern, pattern)
+	}
+	return readPage[models.Employees](query.Preload("Department").Preload("Position").Preload("Companies"), q, order)
 }
 
 func (r *gormEmployeesRepository) FindScoped(scope AccessScope, id uint) (models.Employees, error) {

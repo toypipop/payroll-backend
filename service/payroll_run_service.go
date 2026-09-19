@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -235,12 +234,6 @@ type runFigures struct {
 	statutory      runStatutory
 }
 
-// runOutcome is what one employee contributed to the run's tally.
-type runOutcome struct {
-	skipped  bool
-	prorated *ProratedEmployee
-}
-
 // Cycles returns the cycles the caller's role authorizes, newest first.
 func (s *PayrollRunService) Cycles(scope repository.AccessScope) ([]models.PayrollCycle, error) {
 	return s.repo.ListCyclesScoped(scope)
@@ -439,20 +432,36 @@ func (s *PayrollRunService) snapshot(cycle models.PayrollCycle) (RunResult, erro
 	}
 
 	result := RunResult{}
-	for _, employee := range employees {
-		outcome, err := s.snapshotEmployee(run, employee)
+	for start := 0; start < len(employees); start += repository.PayrollRunBatchSize {
+		end := min(start+repository.PayrollRunBatchSize, len(employees))
+		inputs, err := s.repo.LoadEmployeeInputs(cycle, employeeIDs[start:end])
 		if err != nil {
 			return RunResult{}, err
 		}
-		if outcome.prorated != nil {
-			result.Prorated = append(result.Prorated, *outcome.prorated)
+		snapshots := make([]repository.EmployeeSnapshot, 0, end-start)
+		var skippedIDs []uint
+		for _, employee := range employees[start:end] {
+			input := inputs[employee.ID]
+			if input == nil {
+				result.SkippedCount++
+				result.SkippedNames = append(result.SkippedNames, fullName(employee))
+				skippedIDs = append(skippedIDs, employee.ID)
+				continue
+			}
+			pay := resolvePay(cycle, employee, input.Salary, input.Prorated)
+			if pay.proration.applied {
+				result.Prorated = append(result.Prorated, ProratedEmployee{Name: fullName(employee), Days: pay.proration.days, Total: pay.proration.total})
+			}
+			snapshot, details := computeEmployee(run, pay, input)
+			snapshots = append(snapshots, repository.EmployeeSnapshot{EmployeeID: employee.ID, Snapshot: snapshot, Details: details})
+			result.ProcessedCount++
 		}
-		if outcome.skipped {
-			result.SkippedCount++
-			result.SkippedNames = append(result.SkippedNames, fullName(employee))
-			continue
+		if err := s.repo.DeleteTransactionsForEmployees(cycle.ID, skippedIDs); err != nil {
+			return RunResult{}, err
 		}
-		result.ProcessedCount++
+		if err := s.repo.SaveSnapshots(cycle.ID, snapshots); err != nil {
+			return RunResult{}, err
+		}
 	}
 
 	return result, nil
@@ -509,43 +518,11 @@ func (run runContext) isNonWorking(day time.Time, key string) bool {
 	return run.holidays[key] || run.dayOffWeekdays[int(day.Weekday())]
 }
 
-// snapshotEmployee computes and stores one employee's figures, or clears a stale transaction when no salary record applies.
-func (s *PayrollRunService) snapshotEmployee(run runContext, employee models.Employees) (runOutcome, error) {
-	pay, found, err := s.resolvePay(run.cycle, employee)
-	if err != nil {
-		// A salary that could not be read is a failure, not an employee to skip: skipping would drop them from the run and clear the transaction an earlier run wrote.
-		return runOutcome{}, err
-	}
-	if !found {
-		// Clear a transaction an earlier run wrote when this employee did have a usable salary record, so a stale figure does not linger.
-		return runOutcome{skipped: true}, s.repo.DeleteTransactionForEmployee(run.cycle.ID, employee.ID)
-	}
-
-	outcome := runOutcome{}
-	if pay.proration.applied {
-		outcome.prorated = &ProratedEmployee{Name: fullName(employee), Days: pay.proration.days, Total: pay.proration.total}
-	}
-
-	snapshot, details, err := s.computeEmployee(run, pay)
-	if err != nil {
-		return outcome, err
-	}
-	return outcome, s.repo.SaveSnapshot(run.cycle.ID, employee.ID, snapshot, details)
-}
-
-// resolvePay picks the salary a cycle pays on and pro-rates the base by calendar days when that salary only took effect mid-cycle.
-func (s *PayrollRunService) resolvePay(cycle models.PayrollCycle, employee models.Employees) (runPay, bool, error) {
-	record, isProrated, found, err := s.salaryForCycle(employee.ID, cycle)
-	if err != nil {
-		return runPay{}, false, err
-	}
-	if !found {
-		return runPay{}, false, nil
-	}
-
+// resolvePay prorates the base when the selected salary first takes effect mid-cycle.
+func resolvePay(cycle models.PayrollCycle, employee models.Employees, record models.SalariesStructure, isProrated bool) runPay {
 	pay := runPay{employee: employee, salaryRecord: record, baseSalary: record.BaseSalaries}
 	if !isProrated {
-		return pay, true, nil
+		return pay
 	}
 
 	periodStart := dayOf(cycle.StartDate)
@@ -556,47 +533,15 @@ func (s *PayrollRunService) resolvePay(cycle models.PayrollCycle, employee model
 
 	pay.proration = runProration{applied: true, days: days, total: total}
 	pay.baseSalary = round2(record.BaseSalaries * float64(days) / float64(total))
-	return pay, true, nil
-}
-
-// salaryForCycle picks the salary a cycle should be paid on, reporting whether it only took effect mid-cycle. Only a genuinely missing record reads as "no salary"; a database failure is returned, so a run never silently drops an employee it could not read.
-func (s *PayrollRunService) salaryForCycle(employeeID uint, cycle models.PayrollCycle) (models.SalariesStructure, bool, bool, error) {
-	record, err := s.repo.FindSalaryOnOrBefore(employeeID, cycle.StartDate)
-	if err == nil {
-		return record, false, true, nil
-	}
-	if !errors.Is(err, repository.ErrPayrollSalaryMissing) {
-		return models.SalariesStructure{}, false, false, err
-	}
-
-	record, err = s.repo.FindEarliestSalaryOnOrBefore(employeeID, cycle.EndDate)
-	if err == nil {
-		return record, true, true, nil
-	}
-	if !errors.Is(err, repository.ErrPayrollSalaryMissing) {
-		return models.SalariesStructure{}, false, false, err
-	}
-	return models.SalariesStructure{}, false, false, nil
+	return pay
 }
 
 // computeEmployee turns one employee's inputs into the figures to store and the detail lines that explain them.
-func (s *PayrollRunService) computeEmployee(run runContext, pay runPay) (repository.TransactionSnapshot, []models.PayrollTransactionDetail, error) {
-	earningInputs, err := s.earningInputs(pay.employee.ID, run.cycle.ID)
-	if err != nil {
-		return repository.TransactionSnapshot{}, nil, err
-	}
-	attendance, err := s.attendanceFor(pay.employee.ID, run)
-	if err != nil {
-		return repository.TransactionSnapshot{}, nil, err
-	}
-	deductionInputs, err := s.deductionInputs(pay.employee.ID, run.cycle.ID)
-	if err != nil {
-		return repository.TransactionSnapshot{}, nil, err
-	}
-	leave, err := s.leaveFor(pay.employee.ID, run)
-	if err != nil {
-		return repository.TransactionSnapshot{}, nil, err
-	}
+func computeEmployee(run runContext, pay runPay, input *repository.PayrollEmployeeInputs) (repository.TransactionSnapshot, []models.PayrollTransactionDetail) {
+	earningInputs := earningInputs(input.EmployeeEarnings, input.CycleEarnings)
+	attendance := attendanceFor(input.TimeLogs, run)
+	deductionInputs := deductionInputs(input.EmployeeDeductions, input.CycleDeductions)
+	leave := leaveFor(input.Leaves)
 
 	bases := runBases{taxable: pay.baseSalary, sso: pay.baseSalary}
 	earnings, bases := totalEarnings(earningInputs, bases)
@@ -626,20 +571,11 @@ func (s *PayrollRunService) computeEmployee(run runContext, pay runPay) (reposit
 	figures.totalDeduction = round2(figures.unpaidLeave + deductions.total + figures.late + figures.absent)
 	figures.netPay = round2(figures.totalEarning - figures.totalDeduction - figures.statutory.sso - figures.statutory.tax)
 
-	return snapshotFor(pay, figures), detailsFor(pay, earnings, deductions, figures), nil
+	return snapshotFor(pay, figures), detailsFor(pay, earnings, deductions, figures)
 }
 
 // earningInputs collects the employee's standing earnings and then this cycle's one-off ones, in the order the run totals them.
-func (s *PayrollRunService) earningInputs(employeeID uint, cycleID uint) ([]runEarningInput, error) {
-	standing, err := s.repo.ListEmployeeEarnings(employeeID)
-	if err != nil {
-		return nil, err
-	}
-	cycleOnly, err := s.repo.ListCycleEarnings(employeeID, cycleID)
-	if err != nil {
-		return nil, err
-	}
-
+func earningInputs(standing []models.EmployeeEarning, cycleOnly []models.PayrollCycleEarning) []runEarningInput {
 	inputs := make([]runEarningInput, 0, len(standing)+len(cycleOnly))
 	for _, item := range standing {
 		inputs = append(inputs, runEarningInput{
@@ -653,20 +589,11 @@ func (s *PayrollRunService) earningInputs(employeeID uint, cycleID uint) ([]runE
 			isTaxable: item.EarningType.IsTaxable, isSso: item.EarningType.IsSso,
 		})
 	}
-	return inputs, nil
+	return inputs
 }
 
 // deductionInputs collects the employee's standing deductions and then this cycle's one-off ones, in the order the run totals them.
-func (s *PayrollRunService) deductionInputs(employeeID uint, cycleID uint) ([]runDeductionInput, error) {
-	standing, err := s.repo.ListEmployeeDeductions(employeeID)
-	if err != nil {
-		return nil, err
-	}
-	cycleOnly, err := s.repo.ListCycleDeductions(employeeID, cycleID)
-	if err != nil {
-		return nil, err
-	}
-
+func deductionInputs(standing []models.EmployeeDeduction, cycleOnly []models.PayrollCycleDeduction) []runDeductionInput {
 	inputs := make([]runDeductionInput, 0, len(standing)+len(cycleOnly))
 	for _, item := range standing {
 		inputs = append(inputs, runDeductionInput{
@@ -680,7 +607,7 @@ func (s *PayrollRunService) deductionInputs(employeeID uint, cycleID uint) ([]ru
 			isTaxDeductible: item.DeductionType.IsTaxDeductible, isSsoDeductible: item.DeductionType.IsSsoDeductible,
 		})
 	}
-	return inputs, nil
+	return inputs
 }
 
 // totalEarnings folds the additional earnings onto the pay bases in listed order, so the arithmetic matches a single accumulation pass.
@@ -718,13 +645,7 @@ func totalDeductions(inputs []runDeductionInput) runDeductions {
 }
 
 // attendanceFor collapses a cycle's paired time logs into one record per working day, and totals what falls outside the schedule.
-func (s *PayrollRunService) attendanceFor(employeeID uint, run runContext) (runAttendance, error) {
-	endOfCycle := dayOf(run.cycle.EndDate).AddDate(0, 0, 1)
-	timeLogs, err := s.repo.ListPairedTimeLogs(employeeID, run.cycle.StartDate, endOfCycle)
-	if err != nil {
-		return runAttendance{}, err
-	}
-
+func attendanceFor(timeLogs []models.TimeLog, run runContext) runAttendance {
 	result := runAttendance{byDay: make(map[string]*logDay)}
 	for _, log := range timeLogs {
 		if log.CheckIn == nil || log.CheckOut == nil {
@@ -753,16 +674,11 @@ func (s *PayrollRunService) attendanceFor(employeeID uint, run runContext) (runA
 			result.overtimeMinutes += log.CheckOut.Sub(scheduledEnd).Minutes()
 		}
 	}
-	return result, nil
+	return result
 }
 
-// leaveFor reads the approved leave overlapping a cycle: what it costs in unpaid days, and which days it excuses from the absence count.
-func (s *PayrollRunService) leaveFor(employeeID uint, run runContext) (runLeave, error) {
-	approved, err := s.repo.ListApprovedLeavesInRange(employeeID, run.cycle.StartDate, run.cycle.EndDate)
-	if err != nil {
-		return runLeave{}, err
-	}
-
+// leaveFor summarizes the approved leave overlapping a cycle: what it costs in unpaid days, and which days it excuses from the absence count.
+func leaveFor(approved []models.LeaveRequest) runLeave {
 	result := runLeave{days: make(map[string]bool)}
 	for _, item := range approved {
 		if item.LeaveType == models.LeaveTypeUnpaid {
@@ -772,7 +688,7 @@ func (s *PayrollRunService) leaveFor(employeeID uint, run runContext) (runLeave,
 			result.days[dateKey(day)] = true
 		}
 	}
-	return result, nil
+	return result
 }
 
 // absenceFor walks the cycle day by day, counting the working days with no check pair and the minutes lost on the days that had one.
@@ -1079,16 +995,23 @@ func (s *PayrollRunService) Diff(scope repository.AccessScope, cycleID uint) (Cy
 }
 
 // Transactions returns a cycle's transactions for the summary table.
-func (s *PayrollRunService) Transactions(scope repository.AccessScope, cycleID uint) (models.PayrollCycle, []models.PayrollTransaction, error) {
+type PayrollTransactionPage struct {
+	Cycle        models.PayrollCycle           `json:"cycle"`
+	Transactions []models.PayrollTransaction   `json:"transactions"`
+	Pagination   repository.Pagination         `json:"pagination"`
+	Summary      repository.TransactionSummary `json:"summary"`
+}
+
+func (s *PayrollRunService) Transactions(scope repository.AccessScope, cycleID uint, query repository.PageQuery) (PayrollTransactionPage, error) {
 	cycle, err := s.repo.FindCycleScoped(scope, cycleID)
 	if err != nil {
-		return models.PayrollCycle{}, nil, ErrPayrollCycleNotFoundForList
+		return PayrollTransactionPage{}, err
 	}
-	transactions, err := s.repo.ListTransactionsForCycle(cycle.ID)
+	page, summary, err := s.repo.ListTransactionsForCycle(cycle.ID, query)
 	if err != nil {
-		return models.PayrollCycle{}, nil, err
+		return PayrollTransactionPage{}, err
 	}
-	return cycle, transactions, nil
+	return PayrollTransactionPage{Cycle: cycle, Transactions: page.Items, Pagination: page.Pagination, Summary: summary}, nil
 }
 
 // Slip returns one payslip.

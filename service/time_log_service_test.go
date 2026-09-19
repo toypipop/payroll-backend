@@ -13,8 +13,8 @@ type bulkTimeLogRepo struct {
 	created  []models.TimeLog
 }
 
-func (r *bulkTimeLogRepo) ListScoped(repository.AccessScope) ([]models.TimeLog, error) {
-	return nil, nil
+func (r *bulkTimeLogRepo) ListScoped(repository.AccessScope, repository.PageQuery) (repository.Page[models.TimeLog], error) {
+	return repository.Page[models.TimeLog]{}, nil
 }
 func (r *bulkTimeLogRepo) FindScoped(repository.AccessScope, uint) (models.TimeLog, error) {
 	return models.TimeLog{}, nil
@@ -42,8 +42,8 @@ type bulkTimeLogEmployees struct {
 	employee models.Employees
 }
 
-func (r *bulkTimeLogEmployees) ListScoped(repository.AccessScope) ([]models.Employees, error) {
-	return nil, nil
+func (r *bulkTimeLogEmployees) ListScoped(repository.AccessScope, repository.PageQuery) (repository.Page[models.Employees], error) {
+	return repository.Page[models.Employees]{}, nil
 }
 func (r *bulkTimeLogEmployees) FindScoped(repository.AccessScope, uint) (models.Employees, error) {
 	return r.employee, nil

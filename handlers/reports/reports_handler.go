@@ -86,6 +86,7 @@ func (h *Handler) GetBankTransferReport(c *gin.Context) {
 // ─── Tax Forms ────────────────────────────────────────────────────────────────
 
 type PND1Row struct {
+	TransactionID uint    `json:"transaction_id"`
 	EmployeesCode string  `json:"employees_code"`
 	FirstName     string  `json:"first_name"`
 	LastName      string  `json:"last_name"`
@@ -115,6 +116,7 @@ func (h *Handler) GetTaxFormsPND1(c *gin.Context) {
 	var rows []PND1Row
 	for _, row := range report.Rows {
 		rows = append(rows, PND1Row{
+			TransactionID: row.TransactionID,
 			EmployeesCode: row.EmployeesCode,
 			FirstName:     row.FirstName,
 			LastName:      row.LastName,

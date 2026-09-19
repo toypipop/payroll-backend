@@ -15,6 +15,7 @@ var errNoRow = errors.New("no row")
 
 // fakeRunRepo is an in-memory PayrollRunRepository, so the calculation can be exercised without a database.
 type fakeRunRepo struct {
+	failSaveBatch     int
 	payrollConfig     models.PayrollConfig
 	payrollConfigErr  error
 	employees         []models.Employees
@@ -41,9 +42,12 @@ type fakeRunRepo struct {
 	prunedCycle       uint
 	retainedEmployees []uint
 	pruneErr          error
+	inputBatches      [][]uint
+	saveBatches       int
+	batchInputs       map[uint]*repository.PayrollEmployeeInputs
 }
 
-// savedSnapshot is one call the run made to SaveSnapshot.
+// savedSnapshot is one employee in a saved batch.
 type savedSnapshot struct {
 	employeeID uint
 	snapshot   repository.TransactionSnapshot
@@ -70,15 +74,39 @@ func (f *fakeRunRepo) ListDayOffs(uint) ([]models.DayOff, error) {
 	return f.dayOffs, nil
 }
 
-func (f *fakeRunRepo) FindSalaryOnOrBefore(employeeID uint, _ time.Time) (models.SalariesStructure, error) {
+func (f *fakeRunRepo) LoadEmployeeInputs(_ models.PayrollCycle, ids []uint) (map[uint]*repository.PayrollEmployeeInputs, error) {
+	f.inputBatches = append(f.inputBatches, append([]uint(nil), ids...))
+	if f.txDepth == 0 {
+		f.sawSaveOutsideTx = true
+	}
 	if f.activeSalaryErr != nil {
-		return models.SalariesStructure{}, f.activeSalaryErr
+		return nil, f.activeSalaryErr
 	}
-	record, ok := f.activeSalary[employeeID]
-	if !ok {
-		return models.SalariesStructure{}, repository.ErrPayrollSalaryMissing
+	inputs := make(map[uint]*repository.PayrollEmployeeInputs)
+	for _, id := range ids {
+		if f.batchInputs != nil {
+			if input := f.batchInputs[id]; input != nil {
+				inputs[id] = input
+			}
+			continue
+		}
+		salary, found := f.activeSalary[id]
+		prorated := false
+		if !found {
+			if f.earliestSalaryErr != nil {
+				return nil, f.earliestSalaryErr
+			}
+			salary, found = f.earliestSalary[id]
+			prorated = true
+		}
+		if found {
+			inputs[id] = &repository.PayrollEmployeeInputs{Salary: salary, Prorated: prorated,
+				EmployeeEarnings: f.employeeEarnings, CycleEarnings: f.cycleEarnings,
+				EmployeeDeductions: f.employeeDeducts, CycleDeductions: f.cycleDeducts,
+				TimeLogs: f.timeLogs, Leaves: f.approvedLeaves}
+		}
 	}
-	return record, nil
+	return inputs, nil
 }
 
 func (f *fakeRunRepo) FindEarliestSalaryOnOrBefore(employeeID uint, _ time.Time) (models.SalariesStructure, error) {
@@ -92,8 +120,8 @@ func (f *fakeRunRepo) FindEarliestSalaryOnOrBefore(employeeID uint, _ time.Time)
 	return record, nil
 }
 
-func (f *fakeRunRepo) DeleteTransactionForEmployee(_ uint, employeeID uint) error {
-	f.deletedEmployees = append(f.deletedEmployees, employeeID)
+func (f *fakeRunRepo) DeleteTransactionsForEmployees(_ uint, employeeIDs []uint) error {
+	f.deletedEmployees = append(f.deletedEmployees, employeeIDs...)
 	return nil
 }
 
@@ -106,49 +134,34 @@ func (f *fakeRunRepo) DeleteTransactionsOutsideEmployees(cycleID uint, employeeI
 	return f.pruneErr
 }
 
-func (f *fakeRunRepo) ListEmployeeEarnings(uint) ([]models.EmployeeEarning, error) {
-	return f.employeeEarnings, nil
-}
-
-func (f *fakeRunRepo) ListCycleEarnings(uint, uint) ([]models.PayrollCycleEarning, error) {
-	return f.cycleEarnings, nil
-}
-
-func (f *fakeRunRepo) ListEmployeeDeductions(uint) ([]models.EmployeeDeduction, error) {
-	return f.employeeDeducts, nil
-}
-
-func (f *fakeRunRepo) ListCycleDeductions(uint, uint) ([]models.PayrollCycleDeduction, error) {
-	return f.cycleDeducts, nil
-}
-
-func (f *fakeRunRepo) ListPairedTimeLogs(uint, time.Time, time.Time) ([]models.TimeLog, error) {
-	return f.timeLogs, nil
-}
-
-func (f *fakeRunRepo) ListApprovedLeavesInRange(uint, time.Time, time.Time) ([]models.LeaveRequest, error) {
-	return f.approvedLeaves, nil
-}
-
 // WithinTx runs the body inline and records that a transaction was open, so a test can assert the run wrote inside one.
 func (f *fakeRunRepo) WithinTx(fn func(repository.PayrollRunRepository) error) error {
 	f.txDepth++
 	defer func() { f.txDepth-- }()
-	return fn(f)
+	saved, deleted := len(f.saved), len(f.deletedEmployees)
+	err := fn(f)
+	if err != nil {
+		f.saved = f.saved[:saved]
+		f.deletedEmployees = f.deletedEmployees[:deleted]
+	}
+	return err
 }
 
 func (f *fakeRunRepo) LockCycleForUpdate(uint) (models.PayrollCycle, error) {
 	return f.lockedCycle, nil
 }
 
-func (f *fakeRunRepo) SaveSnapshot(_ uint, employeeID uint, snapshot repository.TransactionSnapshot, details []models.PayrollTransactionDetail) error {
+func (f *fakeRunRepo) SaveSnapshots(_ uint, snapshots []repository.EmployeeSnapshot) error {
 	if f.txDepth == 0 {
 		f.sawSaveOutsideTx = true
 	}
-	if f.saveSnapshotError != nil {
+	f.saveBatches++
+	if f.saveSnapshotError != nil && (f.failSaveBatch == 0 || f.saveBatches == f.failSaveBatch) {
 		return f.saveSnapshotError
 	}
-	f.saved = append(f.saved, savedSnapshot{employeeID: employeeID, snapshot: snapshot, details: details})
+	for _, item := range snapshots {
+		f.saved = append(f.saved, savedSnapshot{employeeID: item.EmployeeID, snapshot: item.Snapshot, details: item.Details})
+	}
 	return nil
 }
 
@@ -183,8 +196,8 @@ func (f *fakeRunRepo) FindPreviousClosedCycle(uint, time.Time) (models.PayrollCy
 	return models.PayrollCycle{}, false, nil
 }
 
-func (f *fakeRunRepo) ListTransactionsForCycle(uint) ([]models.PayrollTransaction, error) {
-	return nil, nil
+func (f *fakeRunRepo) ListTransactionsForCycle(uint, repository.PageQuery) (repository.Page[models.PayrollTransaction], repository.TransactionSummary, error) {
+	return repository.Page[models.PayrollTransaction]{}, repository.TransactionSummary{}, nil
 }
 
 func (f *fakeRunRepo) FindTransactionDetail(uint) (models.PayrollTransaction, error) {
@@ -297,7 +310,7 @@ func TestSnapshotComputesFullPayslip(t *testing.T) {
 		t.Errorf("Prorated = %+v, want empty for a salary in force before the cycle", result.Prorated)
 	}
 	if len(repo.saved) != 1 {
-		t.Fatalf("SaveSnapshot called %d times, want 1", len(repo.saved))
+		t.Fatalf("Saved %d employee snapshots, want 1", len(repo.saved))
 	}
 
 	got := repo.saved[0].snapshot
@@ -422,7 +435,7 @@ func TestSnapshotSkipsEmployeeWithoutSalary(t *testing.T) {
 		t.Errorf("SkippedNames = %v, want [Anan Nopadol]", result.SkippedNames)
 	}
 	if len(repo.saved) != 0 {
-		t.Errorf("SaveSnapshot called %d times, want 0", len(repo.saved))
+		t.Errorf("Saved %d employee snapshots, want 0", len(repo.saved))
 	}
 	if len(repo.deletedEmployees) != 1 || repo.deletedEmployees[0] != 61 {
 		t.Errorf("deletedEmployees = %v, want [61]", repo.deletedEmployees)
@@ -503,7 +516,7 @@ func TestSnapshotReportsSalaryLookupFailure(t *testing.T) {
 		t.Errorf("deletedEmployees = %v, want none: an unreadable salary must not clear a stored transaction", repo.deletedEmployees)
 	}
 	if len(repo.saved) != 0 {
-		t.Errorf("SaveSnapshot called %d times, want 0", len(repo.saved))
+		t.Errorf("Saved %d employee snapshots, want 0", len(repo.saved))
 	}
 }
 
@@ -538,7 +551,7 @@ func TestSnapshotAbortsRunOnFirstSaveFailure(t *testing.T) {
 		t.Errorf("ProcessedCount = %d, want 0 when the run aborted", result.ProcessedCount)
 	}
 	if repo.sawSaveOutsideTx {
-		t.Error("SaveSnapshot ran outside a transaction; the whole run must commit or roll back as one unit")
+		t.Error("SaveSnapshots ran outside a transaction; the whole run must commit or roll back as one unit")
 	}
 }
 
@@ -567,9 +580,9 @@ func TestSnapshotWritesInsideOneTransaction(t *testing.T) {
 		t.Fatalf("Snapshot returned error: %v", err)
 	}
 	if len(repo.saved) != 2 {
-		t.Fatalf("SaveSnapshot called %d times, want 2", len(repo.saved))
+		t.Fatalf("Saved %d employee snapshots, want 2", len(repo.saved))
 	}
 	if repo.sawSaveOutsideTx {
-		t.Error("SaveSnapshot ran outside a transaction")
+		t.Error("SaveSnapshots ran outside a transaction")
 	}
 }

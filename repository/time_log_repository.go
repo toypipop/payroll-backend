@@ -18,7 +18,7 @@ var (
 
 // TimeLogRepository is the persistence boundary for the time-logs domain.
 type TimeLogRepository interface {
-	ListScoped(scope AccessScope) ([]models.TimeLog, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.TimeLog], error)
 	FindScoped(scope AccessScope, id uint) (models.TimeLog, error)
 	Create(log *models.TimeLog, audit *models.AuditLog) error
 	CreateMany(logs []models.TimeLog, audit *models.AuditLog) error
@@ -44,13 +44,26 @@ func (r *gormTimeLogRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("time_log.companies_id", "time_log.employees_id"))
 }
 
-func (r *gormTimeLogRepository) ListScoped(scope AccessScope) ([]models.TimeLog, error) {
-	var logs []models.TimeLog
-	err := r.scoped(scope).
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Find(&logs).Error
-	return logs, err
+func (r *gormTimeLogRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.TimeLog], error) {
+	name := "concat_ws(' ', e.first_name, e.last_name)"
+	order, err := pageOrder(q, map[string]string{
+		"employee_name": name, "check_in_date": "time_log.check_in",
+		"check_in_time":  "(time_log.check_in AT TIME ZONE 'Asia/Bangkok')::time",
+		"check_out_time": "(time_log.check_out AT TIME ZONE 'Asia/Bangkok')::time", "employees.companies.name": "c.name",
+	}, "time_log.id", "time_log.id")
+	if err != nil {
+		return Page[models.TimeLog]{}, err
+	}
+	query := r.scoped(scope).Model(&models.TimeLog{}).
+		Joins("LEFT JOIN employees e ON e.id = time_log.employees_id AND e.deleted_at = 0").
+		Joins("LEFT JOIN companies c ON c.id = e.companies_id AND c.deleted_at = 0")
+	if q.Search != "" {
+		pattern := searchPattern(q.Search)
+		query = query.Where("("+name+" ILIKE ? OR e.employees_code ILIKE ? OR c.name ILIKE ? OR to_char(time_log.check_in AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD HH24:MI') ILIKE ? OR to_char(time_log.check_out AT TIME ZONE 'Asia/Bangkok', 'HH24:MI') ILIKE ?)", pattern, pattern, pattern, pattern, pattern)
+	}
+	return readPage[models.TimeLog](query.Preload("Employees", func(db *gorm.DB) *gorm.DB {
+		return db.Select("id, companies_id, first_name, last_name, employees_code")
+	}).Preload("Employees.Companies"), q, order)
 }
 
 func (r *gormTimeLogRepository) FindScoped(scope AccessScope, id uint) (models.TimeLog, error) {

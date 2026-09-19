@@ -84,8 +84,8 @@ func (b *bulkEmployees) FindBriefScoped(_ repository.AccessScope, id uint) (mode
 	return employee, nil
 }
 
-func (b *bulkEmployees) ListScoped(repository.AccessScope) ([]models.Employees, error) {
-	return nil, nil
+func (b *bulkEmployees) ListScoped(repository.AccessScope, repository.PageQuery) (repository.Page[models.Employees], error) {
+	return repository.Page[models.Employees]{}, nil
 }
 func (b *bulkEmployees) FindScoped(repository.AccessScope, uint) (models.Employees, error) {
 	return models.Employees{}, nil

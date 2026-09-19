@@ -25,6 +25,8 @@ type companySQLStep struct {
 	excludes  []string
 	columns   []string
 	values    []driver.Value
+	rows      [][]driver.Value
+	err       error
 	args      []driver.Value
 	checkArgs func([]driver.NamedValue)
 }
@@ -32,6 +34,7 @@ type companySQL struct {
 	t                     *testing.T
 	steps                 []companySQLStep
 	committed, rolledBack bool
+	txOptions             driver.TxOptions
 }
 
 func (s *companySQL) Connect(context.Context) (driver.Conn, error) { return s, nil }
@@ -42,8 +45,12 @@ func (s *companySQL) Prepare(string) (driver.Stmt, error) {
 	return nil, fmt.Errorf("unexpected prepared statement")
 }
 func (s *companySQL) Begin() (driver.Tx, error) { return s, nil }
-func (s *companySQL) Commit() error             { s.committed = true; return nil }
-func (s *companySQL) Rollback() error           { s.rolledBack = true; return nil }
+func (s *companySQL) BeginTx(_ context.Context, options driver.TxOptions) (driver.Tx, error) {
+	s.txOptions = options
+	return s, nil
+}
+func (s *companySQL) Commit() error   { s.committed = true; return nil }
+func (s *companySQL) Rollback() error { s.rolledBack = true; return nil }
 func (s *companySQL) next(query string) companySQLStep {
 	s.t.Helper()
 	if len(s.steps) == 0 {
@@ -77,21 +84,32 @@ func (s *companySQL) QueryContext(_ context.Context, query string, args []driver
 			s.t.Errorf("SQL args = %#v, want %#v", actual, step.args)
 		}
 	}
-	return &companyRows{columns: step.columns, values: step.values}, nil
+	if step.err != nil {
+		return nil, step.err
+	}
+	return &companyRows{columns: step.columns, values: step.values, rows: step.rows}, nil
 }
 func (s *companySQL) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
-	s.next(query)
+	if step := s.next(query); step.err != nil {
+		return nil, step.err
+	}
 	return driver.RowsAffected(1), nil
 }
 
 type companyRows struct {
 	columns []string
 	values  []driver.Value
+	rows    [][]driver.Value
 }
 
 func (r *companyRows) Columns() []string { return r.columns }
 func (r *companyRows) Close() error      { return nil }
 func (r *companyRows) Next(dest []driver.Value) error {
+	if len(r.rows) > 0 {
+		copy(dest, r.rows[0])
+		r.rows = r.rows[1:]
+		return nil
+	}
 	if r.values == nil {
 		return io.EOF
 	}

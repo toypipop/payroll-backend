@@ -77,8 +77,8 @@ func NewTimeLogService(repo repository.TimeLogRepository, employees repository.E
 }
 
 // List returns the logs the caller's scope covers, with relations loaded.
-func (s *TimeLogService) List(scope repository.AccessScope) ([]models.TimeLog, error) {
-	return s.repo.ListScoped(scope)
+func (s *TimeLogService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.TimeLog], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // resolveEmployee confirms the employee sits in the requested company and that the caller may act on that company, returning the employee to file the log against.

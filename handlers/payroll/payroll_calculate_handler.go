@@ -35,7 +35,7 @@ func (h *Handler) CalculatePayroll(c *gin.Context) {
 	})
 }
 
-// GetPayrollTransactions returns a summary table of all transactions for a cycle.
+// GetPayrollTransactions returns one page and whole-cycle snapshot totals.
 func (h *Handler) GetPayrollTransactions(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
 	if !ok {
@@ -46,12 +46,16 @@ func (h *Handler) GetPayrollTransactions(c *gin.Context) {
 		return
 	}
 
-	cycle, transactions, err := h.PayrollRun.Transactions(scope, cycleID)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	page, err := h.PayrollRun.Transactions(scope, cycleID, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"cycle": cycle, "transactions": transactions})
+	c.JSON(http.StatusOK, page)
 }
 
 // GetPayrollSlip returns one employee's payslip.

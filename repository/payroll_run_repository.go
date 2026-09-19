@@ -62,19 +62,11 @@ type PayrollRunRepository interface {
 	ListHolidaysInRange(companiesID uint, from time.Time, to time.Time) ([]models.Holiday, error)
 	ListDayOffs(companiesID uint) ([]models.DayOff, error)
 
-	FindSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
 	FindEarliestSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error)
-	DeleteTransactionForEmployee(cycleID uint, employeeID uint) error
 	DeleteTransactionsOutsideEmployees(cycleID uint, employeeIDs []uint) error
-
-	ListEmployeeEarnings(employeeID uint) ([]models.EmployeeEarning, error)
-	ListCycleEarnings(employeeID uint, cycleID uint) ([]models.PayrollCycleEarning, error)
-	ListEmployeeDeductions(employeeID uint) ([]models.EmployeeDeduction, error)
-	ListCycleDeductions(employeeID uint, cycleID uint) ([]models.PayrollCycleDeduction, error)
-	ListPairedTimeLogs(employeeID uint, from time.Time, to time.Time) ([]models.TimeLog, error)
-	ListApprovedLeavesInRange(employeeID uint, cycleStart time.Time, cycleEnd time.Time) ([]models.LeaveRequest, error)
-
-	SaveSnapshot(cycleID uint, employeeID uint, snapshot TransactionSnapshot, details []models.PayrollTransactionDetail) error
+	DeleteTransactionsForEmployees(cycleID uint, employeeIDs []uint) error
+	LoadEmployeeInputs(cycle models.PayrollCycle, employeeIDs []uint) (map[uint]*PayrollEmployeeInputs, error)
+	SaveSnapshots(cycleID uint, snapshots []EmployeeSnapshot) error
 
 	CountLivePayrollConfigs(companiesID uint) (int64, error)
 	ListActiveEmployeesBrief(companiesID uint) ([]models.Employees, error)
@@ -82,7 +74,7 @@ type PayrollRunRepository interface {
 	AggregateCycle(cycleID uint) (CycleAggregate, error)
 	FindPreviousClosedCycle(companiesID uint, before time.Time) (models.PayrollCycle, bool, error)
 
-	ListTransactionsForCycle(cycleID uint) ([]models.PayrollTransaction, error)
+	ListTransactionsForCycle(cycleID uint, q PageQuery) (Page[models.PayrollTransaction], TransactionSummary, error)
 	FindTransactionDetail(transactionID uint) (models.PayrollTransaction, error)
 	FindCompany(companiesID uint) (models.Companies, error)
 	ListClosedCycleTransactionsForEmployee(employeeID uint) ([]models.PayrollTransaction, error)
@@ -204,26 +196,7 @@ func (r *gormPayrollRunRepository) ListDayOffs(companiesID uint) ([]models.DayOf
 	return dayOffs, err
 }
 
-// FindActiveSalaryOnOrBefore returns the salary in force at the given date, newest first.
-// FindSalaryOnOrBefore returns the salary that was in force on the given date: the latest record whose effective
-// date has already arrived by then.
-//
-// Which record applies is a question about the cycle's dates, so the effective date decides it. `is_active` is
-// in the filter for a different reason: it marks a record as switched on, and disabling a salary switches every
-// one of the employee's records off, which is what makes a run find nothing to pay them from. It does not mark
-// which record is current — that would price every run at today's figure.
-// Deleted records are excluded by soft delete, as everywhere else.
-func (r *gormPayrollRunRepository) FindSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
-	var record models.SalariesStructure
-	err := r.db.Where("employees_id = ?", employeeID).Scopes(usableSalaryBy(date)).
-		Order("effective_date DESC, created_at DESC").
-		First(&record).Error
-	return record, salaryLookupError(err)
-}
-
-// FindEarliestActiveSalaryOnOrBefore returns the employee's first salary record up to the given date, for a new hire whose first record lands mid-cycle.
-// FindEarliestSalaryOnOrBefore is the fallback for someone whose first salary record only starts partway through
-// the cycle — a new hire — so the run can pro-rate from the day it takes effect.
+// FindEarliestSalaryOnOrBefore validates salary eligibility for a cycle adjustment.
 func (r *gormPayrollRunRepository) FindEarliestSalaryOnOrBefore(employeeID uint, date time.Time) (models.SalariesStructure, error) {
 	var record models.SalariesStructure
 	err := r.db.Where("employees_id = ?", employeeID).Scopes(usableSalaryBy(date)).
@@ -240,27 +213,16 @@ func salaryLookupError(err error) error {
 	return err
 }
 
-// DeleteTransactionForEmployee clears a transaction left by an earlier run that this run is skipping, so a stale figure does not keep appearing.
-func (r *gormPayrollRunRepository) DeleteTransactionForEmployee(cycleID uint, employeeID uint) error {
-	var stale models.PayrollTransaction
-	if err := r.db.Where("cycle_id = ? AND employees_id = ?", cycleID, employeeID).First(&stale).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
-		}
-		return err
-	}
-	if err := r.db.Where("transaction_id = ?", stale.ID).Delete(&models.PayrollTransactionDetail{}).Error; err != nil {
-		return err
-	}
-	return r.db.Delete(&stale).Error
-}
-
 // Called only for an open, locked cycle inside the payroll transaction.
 func (r *gormPayrollRunRepository) DeleteTransactionsOutsideEmployees(cycleID uint, employeeIDs []uint) error {
 	stale := r.db.Model(&models.PayrollTransaction{}).Where("cycle_id = ?", cycleID)
 	if len(employeeIDs) > 0 {
 		stale = stale.Where("employees_id NOT IN ?", employeeIDs)
 	}
+	return r.deleteTransactions(stale)
+}
+
+func (r *gormPayrollRunRepository) deleteTransactions(stale *gorm.DB) error {
 	var ids []uint
 	if err := stale.Pluck("id", &ids).Error; err != nil {
 		return err
@@ -272,98 +234,6 @@ func (r *gormPayrollRunRepository) DeleteTransactionsOutsideEmployees(cycleID ui
 		return err
 	}
 	return r.db.Where("id IN ?", ids).Delete(&models.PayrollTransaction{}).Error
-}
-
-func (r *gormPayrollRunRepository) ListEmployeeEarnings(employeeID uint) ([]models.EmployeeEarning, error) {
-	var items []models.EmployeeEarning
-	err := r.db.Preload("EarningType").Where("employees_id = ?", employeeID).Find(&items).Error
-	return items, err
-}
-
-func (r *gormPayrollRunRepository) ListCycleEarnings(employeeID uint, cycleID uint) ([]models.PayrollCycleEarning, error) {
-	var items []models.PayrollCycleEarning
-	err := r.db.Preload("EarningType").Where("employees_id = ? AND cycle_id = ?", employeeID, cycleID).Find(&items).Error
-	return items, err
-}
-
-func (r *gormPayrollRunRepository) ListEmployeeDeductions(employeeID uint) ([]models.EmployeeDeduction, error) {
-	var items []models.EmployeeDeduction
-	err := r.db.Preload("DeductionType").Where("employees_id = ?", employeeID).Find(&items).Error
-	return items, err
-}
-
-func (r *gormPayrollRunRepository) ListCycleDeductions(employeeID uint, cycleID uint) ([]models.PayrollCycleDeduction, error) {
-	var items []models.PayrollCycleDeduction
-	err := r.db.Preload("DeductionType").Where("employees_id = ? AND cycle_id = ?", employeeID, cycleID).Find(&items).Error
-	return items, err
-}
-
-// ListPairedTimeLogs takes logs with both a check-in and a check-out whose check-in falls in [from, to).
-func (r *gormPayrollRunRepository) ListPairedTimeLogs(employeeID uint, from time.Time, to time.Time) ([]models.TimeLog, error) {
-	var logs []models.TimeLog
-	err := r.db.Where(
-		"employees_id = ? AND check_in >= ? AND check_in < ? AND check_in IS NOT NULL AND check_out IS NOT NULL",
-		employeeID, from, to,
-	).Find(&logs).Error
-	return logs, err
-}
-
-func (r *gormPayrollRunRepository) ListApprovedLeavesInRange(employeeID uint, cycleStart time.Time, cycleEnd time.Time) ([]models.LeaveRequest, error) {
-	var leaves []models.LeaveRequest
-	err := r.db.Where(
-		"employees_id = ? AND status = ? AND start_date <= ? AND end_date >= ?",
-		employeeID, models.LeaveStatusApproved, cycleEnd, cycleStart,
-	).Find(&leaves).Error
-	return leaves, err
-}
-
-// SaveSnapshot writes one employee's computed transaction and replaces its detail lines.
-// It upserts on idx_txn_cycle_employee rather than reading first and then deciding: find-then-create let two concurrent runs both miss the row and both insert, which is a duplicate payout.
-// It does not open a transaction of its own — the caller runs the whole cycle inside one, so a failure halfway through a run leaves no half-written cycle behind.
-func (r *gormPayrollRunRepository) SaveSnapshot(cycleID uint, employeeID uint, snapshot TransactionSnapshot, details []models.PayrollTransactionDetail) error {
-	transaction := models.PayrollTransaction{
-		CycleID:             cycleID,
-		EmployeesID:         employeeID,
-		SalariesStructureID: snapshot.SalariesStructureID,
-		SalariesAtTime:      snapshot.SalariesAtTime,
-		TotalEarning:        snapshot.TotalEarning,
-		TotalDeduction:      snapshot.TotalDeduction,
-		SsoAmount:           snapshot.SsoAmount,
-		TaxableIncome:       snapshot.TaxableIncome,
-		TaxAmount:           snapshot.TaxAmount,
-		NetPay:              snapshot.NetPay,
-		PositionName:        snapshot.PositionName,
-		DepartmentName:      snapshot.DepartmentName,
-		EmploymentTypeName:  snapshot.EmploymentTypeName,
-		BankName:            snapshot.BankName,
-		BankAccountName:     snapshot.BankAccountName,
-		BankAccountNo:       snapshot.BankAccountNo,
-	}
-
-	if err := r.db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "cycle_id"}, {Name: "employees_id"}, {Name: "deleted_at"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"updated_at", "salaries_structure_id", "salaries_at_time",
-			"total_earning", "total_deduction", "sso_amount", "taxable_income", "tax_amount", "net_pay",
-			"position_name", "department_name", "employment_type_name",
-			"bank_name", "bank_account_name", "bank_account_no",
-		}),
-	}).Create(&transaction).Error; err != nil {
-		return err
-	}
-
-	// Replacing the lines unconditionally covers both paths: on a fresh row there is nothing to delete.
-	if err := r.db.Where("transaction_id = ?", transaction.ID).Delete(&models.PayrollTransactionDetail{}).Error; err != nil {
-		return err
-	}
-
-	if len(details) == 0 {
-		return nil
-	}
-	for i := range details {
-		details[i].TransactionID = transaction.ID
-	}
-	return r.db.Create(&details).Error
 }
 
 // CycleAggregate totals one cycle's transactions, for the run-versus-previous comparison.
@@ -430,18 +300,6 @@ func (r *gormPayrollRunRepository) FindPreviousClosedCycle(companiesID uint, bef
 		return models.PayrollCycle{}, false, err
 	}
 	return cycle, true, nil
-}
-
-func (r *gormPayrollRunRepository) ListTransactionsForCycle(cycleID uint) ([]models.PayrollTransaction, error) {
-	var transactions []models.PayrollTransaction
-	err := r.db.Where("cycle_id = ?", cycleID).
-		Preload("Employees").
-		Preload("Employees.Department").
-		Preload("Employees.Position").
-		Preload("Employees.Companies").
-		Preload("Details").
-		Find(&transactions).Error
-	return transactions, err
 }
 
 func (r *gormPayrollRunRepository) FindTransactionDetail(transactionID uint) (models.PayrollTransaction, error) {

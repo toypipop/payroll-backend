@@ -16,7 +16,11 @@ func (h *Handler) GetTimeLogs(c *gin.Context) {
 		return
 	}
 
-	logs, err := h.TimeLog.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	logs, err := h.TimeLog.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

@@ -45,6 +45,7 @@ type BankTransferReport struct {
 
 // PND1Row is one employee's line on the monthly withholding return.
 type PND1Row struct {
+	TransactionID uint
 	EmployeesCode string
 	FirstName     string
 	LastName      string
@@ -188,6 +189,7 @@ func (s *ReportService) PND1(scope repository.AccessScope, cycleID uint) (PND1Re
 	report := PND1Report{Cycle: cycle, Company: cycle.Companies}
 	for _, transaction := range transactions {
 		report.Rows = append(report.Rows, PND1Row{
+			TransactionID: transaction.ID,
 			EmployeesCode: transaction.Employees.EmployeesCode,
 			FirstName:     transaction.Employees.FirstName,
 			LastName:      transaction.Employees.LastName,

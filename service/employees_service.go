@@ -32,8 +32,8 @@ func NewEmployeesService(repo repository.EmployeesRepository) *EmployeesService 
 	return &EmployeesService{repo: repo}
 }
 
-func (s *EmployeesService) List(scope repository.AccessScope) ([]models.Employees, error) {
-	return s.repo.ListScoped(scope)
+func (s *EmployeesService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Employees], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // assertRoleBelongsTo enforces the rule that a role is company-owned: an employee can never be given a role defined under a different company.
