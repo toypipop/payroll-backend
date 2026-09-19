@@ -14,6 +14,7 @@ type CompanyRole struct {
 
 // AccessRepository answers "which companies and roles does this user act under", the lookups authentication and permission checks run before any domain query.
 type AccessRepository interface {
+	ResolveAccess(user models.Employees) (UserAccess, error)
 	AccessibleCompanyIDs(userID uint) []uint
 	AccessibleRoleIDs(userID uint) []uint
 	AccessibleCompanyRoles(userID uint) []CompanyRole
@@ -42,7 +43,7 @@ func (r *gormAccessRepository) FindScopeUser(userID uint) (models.Employees, err
 	// The name travels with the scoping columns because the salary audit trail snapshots who made a change,
 	// and looking it up again per write would be a query to learn something the request already knew. The
 	// selection stays explicit so the password hash never rides along.
-	if err := r.db.Select("id, dept_id, companies_id, first_name, last_name, is_active").First(&user, userID).Error; err != nil {
+	if err := r.db.Select("id, dept_id, companies_id, roles_id, first_name, last_name, is_active").First(&user, userID).Error; err != nil {
 		return models.Employees{}, err
 	}
 	return user, nil
@@ -54,21 +55,7 @@ func (r *gormAccessRepository) AccessibleCompanyIDs(userID uint) []uint {
 		return nil
 	}
 
-	seen := map[uint]bool{}
-	ids := make([]uint, 0)
-
-	if user.CompaniesID != 0 {
-		seen[user.CompaniesID] = true
-		ids = append(ids, user.CompaniesID)
-	}
-
-	for _, m := range r.activeAccess(userID) {
-		if m.CompanyID != 0 && !seen[m.CompanyID] {
-			seen[m.CompanyID] = true
-			ids = append(ids, m.CompanyID)
-		}
-	}
-	return ids
+	return resolveUserAccess(user, r.activeAccess(userID)).CompanyIDs
 }
 
 // AccessibleCompanyRoles returns the role the employee acts under in each company they can reach.
@@ -78,21 +65,7 @@ func (r *gormAccessRepository) AccessibleCompanyRoles(userID uint) []CompanyRole
 		return nil
 	}
 
-	seen := map[uint]bool{}
-	result := make([]CompanyRole, 0)
-
-	if user.CompaniesID != 0 && user.RolesID != 0 {
-		seen[user.CompaniesID] = true
-		result = append(result, CompanyRole{CompanyID: user.CompaniesID, RoleID: user.RolesID})
-	}
-
-	for _, m := range r.activeAccess(userID) {
-		if m.CompanyID != 0 && m.RoleID != 0 && !seen[m.CompanyID] {
-			seen[m.CompanyID] = true
-			result = append(result, CompanyRole{CompanyID: m.CompanyID, RoleID: m.RoleID})
-		}
-	}
-	return result
+	return resolveUserAccess(user, r.activeAccess(userID)).CompanyRoles
 }
 
 func (r *gormAccessRepository) AccessibleRoleIDs(userID uint) []uint {
@@ -101,21 +74,7 @@ func (r *gormAccessRepository) AccessibleRoleIDs(userID uint) []uint {
 		return nil
 	}
 
-	seen := map[uint]bool{}
-	ids := make([]uint, 0)
-
-	if user.RolesID != 0 {
-		seen[user.RolesID] = true
-		ids = append(ids, user.RolesID)
-	}
-
-	for _, m := range r.activeAccess(userID) {
-		if m.RoleID != 0 && !seen[m.RoleID] {
-			seen[m.RoleID] = true
-			ids = append(ids, m.RoleID)
-		}
-	}
-	return ids
+	return resolveUserAccess(user, r.activeAccess(userID)).RoleIDs
 }
 
 func (r *gormAccessRepository) RoleNames(userID uint) []string {

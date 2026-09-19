@@ -78,8 +78,15 @@ func (g *Guard) Auth() gin.HandlerFunc {
 
 		// Set tenant data to context
 		c.Set("user_id", claims.UserID)
-		companyIDs := g.access.AccessibleCompanyIDs(claims.UserID)
-		roleIDs := g.access.AccessibleRoleIDs(claims.UserID)
+		access, err := g.access.ResolveAccess(user)
+		if err != nil {
+			slog.Error("company access lookup failed", "request_id", observability.RequestID(c))
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			c.Abort()
+			return
+		}
+		companyIDs, roleIDs := access.CompanyIDs, access.RoleIDs
+		c.Set("company_roles", access.CompanyRoles)
 		if len(companyIDs) == 0 || len(roleIDs) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No company access configured"})
 			c.Abort()
@@ -168,14 +175,15 @@ func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses 
 // CheckPermission gates the request on the module granting the action, and publishes the scope it resolved.
 func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID, ok := getContextUserID(c)
+		_, ok := getContextUserID(c)
 		if !ok {
 			c.JSON(http.StatusForbidden, gin.H{"error": "No role access configured"})
 			c.Abort()
 			return
 		}
 
-		companyRoles := g.access.AccessibleCompanyRoles(userID)
+		value, _ := c.Get("company_roles")
+		companyRoles, _ := value.([]repository.CompanyRole)
 		if value, limited := c.Get("active_company_ids"); limited {
 			active, _ := value.([]uint)
 			companyRoles = activeCompanyRoles(companyRoles, active)
@@ -187,8 +195,12 @@ func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc
 		}
 
 		roleIDs := make([]uint, 0, len(companyRoles))
+		seenRoles := make(map[uint]bool, len(companyRoles))
 		for _, cr := range companyRoles {
-			roleIDs = append(roleIDs, cr.RoleID)
+			if !seenRoles[cr.RoleID] {
+				seenRoles[cr.RoleID] = true
+				roleIDs = append(roleIDs, cr.RoleID)
+			}
 		}
 
 		accesses, err := g.access.ModuleAccesses(roleIDs, moduleKey)
