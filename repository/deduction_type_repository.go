@@ -21,7 +21,7 @@ var ErrDeductionTypeMissing = apperr.Validation("Deduction type not found")
 // DeductionTypeRepository is the persistence boundary for the deduction-types domain.
 type DeductionTypeRepository interface {
 	Find(id uint) (models.DeductionType, error)
-	ListScoped(scope AccessScope) ([]models.DeductionType, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.DeductionType], error)
 	ListMinimalScoped(scope AccessScope) ([]models.DeductionType, error)
 	FindScoped(scope AccessScope, id uint) (models.DeductionType, error)
 	Create(deductionType *models.DeductionType, audit *models.AuditLog) error
@@ -55,10 +55,9 @@ func (r *gormDeductionTypeRepository) Find(id uint) (models.DeductionType, error
 	return deductionType, nil
 }
 
-func (r *gormDeductionTypeRepository) ListScoped(scope AccessScope) ([]models.DeductionType, error) {
-	var deductions []models.DeductionType
-	err := r.scoped(scope).Preload("Companies").Find(&deductions).Error
-	return deductions, err
+func (r *gormDeductionTypeRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.DeductionType], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = deduction_type.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.DeductionType](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

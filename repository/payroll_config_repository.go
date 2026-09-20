@@ -16,7 +16,7 @@ var ErrPayrollConfigNotFound = apperr.NotFound("No active payroll config found f
 
 // PayrollConfigRepository is the persistence boundary for the payroll-config domain.
 type PayrollConfigRepository interface {
-	ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error)
+	ListCompaniesWithConfig(scope AccessScope, q PageQuery) (Page[models.Companies], error)
 	FindCycleScoped(scope AccessScope, cycleID uint) (models.PayrollCycle, error)
 	FindActiveForCompany(companyID uint) (models.PayrollConfig, error)
 	UpsertForCompany(configuration *models.PayrollConfig, audit *models.AuditLog) error
@@ -32,13 +32,8 @@ func NewPayrollConfigRepository(db *gorm.DB) PayrollConfigRepository {
 }
 
 // ListCompaniesWithConfig returns the caller's authorized companies, each with its configuration preloaded.
-func (r *gormPayrollConfigRepository) ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error) {
-	var companies []models.Companies
-	err := r.db.Scopes(scope.ApplyCompany("companies.id")).
-		Order("companies.id ASC").
-		Preload("PayrollConfig").
-		Find(&companies).Error
-	return companies, err
+func (r *gormPayrollConfigRepository) ListCompaniesWithConfig(scope AccessScope, q PageQuery) (Page[models.Companies], error) {
+	return readCatalogPage[models.Companies](r.db.Scopes(scope.ApplyCompany("companies.id")).Preload("PayrollConfig"), q, nil)
 }
 
 // FindCycleScoped resolves a payroll cycle the caller may read.

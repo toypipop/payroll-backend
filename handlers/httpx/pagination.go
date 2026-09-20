@@ -22,3 +22,16 @@ func ParsePage(c *gin.Context) (repository.PageQuery, bool) {
 	}
 	return q, true
 }
+
+func ParseOptionalBool(c *gin.Context, key string) (*bool, bool) {
+	raw := c.Query(key)
+	if raw == "" {
+		return nil, true
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		RespondError(c, apperr.Validation("Invalid boolean filter"))
+		return nil, false
+	}
+	return &value, true
+}

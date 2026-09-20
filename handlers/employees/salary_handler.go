@@ -18,7 +18,11 @@ func (h *Handler) GetSalaries(c *gin.Context) {
 		return
 	}
 
-	employees, err := h.SalariesStructure.ListEmployees(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	employees, err := h.SalariesStructure.ListEmployeesPage(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -215,4 +219,18 @@ func (h *Handler) DeleteSalaryRecord(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Salary record deleted successfully"})
+}
+
+func (h *Handler) GetSalaryBulkOptions(c *gin.Context) {
+	scope, ok := httpx.RequestScope(c)
+	if !ok {
+		return
+	}
+
+	employees, err := h.SalariesStructure.ListEmployees(scope)
+	if err != nil {
+		httpx.RespondError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, employees)
 }

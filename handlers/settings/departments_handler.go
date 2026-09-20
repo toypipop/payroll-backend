@@ -15,7 +15,11 @@ func (h *Handler) GetDepartments(c *gin.Context) {
 		return
 	}
 
-	departments, err := h.Department.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	departments, err := h.Department.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

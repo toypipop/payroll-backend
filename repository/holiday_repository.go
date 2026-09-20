@@ -14,7 +14,7 @@ var ErrHolidayNotFound = apperr.NotFound("Holiday not found or unauthorized")
 
 // HolidayRepository is the persistence boundary for the holidays domain.
 type HolidayRepository interface {
-	ListScoped(scope AccessScope) ([]models.Holiday, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.Holiday], error)
 	FindScoped(scope AccessScope, id uint) (models.Holiday, error)
 	Create(holiday *models.Holiday, audit *models.AuditLog) error
 	Save(holiday *models.Holiday, audit *models.AuditLog) error
@@ -35,10 +35,9 @@ func (r *gormHolidayRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("holiday.companies_id"))
 }
 
-func (r *gormHolidayRepository) ListScoped(scope AccessScope) ([]models.Holiday, error) {
-	var holidays []models.Holiday
-	err := r.scoped(scope).Preload("Companies").Order("date").Find(&holidays).Error
-	return holidays, err
+func (r *gormHolidayRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.Holiday], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = holiday.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.Holiday](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 func (r *gormHolidayRepository) FindScoped(scope AccessScope, id uint) (models.Holiday, error) {

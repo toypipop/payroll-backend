@@ -10,7 +10,11 @@ import (
 )
 
 func (h *Handler) GetBanks(c *gin.Context) {
-	banks, err := h.Bank.List()
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	banks, err := h.Bank.ListPage(query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

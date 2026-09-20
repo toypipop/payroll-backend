@@ -38,8 +38,8 @@ func NewHolidayService(repo repository.HolidayRepository) *HolidayService {
 }
 
 // List returns the holidays of the caller's authorized companies, earliest first.
-func (s *HolidayService) List(scope repository.AccessScope) ([]models.Holiday, error) {
-	return s.repo.ListScoped(scope)
+func (s *HolidayService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Holiday], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // parseHolidayFields validates the shared name and date rules.

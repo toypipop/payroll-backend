@@ -15,7 +15,15 @@ func (h *Handler) GetPayrollCycles(c *gin.Context) {
 		return
 	}
 
-	cycles, err := h.PayrollRun.Cycles(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	active, ok := httpx.ParseOptionalBool(c, "is_closed")
+	if !ok {
+		return
+	}
+	cycles, err := h.PayrollRun.CyclesPage(scope, query, active)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -38,13 +46,18 @@ func (h *Handler) GetPayrollCycleOptions(c *gin.Context) {
 		return
 	}
 
+	type companyOption struct {
+		ID   uint   `json:"id"`
+		Name string `json:"name"`
+	}
 	type option struct {
-		ID          uint      `json:"id"`
-		CycleName   string    `json:"cycle_name"`
-		StartDate   time.Time `json:"start_date"`
-		EndDate     time.Time `json:"end_date"`
-		IsClosed    bool      `json:"is_closed"`
-		CompaniesID uint      `json:"companies_id"`
+		ID          uint          `json:"id"`
+		CycleName   string        `json:"cycle_name"`
+		StartDate   time.Time     `json:"start_date"`
+		EndDate     time.Time     `json:"end_date"`
+		IsClosed    bool          `json:"is_closed"`
+		CompaniesID uint          `json:"companies_id"`
+		Companies   companyOption `json:"companies"`
 	}
 	options := make([]option, 0, len(cycles))
 	for _, cycle := range cycles {
@@ -55,6 +68,7 @@ func (h *Handler) GetPayrollCycleOptions(c *gin.Context) {
 			EndDate:     cycle.EndDate,
 			IsClosed:    cycle.IsClosed,
 			CompaniesID: cycle.CompaniesID,
+			Companies:   companyOption{ID: cycle.CompaniesID, Name: cycle.Companies.Name},
 		})
 	}
 	c.JSON(http.StatusOK, options)

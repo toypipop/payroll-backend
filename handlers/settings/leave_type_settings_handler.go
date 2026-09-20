@@ -15,7 +15,11 @@ func (h *Handler) GetLeaveTypeSettings(c *gin.Context) {
 		return
 	}
 
-	leaveTypes, err := h.LeaveType.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	leaveTypes, err := h.LeaveType.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

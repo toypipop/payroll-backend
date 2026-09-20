@@ -24,6 +24,23 @@ go test ./...
 
 `.env` is ignored by Git. Copy `.env.local.example` for local work. For UAT deployment, copy `.env.uat.example` to `.env` on the host and replace every placeholder, preferably injecting secrets from the deployment system. Never commit real credentials or environment values. `go run ./seed --reset` deletes all database rows and is only for a local non-production database.
 
+## List pagination
+
+Management lists return `{ "items": [], "pagination": { "page": 1,
+"page_size": 25, "total": 0, "total_pages": 1 } }`. Supply `page`, `page_size`
+(1–100), `search`, `sort`, and `order` (`asc` or `desc`). Sorting accepts only
+repository-defined fields; counting, searching and paging retain the route's
+authorization scope. Pages past the end are clamped to the last page.
+
+This covers employee/salary, attendance, leave, payroll/adjustment, master-data,
+company, configuration, employee-company access and audit management tables.
+`/companies/all` accepts `is_active`; `/payroll/cycles` accepts `is_closed`.
+Dropdown `/options` sources, reports and individual salary histories keep their
+complete responses. `/salaries/options` is a complete active-employee target source
+loaded when the bulk salary picker opens and requires `SalariesStructurePage` VIEW
+permission plus the existing employee/company scope. Deploy the matching frontend
+and backend together because list response envelopes have changed.
+
 ## Database connection pool
 
 `ConnectDatabase()` configures the shared SQL pool for API, migration, and seed processes.

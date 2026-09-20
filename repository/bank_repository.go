@@ -14,6 +14,7 @@ var ErrBankNotFound = apperr.NotFound("Bank not found")
 
 // BankRepository is the persistence boundary for the banks domain.
 type BankRepository interface {
+	ListPage(q PageQuery) (Page[models.Bank], error)
 	List() ([]models.Bank, error)
 	Find(id uint) (models.Bank, error)
 	Create(bank *models.Bank, audit *models.AuditLog) error
@@ -85,4 +86,9 @@ func (r *gormBankRepository) Delete(bank *models.Bank, audit *models.AuditLog) e
 		}
 		return nil
 	})
+}
+
+func (r *gormBankRepository) ListPage(q PageQuery) (Page[models.Bank], error) {
+	query := r.db
+	return readCatalogPage[models.Bank](query, q, nil)
 }

@@ -15,7 +15,11 @@ func (h *Handler) GetHolidays(c *gin.Context) {
 		return
 	}
 
-	holidays, err := h.Holiday.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	holidays, err := h.Holiday.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

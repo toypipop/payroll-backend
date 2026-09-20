@@ -25,8 +25,8 @@ func NewRoleService(repo repository.RoleRepository) *RoleService {
 }
 
 // List returns the roles in the caller's authorized companies.
-func (s *RoleService) List(scope repository.AccessScope) ([]models.Roles, error) {
-	return s.repo.ListScoped(scope)
+func (s *RoleService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Roles], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

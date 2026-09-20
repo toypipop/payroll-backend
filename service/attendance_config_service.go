@@ -52,8 +52,8 @@ func NewAttendanceConfigService(repo repository.AttendanceConfigRepository) *Att
 }
 
 // List returns the caller's authorized companies with their configuration attached.
-func (s *AttendanceConfigService) List(scope repository.AccessScope) ([]models.Companies, error) {
-	return s.repo.ListCompaniesWithConfig(scope)
+func (s *AttendanceConfigService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Companies], error) {
+	return s.repo.ListCompaniesWithConfigPage(scope, q)
 }
 
 // Schedules returns each company's start and end time as HH:MM in the business timezone, omitting the payroll rates so a timelog-only user never sees them.

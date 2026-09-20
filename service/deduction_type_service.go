@@ -28,8 +28,8 @@ func NewDeductionTypeService(repo repository.DeductionTypeRepository) *Deduction
 }
 
 // List returns the deduction types of the caller's authorized companies, with relations loaded.
-func (s *DeductionTypeService) List(scope repository.AccessScope) ([]models.DeductionType, error) {
-	return s.repo.ListScoped(scope)
+func (s *DeductionTypeService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.DeductionType], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

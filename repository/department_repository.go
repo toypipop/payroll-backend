@@ -14,7 +14,7 @@ var ErrDepartmentNotFound = apperr.NotFound("Department not found or unauthorize
 
 // DepartmentRepository is the persistence boundary for the departments domain.
 type DepartmentRepository interface {
-	ListScoped(scope AccessScope) ([]models.Department, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.Department], error)
 	ListMinimalScoped(scope AccessScope) ([]models.Department, error)
 	FindScoped(scope AccessScope, id uint) (models.Department, error)
 	Create(department *models.Department, audit *models.AuditLog) error
@@ -36,10 +36,10 @@ func (r *gormDepartmentRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("department.companies_id"))
 }
 
-func (r *gormDepartmentRepository) ListScoped(scope AccessScope) ([]models.Department, error) {
-	var departments []models.Department
-	err := r.scoped(scope).Preload("Companies").Preload("Category").Find(&departments).Error
-	return departments, err
+func (r *gormDepartmentRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.Department], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = department.companies_id AND c.deleted_at = 0").Preload("Companies")
+	query = query.Joins("LEFT JOIN department_category cat ON cat.id = department.category_id AND cat.deleted_at = 0").Preload("Category")
+	return readCatalogPage[models.Department](query, q, map[string]string{"companies.name": "c.name", "category.name": "cat.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

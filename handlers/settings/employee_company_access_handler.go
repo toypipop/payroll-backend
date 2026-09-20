@@ -32,7 +32,11 @@ func (h *Handler) GetEmployeeCompanyAccess(c *gin.Context) {
 		return
 	}
 
-	mappings, err := h.EmployeeCompanyAccess.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	mappings, err := h.EmployeeCompanyAccess.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

@@ -28,8 +28,8 @@ func NewLeaveTypeSettingService(repo repository.LeaveTypeSettingRepository) *Lea
 }
 
 // List returns the leave types of the caller's authorized companies, with relations loaded.
-func (s *LeaveTypeSettingService) List(scope repository.AccessScope) ([]models.LeaveTypeSetting, error) {
-	return s.repo.ListScoped(scope)
+func (s *LeaveTypeSettingService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.LeaveTypeSetting], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

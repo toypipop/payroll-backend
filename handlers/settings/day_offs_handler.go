@@ -23,7 +23,11 @@ func (h *Handler) GetDayOffs(c *gin.Context) {
 		return
 	}
 
-	dayOffs, err := h.DayOff.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	dayOffs, err := h.DayOff.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

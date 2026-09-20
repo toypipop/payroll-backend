@@ -15,7 +15,11 @@ func (h *Handler) GetEmploymentTypes(c *gin.Context) {
 		return
 	}
 
-	types, err := h.EmploymentType.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	types, err := h.EmploymentType.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

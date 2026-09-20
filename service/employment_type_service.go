@@ -25,8 +25,8 @@ func NewEmploymentTypeService(repo repository.EmploymentTypeRepository) *Employm
 }
 
 // List returns the employment types of the caller's authorized companies, with relations loaded.
-func (s *EmploymentTypeService) List(scope repository.AccessScope) ([]models.EmploymentType, error) {
-	return s.repo.ListScoped(scope)
+func (s *EmploymentTypeService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.EmploymentType], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

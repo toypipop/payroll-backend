@@ -14,7 +14,7 @@ var ErrPositionNotFound = apperr.NotFound("Position not found or unauthorized")
 
 // PositionRepository is the persistence boundary for the positions domain.
 type PositionRepository interface {
-	ListScoped(scope AccessScope) ([]models.Position, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.Position], error)
 	ListMinimalScoped(scope AccessScope) ([]models.Position, error)
 	FindScoped(scope AccessScope, id uint) (models.Position, error)
 	Create(position *models.Position, audit *models.AuditLog) error
@@ -36,10 +36,9 @@ func (r *gormPositionRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("position.companies_id"))
 }
 
-func (r *gormPositionRepository) ListScoped(scope AccessScope) ([]models.Position, error) {
-	var positions []models.Position
-	err := r.scoped(scope).Preload("Companies").Find(&positions).Error
-	return positions, err
+func (r *gormPositionRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.Position], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = position.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.Position](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

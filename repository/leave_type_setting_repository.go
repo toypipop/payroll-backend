@@ -14,7 +14,7 @@ var ErrLeaveTypeNotFound = apperr.NotFound("Leave type not found or unauthorized
 
 // LeaveTypeSettingRepository is the persistence boundary for the leave-type settings domain.
 type LeaveTypeSettingRepository interface {
-	ListScoped(scope AccessScope) ([]models.LeaveTypeSetting, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.LeaveTypeSetting], error)
 	ListMinimalScoped(scope AccessScope) ([]models.LeaveTypeSetting, error)
 	FindScoped(scope AccessScope, id uint) (models.LeaveTypeSetting, error)
 	Create(leaveType *models.LeaveTypeSetting, audit *models.AuditLog) error
@@ -36,10 +36,9 @@ func (r *gormLeaveTypeSettingRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("leave_type_setting.companies_id"))
 }
 
-func (r *gormLeaveTypeSettingRepository) ListScoped(scope AccessScope) ([]models.LeaveTypeSetting, error) {
-	var leaveTypes []models.LeaveTypeSetting
-	err := r.scoped(scope).Preload("Companies").Order("name").Find(&leaveTypes).Error
-	return leaveTypes, err
+func (r *gormLeaveTypeSettingRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.LeaveTypeSetting], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = leave_type_setting.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.LeaveTypeSetting](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

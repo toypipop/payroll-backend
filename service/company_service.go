@@ -122,3 +122,7 @@ func (s *CompanyService) SetActive(scope repository.AccessScope, id uint, active
 	}
 	return s.repo.SetActive(id, active, &audit)
 }
+
+func (s *CompanyService) ListPage(q repository.PageQuery, active *bool) (repository.Page[models.Companies], error) {
+	return s.repo.ListPage(q, active)
+}

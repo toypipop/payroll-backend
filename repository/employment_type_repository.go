@@ -14,7 +14,7 @@ var ErrEmploymentTypeNotFound = apperr.NotFound("Employment type not found")
 
 // EmploymentTypeRepository is the persistence boundary for the employment-types domain.
 type EmploymentTypeRepository interface {
-	ListScoped(scope AccessScope) ([]models.EmploymentType, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.EmploymentType], error)
 	ListMinimalScoped(scope AccessScope) ([]models.EmploymentType, error)
 	FindScoped(scope AccessScope, id uint) (models.EmploymentType, error)
 	Create(employmentType *models.EmploymentType, audit *models.AuditLog) error
@@ -36,10 +36,9 @@ func (r *gormEmploymentTypeRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("employment_type.companies_id"))
 }
 
-func (r *gormEmploymentTypeRepository) ListScoped(scope AccessScope) ([]models.EmploymentType, error) {
-	var types []models.EmploymentType
-	err := r.scoped(scope).Preload("Companies").Order("name").Find(&types).Error
-	return types, err
+func (r *gormEmploymentTypeRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.EmploymentType], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = employment_type.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.EmploymentType](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

@@ -15,7 +15,7 @@ var ErrRoleAccessDenied = apperr.Forbidden("Access denied or record not found")
 // RoleRepository is the persistence boundary for the roles domain.
 type RoleRepository interface {
 	WithinTx(func(RoleRepository) error) error
-	ListScoped(scope AccessScope) ([]models.Roles, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.Roles], error)
 	ListMinimalScoped(scope AccessScope) ([]models.Roles, error)
 	FindScoped(scope AccessScope, id uint) (models.Roles, error)
 	Create(role *models.Roles) error
@@ -42,10 +42,9 @@ func (r *gormRoleRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("roles.companies_id"))
 }
 
-func (r *gormRoleRepository) ListScoped(scope AccessScope) ([]models.Roles, error) {
-	var roles []models.Roles
-	err := r.scoped(scope).Preload("Companies").Find(&roles).Error
-	return roles, err
+func (r *gormRoleRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.Roles], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = roles.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.Roles](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

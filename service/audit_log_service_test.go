@@ -16,9 +16,9 @@ func (r *auditLogRepoFake) Append(entry *models.AuditLog) error {
 	r.entries = append(r.entries, *entry)
 	return nil
 }
-func (r *auditLogRepoFake) ListScoped(_ repository.AccessScope, query repository.AuditLogQuery) ([]models.AuditLog, error) {
+func (r *auditLogRepoFake) ListScoped(_ repository.AccessScope, query repository.AuditLogQuery, _ repository.PageQuery) (repository.Page[models.AuditLog], error) {
 	r.query = query
-	return r.entries, nil
+	return repository.Page[models.AuditLog]{Items: r.entries}, nil
 }
 
 func TestAuditLogServiceSnapshotsActorFromScope(t *testing.T) {
@@ -41,7 +41,7 @@ func TestAuditLogServiceListsSharedDataWithoutCompanyScope(t *testing.T) {
 	repo := &auditLogRepoFake{}
 	svc := NewAuditLogService(repo)
 
-	_, err := svc.List(repository.NewAccessScope(models.Employees{ID: 9}, models.ScopeCompanies, []uint{2}), repository.AuditLogQuery{Scope: repository.AuditLogScopeShared})
+	_, err := svc.List(repository.NewAccessScope(models.Employees{ID: 9}, models.ScopeCompanies, []uint{2}), repository.AuditLogQuery{Scope: repository.AuditLogScopeShared}, repository.PageQuery{Page: 1, PageSize: 25, Order: "desc"})
 	if err != nil {
 		t.Fatal(err)
 	}

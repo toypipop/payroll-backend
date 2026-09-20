@@ -14,7 +14,7 @@ var ErrWorkLocationNotFound = apperr.NotFound("Work location not found or unauth
 
 // WorkLocationRepository is the persistence boundary for the work-locations domain.
 type WorkLocationRepository interface {
-	ListScoped(scope AccessScope) ([]models.WorkLocation, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.WorkLocation], error)
 	ListMinimalScoped(scope AccessScope) ([]models.WorkLocation, error)
 	FindScoped(scope AccessScope, id uint) (models.WorkLocation, error)
 	Create(location *models.WorkLocation, audit *models.AuditLog) error
@@ -36,10 +36,9 @@ func (r *gormWorkLocationRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("work_location.companies_id"))
 }
 
-func (r *gormWorkLocationRepository) ListScoped(scope AccessScope) ([]models.WorkLocation, error) {
-	var locations []models.WorkLocation
-	err := r.scoped(scope).Preload("Companies").Order("name").Find(&locations).Error
-	return locations, err
+func (r *gormWorkLocationRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.WorkLocation], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = work_location.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.WorkLocation](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

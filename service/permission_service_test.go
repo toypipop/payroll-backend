@@ -45,7 +45,9 @@ type fakeRoleRepo struct {
 	err  error
 }
 
-func (f *fakeRoleRepo) ListScoped(repository.AccessScope) ([]models.Roles, error) { return nil, nil }
+func (f *fakeRoleRepo) ListScoped(repository.AccessScope, repository.PageQuery) (repository.Page[models.Roles], error) {
+	return repository.Page[models.Roles]{}, nil
+}
 func (f *fakeRoleRepo) ListMinimalScoped(repository.AccessScope) ([]models.Roles, error) {
 	return nil, nil
 }

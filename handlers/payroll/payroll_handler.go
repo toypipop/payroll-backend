@@ -16,7 +16,11 @@ func (h *Handler) GetPayrollConfigs(c *gin.Context) {
 		return
 	}
 
-	companies, err := h.PayrollConfig.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	companies, err := h.PayrollConfig.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

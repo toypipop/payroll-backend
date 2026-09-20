@@ -15,7 +15,11 @@ func (h *Handler) GetDeductionTypes(c *gin.Context) {
 		return
 	}
 
-	deductions, err := h.DeductionType.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	deductions, err := h.DeductionType.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

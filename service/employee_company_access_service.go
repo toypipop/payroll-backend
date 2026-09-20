@@ -46,8 +46,8 @@ func NewEmployeeCompanyAccessService(
 }
 
 // List returns the mappings the caller's scope covers, with relations loaded.
-func (s *EmployeeCompanyAccessService) List(scope repository.AccessScope) ([]models.EmployeeCompanyAccess, error) {
-	return s.repo.ListScoped(scope)
+func (s *EmployeeCompanyAccessService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.EmployeeCompanyAccess], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // validate enforces every rule a mapping must satisfy before it is written.

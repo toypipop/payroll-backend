@@ -33,8 +33,8 @@ func NewPayrollConfigService(repo repository.PayrollConfigRepository) *PayrollCo
 }
 
 // List returns the caller's authorized companies with their current configuration.
-func (s *PayrollConfigService) List(scope repository.AccessScope) ([]models.Companies, error) {
-	return s.repo.ListCompaniesWithConfig(scope)
+func (s *PayrollConfigService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Companies], error) {
+	return s.repo.ListCompaniesWithConfig(scope, q)
 }
 
 // Save writes the configuration for a company the caller administers, updating the existing row when there is one.

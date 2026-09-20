@@ -16,7 +16,11 @@ func (h *Handler) GetRoles(c *gin.Context) {
 		return
 	}
 
-	roles, err := h.Role.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	roles, err := h.Role.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

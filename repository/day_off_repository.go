@@ -14,7 +14,7 @@ var ErrDayOffNotFound = apperr.NotFound("Day off not found or unauthorized")
 
 // DayOffRepository is the persistence boundary for the day-offs domain.
 type DayOffRepository interface {
-	ListScoped(scope AccessScope) ([]models.DayOff, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.DayOff], error)
 	ListMinimalScoped(scope AccessScope) ([]models.DayOff, error)
 	FindScoped(scope AccessScope, id uint) (models.DayOff, error)
 	Create(dayOff *models.DayOff, audit *models.AuditLog) error
@@ -36,10 +36,9 @@ func (r *gormDayOffRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyCompany("day_off.companies_id"))
 }
 
-func (r *gormDayOffRepository) ListScoped(scope AccessScope) ([]models.DayOff, error) {
-	var dayOffs []models.DayOff
-	err := r.scoped(scope).Preload("Companies").Order("weekday ASC, name ASC").Find(&dayOffs).Error
-	return dayOffs, err
+func (r *gormDayOffRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.DayOff], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = day_off.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.DayOff](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint.

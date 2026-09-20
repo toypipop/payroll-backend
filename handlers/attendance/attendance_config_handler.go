@@ -15,7 +15,11 @@ func (h *Handler) GetAttendanceConfigs(c *gin.Context) {
 		return
 	}
 
-	companies, err := h.AttendanceConfig.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	companies, err := h.AttendanceConfig.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

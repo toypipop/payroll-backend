@@ -567,3 +567,7 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 		})
 	})
 }
+
+func (s *SalariesStructureService) ListEmployeesPage(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Employees], error) {
+	return s.repo.ListEmployeesPage(scope, q)
+}

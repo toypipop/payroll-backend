@@ -16,6 +16,7 @@ var ErrAttendanceConfigNotFound = apperr.NotFound("Attendance configuration not 
 // AttendanceConfigRepository is the persistence boundary for the attendance-config domain.
 type AttendanceConfigRepository interface {
 	ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error)
+	ListCompaniesWithConfigPage(scope AccessScope, q PageQuery) (Page[models.Companies], error)
 	UpsertForCompany(configuration *models.AttendanceConfig, audit *models.AuditLog) error
 }
 
@@ -29,13 +30,8 @@ func NewAttendanceConfigRepository(db *gorm.DB) AttendanceConfigRepository {
 }
 
 // ListCompaniesWithConfig reads companies rather than configs so a company that has not been configured yet still appears on the page.
-func (r *gormAttendanceConfigRepository) ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error) {
-	var companies []models.Companies
-	err := r.db.Scopes(scope.ApplyCompany("companies.id")).
-		Order("companies.id ASC").
-		Preload("AttendanceConfig").
-		Find(&companies).Error
-	return companies, err
+func (r *gormAttendanceConfigRepository) ListCompaniesWithConfigPage(scope AccessScope, q PageQuery) (Page[models.Companies], error) {
+	return readCatalogPage[models.Companies](r.db.Scopes(scope.ApplyCompany("companies.id")).Preload("AttendanceConfig"), q, nil)
 }
 
 // saveFields lists every column a save owns, as a map rather than a struct.
@@ -96,4 +92,11 @@ func (r *gormAttendanceConfigRepository) upsertForCompany(configuration *models.
 		return r.db.Create(audit).Error
 	}
 	return nil
+}
+
+// Complete schedule source for the timelog options endpoint.
+func (r *gormAttendanceConfigRepository) ListCompaniesWithConfig(scope AccessScope) ([]models.Companies, error) {
+	var companies []models.Companies
+	err := r.db.Scopes(scope.ApplyCompany("companies.id")).Preload("AttendanceConfig").Order("companies.id ASC").Find(&companies).Error
+	return companies, err
 }

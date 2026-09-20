@@ -25,8 +25,8 @@ func NewWorkLocationService(repo repository.WorkLocationRepository) *WorkLocatio
 }
 
 // List returns the work locations of the caller's authorized companies, with relations loaded.
-func (s *WorkLocationService) List(scope repository.AccessScope) ([]models.WorkLocation, error) {
-	return s.repo.ListScoped(scope)
+func (s *WorkLocationService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.WorkLocation], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

@@ -102,3 +102,7 @@ func bankAudit(scope repository.AccessScope, event models.AuditEventType, summar
 func bankAuditData(bank models.Bank) map[string]any {
 	return map[string]any{"bank_code": bank.BankCode, "bank_name": bank.BankName, "swift_code": bank.SwiftCode}
 }
+
+func (s *BankService) ListPage(q repository.PageQuery) (repository.Page[models.Bank], error) {
+	return s.repo.ListPage(q)
+}

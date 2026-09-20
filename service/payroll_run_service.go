@@ -1079,3 +1079,7 @@ func (s *PayrollRunService) MySlips(employeeID uint, q repository.PageQuery) (re
 	}
 	return repository.Page[MySlip]{Items: slips, Pagination: page.Pagination}, nil
 }
+
+func (s *PayrollRunService) CyclesPage(scope repository.AccessScope, q repository.PageQuery, closed *bool) (repository.Page[models.PayrollCycle], error) {
+	return s.repo.ListCyclesPage(scope, q, closed)
+}

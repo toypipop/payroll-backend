@@ -14,7 +14,7 @@ var ErrAccessMappingNotFound = apperr.NotFound("Access mapping not found")
 
 // EmployeeCompanyAccessRepository is the persistence boundary for the employee-company-access domain.
 type EmployeeCompanyAccessRepository interface {
-	ListScoped(scope AccessScope) ([]models.EmployeeCompanyAccess, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeCompanyAccess], error)
 	FindScoped(scope AccessScope, id uint) (models.EmployeeCompanyAccess, error)
 	FindDetail(id uint) (models.EmployeeCompanyAccess, error)
 	FindEmployeeBrief(id uint) (models.Employees, error)
@@ -40,15 +40,11 @@ func (r *gormEmployeeCompanyAccessRepository) scoped(scope AccessScope) *gorm.DB
 	))
 }
 
-func (r *gormEmployeeCompanyAccessRepository) ListScoped(scope AccessScope) ([]models.EmployeeCompanyAccess, error) {
-	var mappings []models.EmployeeCompanyAccess
-	err := r.scoped(scope).
-		Preload("Employee").
-		Preload("Company").
-		Preload("Role").
-		Order("employee_company_access.employee_id ASC, employee_company_access.company_id ASC").
-		Find(&mappings).Error
-	return mappings, err
+func (r *gormEmployeeCompanyAccessRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeCompanyAccess], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN employees e ON e.id = employee_company_access.employee_id AND e.deleted_at = 0").Joins("LEFT JOIN companies c ON c.id = employee_company_access.company_id AND c.deleted_at = 0").Joins("LEFT JOIN roles rr ON rr.id = employee_company_access.role_id AND rr.deleted_at = 0").Preload("Employee", func(db *gorm.DB) *gorm.DB {
+		return db.Select("id, employees_code, first_name, last_name, companies_id")
+	}).Preload("Company").Preload("Role")
+	return readCatalogPage[models.EmployeeCompanyAccess](query, q, map[string]string{"employee_name": "concat_ws(' ', e.first_name, e.last_name)", "employee.employees_code": "e.employees_code", "company.name": "c.name", "role.roles_name": "rr.roles_name"})
 }
 
 func (r *gormEmployeeCompanyAccessRepository) FindScoped(scope AccessScope, id uint) (models.EmployeeCompanyAccess, error) {

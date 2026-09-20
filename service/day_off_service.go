@@ -37,8 +37,8 @@ func NewDayOffService(repo repository.DayOffRepository, companies repository.Com
 }
 
 // List returns the day offs of the caller's authorized companies, by weekday then name.
-func (s *DayOffService) List(scope repository.AccessScope) ([]models.DayOff, error) {
-	return s.repo.ListScoped(scope)
+func (s *DayOffService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.DayOff], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page weekday defaults.

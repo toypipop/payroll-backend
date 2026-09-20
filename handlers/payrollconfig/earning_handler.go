@@ -15,7 +15,11 @@ func (h *Handler) GetEarningTypes(c *gin.Context) {
 		return
 	}
 
-	earnings, err := h.EarningType.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	earnings, err := h.EarningType.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

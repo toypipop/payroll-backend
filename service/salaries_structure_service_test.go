@@ -1167,3 +1167,7 @@ func TestSalaryAuditTrimsTheReason(t *testing.T) {
 		t.Errorf("reason = %q, want it trimmed", repo.audits[0].Reason)
 	}
 }
+
+func (f *fakeSalaryRepo) ListEmployeesPage(repository.AccessScope, repository.PageQuery) (repository.Page[models.Employees], error) {
+	return repository.Page[models.Employees]{}, nil
+}

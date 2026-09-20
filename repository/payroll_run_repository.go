@@ -43,6 +43,7 @@ type TransactionSnapshot struct {
 
 // PayrollRunRepository is the persistence boundary for calculating a payroll cycle.
 type PayrollRunRepository interface {
+	ListCyclesPage(scope AccessScope, q PageQuery, closed *bool) (Page[models.PayrollCycle], error)
 	// WithinTx runs fn against a repository bound to a single database transaction, so a whole payroll run commits or rolls back as one unit.
 	WithinTx(fn func(PayrollRunRepository) error) error
 	AppendAuditLog(entry *models.AuditLog) error
@@ -360,4 +361,12 @@ func (r *gormPayrollRunRepository) ListCyclesByIDs(cycleIDs []uint) ([]models.Pa
 	}
 	err := r.db.Where("id IN ?", cycleIDs).Find(&cycles).Error
 	return cycles, err
+}
+
+func (r *gormPayrollRunRepository) ListCyclesPage(scope AccessScope, q PageQuery, closed *bool) (Page[models.PayrollCycle], error) {
+	query := r.db.Scopes(scope.ApplyCompany("payroll_cycle.companies_id")).Joins("LEFT JOIN companies c ON c.id = payroll_cycle.companies_id AND c.deleted_at = 0").Preload("Companies")
+	if closed != nil {
+		query = query.Where("payroll_cycle.is_closed = ?", *closed)
+	}
+	return readCatalogPage[models.PayrollCycle](query, q, map[string]string{"companies.name": "c.name"})
 }

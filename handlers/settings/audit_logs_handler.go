@@ -38,7 +38,11 @@ func (h *Handler) GetAuditLogs(c *gin.Context) {
 		parsed := uint(value)
 		filter.CompanyID = &parsed
 	}
-	entries, err := h.AuditLog.List(scope, filter)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	entries, err := h.AuditLog.List(scope, filter, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

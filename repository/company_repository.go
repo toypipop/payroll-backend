@@ -24,6 +24,7 @@ type TenantBootstrap struct {
 
 // CompanyRepository is the persistence boundary for the companies domain.
 type CompanyRepository interface {
+	ListPage(q PageQuery, active *bool) (Page[models.Companies], error)
 	ListScoped(scope AccessScope) ([]models.Companies, error)
 	ListAccessible(userID uint) ([]models.Companies, error)
 	ListAll() ([]models.Companies, error)
@@ -205,4 +206,12 @@ func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot Ten
 		}
 		return nil
 	})
+}
+
+func (r *gormCompanyRepository) ListPage(q PageQuery, active *bool) (Page[models.Companies], error) {
+	query := r.db
+	if active != nil {
+		query = query.Where("companies.is_active = ?", *active)
+	}
+	return readCatalogPage[models.Companies](query, q, nil)
 }

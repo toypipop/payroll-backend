@@ -23,7 +23,15 @@ func (h *Handler) GetCompanies(c *gin.Context) {
 }
 
 func (h *Handler) GetAllCompanies(c *gin.Context) {
-	companies, err := h.Company.ListAll()
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	active, ok := httpx.ParseOptionalBool(c, "is_active")
+	if !ok {
+		return
+	}
+	companies, err := h.Company.ListPage(query, active)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

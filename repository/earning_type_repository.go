@@ -21,7 +21,7 @@ var ErrEarningTypeMissing = apperr.Validation("Earning type not found")
 // EarningTypeRepository is the persistence boundary for the earning-types domain.
 type EarningTypeRepository interface {
 	Find(id uint) (models.EarningType, error)
-	ListScoped(scope AccessScope) ([]models.EarningType, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.EarningType], error)
 	ListMinimalScoped(scope AccessScope) ([]models.EarningType, error)
 	FindScoped(scope AccessScope, id uint) (models.EarningType, error)
 	Create(earningType *models.EarningType, audit *models.AuditLog) error
@@ -55,10 +55,9 @@ func (r *gormEarningTypeRepository) Find(id uint) (models.EarningType, error) {
 	return earningType, nil
 }
 
-func (r *gormEarningTypeRepository) ListScoped(scope AccessScope) ([]models.EarningType, error) {
-	var earnings []models.EarningType
-	err := r.scoped(scope).Preload("Companies").Find(&earnings).Error
-	return earnings, err
+func (r *gormEarningTypeRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.EarningType], error) {
+	query := r.scoped(scope).Joins("LEFT JOIN companies c ON c.id = earning_type.companies_id AND c.deleted_at = 0").Preload("Companies")
+	return readCatalogPage[models.EarningType](query, q, map[string]string{"companies.name": "c.name"})
 }
 
 // ListMinimalScoped skips the relations, for the dropdown options endpoint that needs id/name only.

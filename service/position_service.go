@@ -25,8 +25,8 @@ func NewPositionService(repo repository.PositionRepository) *PositionService {
 }
 
 // List returns the positions in the caller's authorized companies, with relations loaded.
-func (s *PositionService) List(scope repository.AccessScope) ([]models.Position, error) {
-	return s.repo.ListScoped(scope)
+func (s *PositionService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Position], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

@@ -28,8 +28,8 @@ func NewDepartmentService(repo repository.DepartmentRepository) *DepartmentServi
 }
 
 // List returns the departments in the caller's authorized companies, with relations loaded.
-func (s *DepartmentService) List(scope repository.AccessScope) ([]models.Department, error) {
-	return s.repo.ListScoped(scope)
+func (s *DepartmentService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Department], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.

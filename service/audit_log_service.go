@@ -34,9 +34,9 @@ func (s *AuditLogService) Record(scope repository.AccessScope, input models.Audi
 	return s.repo.Append(&entry)
 }
 
-func (s *AuditLogService) List(scope repository.AccessScope, filter repository.AuditLogQuery) ([]models.AuditLog, error) {
+func (s *AuditLogService) List(scope repository.AccessScope, filter repository.AuditLogQuery, q repository.PageQuery) (repository.Page[models.AuditLog], error) {
 	if filter.CompanyID != nil && !scope.CanAccessCompany(*filter.CompanyID) {
-		return nil, repository.ErrSalaryEmployeeDenied
+		return repository.Page[models.AuditLog]{}, repository.ErrSalaryEmployeeDenied
 	}
-	return s.repo.ListScoped(scope, filter)
+	return s.repo.ListScoped(scope, filter, q)
 }

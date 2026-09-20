@@ -23,6 +23,7 @@ var ErrSalaryVersionConflict = apperr.Precondition("This salary record was chang
 
 // SalariesStructureRepository is the persistence boundary for the salary-structure domain.
 type SalariesStructureRepository interface {
+	ListEmployeesPage(scope AccessScope, q PageQuery) (Page[models.Employees], error)
 	// WithinTx runs fn against a repository bound to a single database transaction.
 	WithinTx(fn func(SalariesStructureRepository) error) error
 	// LockCompanyCycles takes a share lock on the company's payroll cycles for the rest of the transaction, so a cycle cannot be closed underneath a check that just read its state.
@@ -75,15 +76,13 @@ func (r *gormSalariesStructureRepository) LockCompanyCycles(companyID uint) erro
 		Pluck("id", &ids).Error
 }
 
-// ListEmployeesWithSalary lists the employees in scope with their current salary attached, so the page can show who still has none.
+// ListEmployeesWithSalary is the complete target source for the bulk salary picker.
+// It loads only when that picker opens, independently of the paged management list.
 func (r *gormSalariesStructureRepository) ListEmployeesWithSalary(scope AccessScope) ([]models.Employees, error) {
 	var employees []models.Employees
 	err := r.db.Scopes(scope.ApplyEmployee("employees.companies_id", "employees.id")).
-		Preload("Companies").
-		Preload("Department").
-		Preload("Position").
-		Preload("SalariesStructure", currentSalaryCondition).
-		Find(&employees).Error
+		Select("id, companies_id, employees_code, first_name, last_name, is_active").
+		Where("employees.is_active = ?", true).Preload("SalariesStructure", currentSalaryCondition).Order("employees.id").Find(&employees).Error
 	return employees, err
 }
 
@@ -341,4 +340,20 @@ func (r *gormSalariesStructureRepository) DeleteRecord(record *models.SalariesSt
 		return ErrSalaryVersionConflict
 	}
 	return nil
+}
+
+func (r *gormSalariesStructureRepository) ListEmployeesPage(scope AccessScope, q PageQuery) (Page[models.Employees], error) {
+	name := "concat_ws(' ', employees.first_name, employees.last_name)"
+	order, err := pageOrder(q, map[string]string{"id": "employees.id", "employees_code": "employees.employees_code", "first_name": name, "base_salaries_sort": "COALESCE(ss.base_salaries,0)", "effective_date_sort": "ss.effective_date", "salary_status_sort": "(ss.id IS NOT NULL)", "companies.name": "c.name"}, "employees.id", "employees.id")
+	if err != nil {
+		return Page[models.Employees]{}, err
+	}
+	query := r.db.Model(&models.Employees{}).Omit("Password").Scopes(scope.ApplyEmployee("employees.companies_id", "employees.id")).
+		Joins("LEFT JOIN companies c ON c.id = employees.companies_id AND c.deleted_at = 0").
+		Joins("LEFT JOIN LATERAL (SELECT id, base_salaries, effective_date FROM salaries_structure WHERE employees_id = employees.id AND deleted_at = 0 AND is_active = true ORDER BY effective_date DESC, id DESC LIMIT 1) ss ON true")
+	if q.Search != "" {
+		pattern := searchPattern(q.Search)
+		query = query.Where("("+name+" ILIKE ? OR employees.employees_code ILIKE ? OR c.name ILIKE ? OR CAST(ss.base_salaries AS TEXT) ILIKE ? OR to_char(ss.effective_date AT TIME ZONE 'Asia/Bangkok','YYYY/MM/DD') ILIKE ? OR (CASE WHEN ss.id IS NULL THEN 'Disabled' ELSE 'Enabled' END) ILIKE ?)", pattern, pattern, pattern, pattern, pattern, pattern)
+	}
+	return readPage[models.Employees](query.Preload("Companies").Preload("Department").Preload("Position").Preload("SalariesStructure", currentSalaryCondition), q, order)
 }

@@ -586,3 +586,7 @@ func TestSnapshotWritesInsideOneTransaction(t *testing.T) {
 		t.Error("SaveSnapshots ran outside a transaction")
 	}
 }
+
+func (f *fakeRunRepo) ListCyclesPage(repository.AccessScope, repository.PageQuery, *bool) (repository.Page[models.PayrollCycle], error) {
+	return repository.Page[models.PayrollCycle]{}, nil
+}

@@ -15,7 +15,11 @@ func (h *Handler) GetPositions(c *gin.Context) {
 		return
 	}
 
-	positions, err := h.Position.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	positions, err := h.Position.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

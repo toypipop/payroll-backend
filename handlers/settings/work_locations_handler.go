@@ -15,7 +15,11 @@ func (h *Handler) GetWorkLocations(c *gin.Context) {
 		return
 	}
 
-	locations, err := h.WorkLocation.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	locations, err := h.WorkLocation.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

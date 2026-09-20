@@ -28,8 +28,8 @@ func NewEarningTypeService(repo repository.EarningTypeRepository) *EarningTypeSe
 }
 
 // List returns the earning types of the caller's authorized companies, with relations loaded.
-func (s *EarningTypeService) List(scope repository.AccessScope) ([]models.EarningType, error) {
-	return s.repo.ListScoped(scope)
+func (s *EarningTypeService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.EarningType], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // Options returns the same rows without relations, for cross-page dropdowns.
