@@ -419,8 +419,6 @@ func main() {
 		// --- Level 1: Main Categories ---
 		// General contains the entry pages users can access through their role permissions.
 		{ID: 1, ModuleName: "General", ModuleKey: "ModuleGeneral", RoutePath: "", Order: 2, IsCategory: true},
-		{ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, ParentID: ptr(1), IsCategory: false},
-		{ModuleName: "My Payslips", ModuleKey: "MyPayslipsPage", RoutePath: "/my-payslips", Icon: "ReceiptLong", Order: 2, ParentID: ptr(1), IsCategory: false},
 		{ID: 8, ModuleName: "Help Center", ModuleKey: "HelpPage", RoutePath: "/help", Icon: "HelpOutline", Order: 3, ParentID: ptr(1), IsCategory: false},
 		{ID: 2, ModuleName: "Employees", ModuleKey: "ModuleEmployees", RoutePath: "", Icon: "People", Order: 3, IsCategory: true},
 		{ID: 3, ModuleName: "Attendance", ModuleKey: "ModuleAttendance", RoutePath: "", Icon: "Event", Order: 4, IsCategory: true},
@@ -428,6 +426,11 @@ func main() {
 		{ID: 7, ModuleName: "Reports", ModuleKey: "ModuleReports", RoutePath: "", Icon: "FactCheck", Order: 6, IsCategory: true},
 		{ID: 6, ModuleName: "Settings", ModuleKey: "ModuleSettings", RoutePath: "", Icon: "Settings", Order: 7, IsCategory: true},
 		{ID: 5, ModuleName: "Payroll Config", ModuleKey: "ModulePayrollConfig", RoutePath: "", Icon: "SettingsSuggest", Order: 8, IsCategory: true},
+
+		// Reserve every explicit ID above before allocating page IDs. Otherwise a
+		// fresh seed allocates 2/3 here and later overwrites them with categories.
+		{ModuleName: "Dashboard", ModuleKey: "DashboardPage", RoutePath: "/dashboard", Icon: "Dashboard", Order: 1, ParentID: ptr(1), IsCategory: false},
+		{ModuleName: "My Payslips", ModuleKey: "MyPayslipsPage", RoutePath: "/my-payslips", Icon: "ReceiptLong", Order: 2, ParentID: ptr(1), IsCategory: false},
 
 		// Sub-Menus Level 2: Sub-Menus under Employees
 		{ModuleName: "Employee List", ModuleKey: "EmployeesListPage", RoutePath: "/employees", Icon: "Badge", Order: 1, ParentID: ptr(2)},
@@ -485,11 +488,15 @@ func main() {
 		var existingModule models.AppModule
 		if m.ID != 0 {
 			// Upsert by primary key to avoid conflict when id is taken by a different module_key
-			config.DB.Save(&m)
+			if err := config.DB.Save(&m).Error; err != nil {
+				log.Fatalf("seed module %s: %v", m.ModuleKey, err)
+			}
 			existingModule = m
 			syncAppModuleIDSequence()
 		} else {
-			config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule)
+			if err := config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule).Error; err != nil {
+				log.Fatalf("seed module %s: %v", m.ModuleKey, err)
+			}
 		}
 		moduleIDByKey[existingModule.ModuleKey] = existingModule.ID
 	}
