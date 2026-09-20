@@ -84,8 +84,8 @@ func totalDays(start time.Time, end time.Time) float64 {
 }
 
 // List returns the requests the caller's scope covers.
-func (s *LeaveRequestService) List(scope repository.AccessScope) ([]models.LeaveRequest, error) {
-	return s.repo.ListScoped(scope)
+func (s *LeaveRequestService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.LeaveRequest], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // resolveTarget checks the employee and the leave type against the requested company.
@@ -231,14 +231,14 @@ func (s *LeaveRequestService) Delete(scope repository.AccessScope, id uint) erro
 }
 
 // Pending returns the requests awaiting approval, each decorated with the quota for every calendar year they touch.
-func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLeave, error) {
-	leaves, err := s.repo.ListPendingScoped(scope)
+func (s *LeaveRequestService) Pending(scope repository.AccessScope, q repository.PageQuery) (repository.Page[PendingLeave], error) {
+	page, err := s.repo.ListPendingScoped(scope, q)
 	if err != nil {
-		return nil, err
+		return repository.Page[PendingLeave]{}, err
 	}
 
-	pending := make([]PendingLeave, 0, len(leaves))
-	for _, leave := range leaves {
+	pending := make([]PendingLeave, 0, len(page.Items))
+	for _, leave := range page.Items {
 		entry := PendingLeave{Request: leave}
 		if leave.LeaveTypeID != nil && leave.LeaveTypeMaster != nil && leave.LeaveTypeMaster.MaxDaysPerYear > 0 {
 			requestedByYear := leaveDaysByCalendarYear(leave.StartDate, leave.EndDate)
@@ -246,7 +246,7 @@ func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLe
 				requestedDays := requestedByYear[year]
 				used, err := s.repo.SumApprovedDaysInYear(leave.EmployeesID, *leave.LeaveTypeID, year)
 				if err != nil {
-					return nil, err
+					return repository.Page[PendingLeave]{}, err
 				}
 				quotaYear := LeaveQuotaYear{
 					Year:          year,
@@ -269,7 +269,7 @@ func (s *LeaveRequestService) Pending(scope repository.AccessScope) ([]PendingLe
 		}
 		pending = append(pending, entry)
 	}
-	return pending, nil
+	return repository.Page[PendingLeave]{Items: pending, Pagination: page.Pagination}, nil
 }
 
 func leaveDaysByCalendarYear(start time.Time, end time.Time) map[int]float64 {

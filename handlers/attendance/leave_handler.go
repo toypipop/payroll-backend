@@ -6,6 +6,7 @@ import (
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
+	"payroll-backend/repository"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,11 @@ func (h *Handler) GetLeaveRequests(c *gin.Context) {
 		return
 	}
 
-	leaves, err := h.LeaveRequest.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	leaves, err := h.LeaveRequest.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -125,14 +130,18 @@ func (h *Handler) GetPendingLeaveRequests(c *gin.Context) {
 		return
 	}
 
-	pending, err := h.LeaveRequest.Pending(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	pending, err := h.LeaveRequest.Pending(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
 	}
 
-	responses := make([]pendingLeaveResponse, 0, len(pending))
-	for _, entry := range pending {
+	responses := make([]pendingLeaveResponse, 0, len(pending.Items))
+	for _, entry := range pending.Items {
 		responses = append(responses, pendingLeaveResponse{
 			LeaveRequest:  entry.Request,
 			QuotaMaxDays:  entry.QuotaMaxDays,
@@ -141,7 +150,7 @@ func (h *Handler) GetPendingLeaveRequests(c *gin.Context) {
 			QuotaYears:    entry.QuotaYears,
 		})
 	}
-	c.JSON(http.StatusOK, responses)
+	c.JSON(http.StatusOK, repository.Page[pendingLeaveResponse]{Items: responses, Pagination: pending.Pagination})
 }
 
 // ApproveLeaveRequest records an approval or rejection.

@@ -21,8 +21,8 @@ var (
 
 // LeaveRequestRepository is the persistence boundary for the leave-requests domain.
 type LeaveRequestRepository interface {
-	ListScoped(scope AccessScope) ([]models.LeaveRequest, error)
-	ListPendingScoped(scope AccessScope) ([]models.LeaveRequest, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.LeaveRequest], error)
+	ListPendingScoped(scope AccessScope, q PageQuery) (Page[models.LeaveRequest], error)
 	FindScoped(scope AccessScope, id uint) (models.LeaveRequest, error)
 	FindDetail(id uint) (models.LeaveRequest, error)
 	Create(leave *models.LeaveRequest, audit *models.AuditLog) error
@@ -47,26 +47,42 @@ func (r *gormLeaveRequestRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("leave_request.companies_id", "leave_request.employees_id"))
 }
 
-func (r *gormLeaveRequestRepository) ListScoped(scope AccessScope) ([]models.LeaveRequest, error) {
-	var leaves []models.LeaveRequest
-	err := r.scoped(scope).
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Preload("Approver").
-		Find(&leaves).Error
-	return leaves, err
+func (r *gormLeaveRequestRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.LeaveRequest], error) {
+	return r.listPage(scope, q, false)
 }
 
-// ListPendingScoped backs the approval page, which only ever shows Pending rows.
-func (r *gormLeaveRequestRepository) ListPendingScoped(scope AccessScope) ([]models.LeaveRequest, error) {
-	var leaves []models.LeaveRequest
-	err := r.scoped(scope).
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Preload("LeaveTypeMaster").
-		Where("status = ?", models.LeaveStatusPending).
-		Find(&leaves).Error
-	return leaves, err
+func (r *gormLeaveRequestRepository) ListPendingScoped(scope AccessScope, q PageQuery) (Page[models.LeaveRequest], error) {
+	return r.listPage(scope, q, true)
+}
+
+func (r *gormLeaveRequestRepository) listPage(scope AccessScope, q PageQuery, pending bool) (Page[models.LeaveRequest], error) {
+	name := "concat_ws(' ', e.first_name, e.last_name)"
+	approver := "concat_ws(' ', a.first_name, a.last_name)"
+	leaveType := "COALESCE(lt.name, leave_request.leave_type)"
+	order, err := pageOrder(q, map[string]string{
+		"employee_name": name, "leave_type_name": leaveType, "leave_type": "leave_request.leave_type",
+		"start_date": "leave_request.start_date", "status": "leave_request.status", "approver_name": approver,
+		"employees.companies.name": "c.name", "total_days": "leave_request.total_days", "reason": "leave_request.reason",
+	}, "leave_request.id", "leave_request.id")
+	if err != nil {
+		return Page[models.LeaveRequest]{}, err
+	}
+	query := r.scoped(scope).Model(&models.LeaveRequest{}).
+		Joins("LEFT JOIN employees e ON e.id = leave_request.employees_id AND e.deleted_at = 0").
+		Joins("LEFT JOIN companies c ON c.id = e.companies_id AND c.deleted_at = 0").
+		Joins("LEFT JOIN employees a ON a.id = leave_request.approved_by AND a.deleted_at = 0").
+		Joins("LEFT JOIN leave_type_setting lt ON lt.id = leave_request.leave_type_id AND lt.deleted_at = 0")
+	if pending {
+		query = query.Where("leave_request.status = ?", models.LeaveStatusPending)
+	}
+	if q.Search != "" {
+		pattern := searchPattern(q.Search)
+		query = query.Where("("+name+" ILIKE ? OR e.employees_code ILIKE ? OR c.name ILIKE ? OR "+leaveType+" ILIKE ? OR "+approver+" ILIKE ? OR leave_request.status ILIKE ? OR leave_request.reason ILIKE ? OR to_char(leave_request.start_date AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') ILIKE ? OR to_char(leave_request.end_date AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') ILIKE ?)", pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern)
+	}
+	employeeFields := func(db *gorm.DB) *gorm.DB {
+		return db.Select("id, companies_id, first_name, last_name, employees_code")
+	}
+	return readPage[models.LeaveRequest](query.Preload("Employees", employeeFields).Preload("Employees.Companies").Preload("Approver", employeeFields).Preload("LeaveTypeMaster"), q, order)
 }
 
 func (r *gormLeaveRequestRepository) FindScoped(scope AccessScope, id uint) (models.LeaveRequest, error) {
