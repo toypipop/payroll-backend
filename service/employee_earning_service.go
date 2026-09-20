@@ -35,8 +35,8 @@ func NewEmployeeEarningService(
 }
 
 // List returns the earnings the caller's scope covers, with relations loaded.
-func (s *EmployeeEarningService) List(scope repository.AccessScope) ([]models.EmployeeEarning, error) {
-	return s.repo.ListScoped(scope)
+func (s *EmployeeEarningService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.EmployeeEarning], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // resolveTarget confirms the employee sits in the requested company and that the earning type belongs to that company too, returning the company to store.

@@ -35,8 +35,8 @@ func NewEmployeeDeductionService(
 }
 
 // List returns the deductions the caller's scope covers, with relations loaded.
-func (s *EmployeeDeductionService) List(scope repository.AccessScope) ([]models.EmployeeDeduction, error) {
-	return s.repo.ListScoped(scope)
+func (s *EmployeeDeductionService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.EmployeeDeduction], error) {
+	return s.repo.ListScoped(scope, q)
 }
 
 // resolveTarget confirms the employee sits in the requested company and that the deduction type belongs to that company too, returning the company to store.

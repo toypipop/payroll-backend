@@ -17,7 +17,7 @@ var (
 
 // EmployeeEarningRepository is the persistence boundary for the employee-earnings domain.
 type EmployeeEarningRepository interface {
-	ListScoped(scope AccessScope) ([]models.EmployeeEarning, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeEarning], error)
 	FindScoped(scope AccessScope, id uint) (models.EmployeeEarning, error)
 	FindDetail(id uint) (models.EmployeeEarning, error)
 	Create(earning *models.EmployeeEarning, audit *models.AuditLog) error
@@ -39,14 +39,8 @@ func (r *gormEmployeeEarningRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("employee_earning.companies_id", "employee_earning.employees_id"))
 }
 
-func (r *gormEmployeeEarningRepository) ListScoped(scope AccessScope) ([]models.EmployeeEarning, error) {
-	var items []models.EmployeeEarning
-	err := r.scoped(scope).
-		Preload("EarningType").
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Find(&items).Error
-	return items, err
+func (r *gormEmployeeEarningRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeEarning], error) {
+	return readEmployeeAdjustmentPage[models.EmployeeEarning](r.scoped(scope), q, "employee_earning", "earning_type", "EarningType")
 }
 
 func (r *gormEmployeeEarningRepository) FindScoped(scope AccessScope, id uint) (models.EmployeeEarning, error) {

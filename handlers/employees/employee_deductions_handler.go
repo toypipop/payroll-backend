@@ -15,7 +15,11 @@ func (h *Handler) GetEmployeeDeductions(c *gin.Context) {
 		return
 	}
 
-	items, err := h.EmployeeDeduction.List(scope)
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	items, err := h.EmployeeDeduction.List(scope, query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

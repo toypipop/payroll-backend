@@ -17,7 +17,7 @@ var (
 
 // EmployeeDeductionRepository is the persistence boundary for the employee-deductions domain.
 type EmployeeDeductionRepository interface {
-	ListScoped(scope AccessScope) ([]models.EmployeeDeduction, error)
+	ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeDeduction], error)
 	FindScoped(scope AccessScope, id uint) (models.EmployeeDeduction, error)
 	FindDetail(id uint) (models.EmployeeDeduction, error)
 	Create(deduction *models.EmployeeDeduction, audit *models.AuditLog) error
@@ -39,14 +39,8 @@ func (r *gormEmployeeDeductionRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("employee_deduction.companies_id", "employee_deduction.employees_id"))
 }
 
-func (r *gormEmployeeDeductionRepository) ListScoped(scope AccessScope) ([]models.EmployeeDeduction, error) {
-	var items []models.EmployeeDeduction
-	err := r.scoped(scope).
-		Preload("DeductionType").
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Find(&items).Error
-	return items, err
+func (r *gormEmployeeDeductionRepository) ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeDeduction], error) {
+	return readEmployeeAdjustmentPage[models.EmployeeDeduction](r.scoped(scope), q, "employee_deduction", "deduction_type", "DeductionType")
 }
 
 func (r *gormEmployeeDeductionRepository) FindScoped(scope AccessScope, id uint) (models.EmployeeDeduction, error) {
