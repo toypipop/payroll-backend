@@ -67,6 +67,10 @@ func buildPostgresDSN() string {
 }
 
 func ConnectDatabase() {
+	pool, err := readDatabasePool()
+	if err != nil {
+		log.Fatal("Invalid database pool configuration: ", err)
+	}
 	dbName := firstEnv("payrolldb", "DB_NAME", "PGDATABASE")
 
 	db, err := gorm.Open(postgres.Open(buildPostgresDSN()), &gorm.Config{
@@ -78,6 +82,13 @@ func ConnectDatabase() {
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("Failed to obtain database pool: ", err)
+	}
+	pool.apply(sqlDB)
+	log.Printf("Database pool configured: max_open=%d max_idle=%d max_lifetime=%s max_idle_time=%s", pool.maxOpen, pool.maxIdle, pool.lifetime, pool.idleTime)
 
 	fmt.Printf("Connected to Database: %s\n", dbName)
 	DB = db

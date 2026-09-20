@@ -15,6 +15,7 @@ import (
 	"payroll-backend/routes"
 	"payroll-backend/service"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -113,4 +114,13 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 			WorkLocation:          service.NewWorkLocationService(repository.NewWorkLocationRepository(db)),
 		},
 	}
+}
+
+// buildDatabaseAdmission shares one request budget across every database-backed route.
+func buildDatabaseAdmission(db *gorm.DB) gin.HandlerFunc {
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("Failed to obtain database pool: ", err)
+	}
+	return middleware.DatabaseAdmission(sqlDB.Stats().MaxOpenConnections)
 }

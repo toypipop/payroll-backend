@@ -26,14 +26,16 @@ type PayrollCycle struct {
 }
 
 // PayrollTransaction records the actual payout for an Employees
+// idx_txn_employee_live supports My Payslips across cycles, ordered newest first.
+// The existing unique index supports live cycle lookups and snapshot upserts.
 type PayrollTransaction struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
+	ID        uint      `gorm:"primaryKey;index:idx_txn_employee_live,priority:2,sort:desc" json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	// One live transaction per employee per cycle. deleted_at is part of the key so a soft-deleted row never blocks a later run, while two concurrent Calculate requests cannot both insert.
 	DeletedAt   soft_delete.DeletedAt `gorm:"uniqueIndex:idx_txn_cycle_employee;not null;default:0" json:"-"`
 	CycleID     uint                  `gorm:"uniqueIndex:idx_txn_cycle_employee;not null" json:"cycle_id"`
-	EmployeesID uint                  `gorm:"uniqueIndex:idx_txn_cycle_employee;not null" json:"employees_id"`
+	EmployeesID uint                  `gorm:"uniqueIndex:idx_txn_cycle_employee;index:idx_txn_employee_live,priority:1,where:deleted_at = 0;not null" json:"employees_id"`
 	// Which salary record produced SalariesAtTime — lets the salary handler tell whether a superseded record was ever actually used in a real calculation.
 	SalariesStructureID uint    `gorm:"not null;index" json:"salaries_structure_id"`
 	SalariesAtTime      float64 `gorm:"type:decimal(15,2)" json:"salaries_at_time"`

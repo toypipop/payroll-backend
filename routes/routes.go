@@ -50,7 +50,7 @@ type Handlers struct {
 	Settings      *sethandler.Handler
 }
 
-func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
+func SetupRouter(h Handlers, g *middleware.Guard, databaseAdmission gin.HandlerFunc) *gin.Engine {
 	r := gin.New()
 	r.Use(middleware.RequestID(), middleware.RequestLogger(), gin.Recovery())
 
@@ -67,6 +67,9 @@ func SetupRouter(h Handlers, g *middleware.Guard) *gin.Engine {
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
+
+	// Keep liveness checks outside the database request budget.
+	r.Use(databaseAdmission)
 
 	authGroup := r.Group("/api/v1/auth")
 	{

@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// 3. Compose every repository, service and handler once. This is the only place that knows config.DB.
-	r := routes.SetupRouter(buildHandlers(config.DB), buildGuard(config.DB))
+	r := routes.SetupRouter(buildHandlers(config.DB), buildGuard(config.DB), buildDatabaseAdmission(config.DB))
 
 	// 4. Start Web Server
 	port := os.Getenv("PORT")
