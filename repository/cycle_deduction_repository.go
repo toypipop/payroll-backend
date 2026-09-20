@@ -18,7 +18,7 @@ var (
 // CycleDeductionRepository is the persistence boundary for one-off deductions attached to a cycle.
 type CycleDeductionRepository interface {
 	WithinTx(func(CycleDeductionRepository, PayrollRunRepository) error) error
-	ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleDeduction, error)
+	ListScopedByCycle(scope AccessScope, cycleID uint, q PageQuery) (Page[models.PayrollCycleDeduction], error)
 	FindScoped(scope AccessScope, id uint) (models.PayrollCycleDeduction, error)
 	FindDetail(id uint) (models.PayrollCycleDeduction, error)
 	Create(item *models.PayrollCycleDeduction, audit *models.AuditLog) error
@@ -46,15 +46,9 @@ func (r *gormCycleDeductionRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("payroll_cycle_deduction.companies_id", "payroll_cycle_deduction.employees_id"))
 }
 
-func (r *gormCycleDeductionRepository) ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleDeduction, error) {
-	var items []models.PayrollCycleDeduction
-	err := r.scoped(scope).
-		Preload("DeductionType").
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Where("cycle_id = ?", cycleID).
-		Find(&items).Error
-	return items, err
+func (r *gormCycleDeductionRepository) ListScopedByCycle(scope AccessScope, cycleID uint, q PageQuery) (Page[models.PayrollCycleDeduction], error) {
+	query := r.scoped(scope).Where("payroll_cycle_deduction.cycle_id = ?", cycleID)
+	return readEmployeeAdjustmentPage[models.PayrollCycleDeduction](query, q, "payroll_cycle_deduction", "deduction_type", "DeductionType")
 }
 
 func (r *gormCycleDeductionRepository) FindScoped(scope AccessScope, id uint) (models.PayrollCycleDeduction, error) {

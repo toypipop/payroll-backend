@@ -68,11 +68,11 @@ func (s *CycleEarningService) openCycle(scope repository.AccessScope, cycleID ui
 }
 
 // List returns the cycle's earnings within the caller's scope.
-func (s *CycleEarningService) List(scope repository.AccessScope, cycleID uint) ([]models.PayrollCycleEarning, error) {
+func (s *CycleEarningService) List(scope repository.AccessScope, cycleID uint, q repository.PageQuery) (repository.Page[models.PayrollCycleEarning], error) {
 	if cycleID == 0 {
-		return nil, ErrCycleIDRequired
+		return repository.Page[models.PayrollCycleEarning]{}, ErrCycleIDRequired
 	}
-	return s.repo.ListScopedByCycle(scope, cycleID)
+	return s.repo.ListScopedByCycle(scope, cycleID, q)
 }
 
 // validateAgainstCycle checks the company, employee and earning type against the cycle.

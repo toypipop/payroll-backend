@@ -18,7 +18,7 @@ var (
 // CycleEarningRepository is the persistence boundary for one-off earnings attached to a cycle.
 type CycleEarningRepository interface {
 	WithinTx(func(CycleEarningRepository, PayrollRunRepository) error) error
-	ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleEarning, error)
+	ListScopedByCycle(scope AccessScope, cycleID uint, q PageQuery) (Page[models.PayrollCycleEarning], error)
 	FindScoped(scope AccessScope, id uint) (models.PayrollCycleEarning, error)
 	FindDetail(id uint) (models.PayrollCycleEarning, error)
 	Create(item *models.PayrollCycleEarning, audit *models.AuditLog) error
@@ -46,15 +46,9 @@ func (r *gormCycleEarningRepository) scoped(scope AccessScope) *gorm.DB {
 	return r.db.Scopes(scope.ApplyEmployee("payroll_cycle_earning.companies_id", "payroll_cycle_earning.employees_id"))
 }
 
-func (r *gormCycleEarningRepository) ListScopedByCycle(scope AccessScope, cycleID uint) ([]models.PayrollCycleEarning, error) {
-	var items []models.PayrollCycleEarning
-	err := r.scoped(scope).
-		Preload("EarningType").
-		Preload("Employees").
-		Preload("Employees.Companies").
-		Where("cycle_id = ?", cycleID).
-		Find(&items).Error
-	return items, err
+func (r *gormCycleEarningRepository) ListScopedByCycle(scope AccessScope, cycleID uint, q PageQuery) (Page[models.PayrollCycleEarning], error) {
+	query := r.scoped(scope).Where("payroll_cycle_earning.cycle_id = ?", cycleID)
+	return readEmployeeAdjustmentPage[models.PayrollCycleEarning](query, q, "payroll_cycle_earning", "earning_type", "EarningType")
 }
 
 func (r *gormCycleEarningRepository) FindScoped(scope AccessScope, id uint) (models.PayrollCycleEarning, error) {

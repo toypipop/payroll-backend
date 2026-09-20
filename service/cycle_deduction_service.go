@@ -67,11 +67,11 @@ func (s *CycleDeductionService) openCycle(scope repository.AccessScope, cycleID 
 }
 
 // List returns the cycle's deductions within the caller's scope.
-func (s *CycleDeductionService) List(scope repository.AccessScope, cycleID uint) ([]models.PayrollCycleDeduction, error) {
+func (s *CycleDeductionService) List(scope repository.AccessScope, cycleID uint, q repository.PageQuery) (repository.Page[models.PayrollCycleDeduction], error) {
 	if cycleID == 0 {
-		return nil, ErrCycleIDRequired
+		return repository.Page[models.PayrollCycleDeduction]{}, ErrCycleIDRequired
 	}
-	return s.repo.ListScopedByCycle(scope, cycleID)
+	return s.repo.ListScopedByCycle(scope, cycleID, q)
 }
 
 // Create attaches a one-off deduction to an open cycle.

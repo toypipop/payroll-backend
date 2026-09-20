@@ -25,7 +25,11 @@ func (h *Handler) GetCycleEarnings(c *gin.Context) {
 		return
 	}
 
-	items, err := h.CycleEarning.List(scope, queryCycleID(c))
+	query, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	items, err := h.CycleEarning.List(scope, queryCycleID(c), query)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
