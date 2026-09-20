@@ -206,8 +206,8 @@ func (f *fakeRunRepo) FindTransactionDetail(uint) (models.PayrollTransaction, er
 
 func (f *fakeRunRepo) FindCompany(uint) (models.Companies, error) { return models.Companies{}, nil }
 
-func (f *fakeRunRepo) ListClosedCycleTransactionsForEmployee(uint) ([]models.PayrollTransaction, error) {
-	return nil, nil
+func (f *fakeRunRepo) ListClosedCycleTransactionsForEmployee(uint, repository.PageQuery) (repository.Page[models.PayrollTransaction], error) {
+	return repository.Page[models.PayrollTransaction]{}, nil
 }
 
 func (f *fakeRunRepo) ListCyclesByIDs([]uint) ([]models.PayrollCycle, error) { return nil, nil }

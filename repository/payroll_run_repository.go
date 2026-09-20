@@ -77,7 +77,7 @@ type PayrollRunRepository interface {
 	ListTransactionsForCycle(cycleID uint, q PageQuery) (Page[models.PayrollTransaction], TransactionSummary, error)
 	FindTransactionDetail(transactionID uint) (models.PayrollTransaction, error)
 	FindCompany(companiesID uint) (models.Companies, error)
-	ListClosedCycleTransactionsForEmployee(employeeID uint) ([]models.PayrollTransaction, error)
+	ListClosedCycleTransactionsForEmployee(employeeID uint, q PageQuery) (Page[models.PayrollTransaction], error)
 	ListCyclesByIDs(cycleIDs []uint) ([]models.PayrollCycle, error)
 }
 
@@ -330,16 +330,27 @@ func (r *gormPayrollRunRepository) FindCompany(companiesID uint) (models.Compani
 }
 
 // ListClosedCycleTransactionsForEmployee backs My Payslips: only closed cycles count.
-func (r *gormPayrollRunRepository) ListClosedCycleTransactionsForEmployee(employeeID uint) ([]models.PayrollTransaction, error) {
-	var transactions []models.PayrollTransaction
-	err := r.db.
+func (r *gormPayrollRunRepository) ListClosedCycleTransactionsForEmployee(employeeID uint, q PageQuery) (Page[models.PayrollTransaction], error) {
+	order, err := pageOrder(q, map[string]string{
+		"id":              "payroll_transaction.id",
+		"cycle_name":      "payroll_cycle.cycle_name",
+		"start_date":      "payroll_cycle.start_date",
+		"total_earning":   "payroll_transaction.total_earning",
+		"total_deduction": "payroll_transaction.total_deduction",
+		"net_pay":         "payroll_transaction.net_pay",
+	}, "payroll_transaction.id", "payroll_transaction.id")
+	if err != nil {
+		return Page[models.PayrollTransaction]{}, err
+	}
+	query := r.db.Model(&models.PayrollTransaction{}).
 		Joins("JOIN payroll_cycle ON payroll_cycle.id = payroll_transaction.cycle_id AND payroll_cycle.is_closed = true AND payroll_cycle.deleted_at = 0").
 		Joins("JOIN companies ON companies.id = payroll_cycle.companies_id AND companies.is_active = true AND companies.deleted_at = 0").
-		Where("payroll_transaction.employees_id = ? AND payroll_transaction.deleted_at = 0", employeeID).
-		Preload("Details").
-		Order("payroll_transaction.id DESC").
-		Find(&transactions).Error
-	return transactions, err
+		Where("payroll_transaction.employees_id = ? AND payroll_transaction.deleted_at = 0", employeeID)
+	if q.Search != "" {
+		pattern := searchPattern(q.Search)
+		query = query.Where("(payroll_cycle.cycle_name ILIKE ? OR to_char(payroll_cycle.start_date AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') ILIKE ? OR to_char(payroll_cycle.end_date AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') ILIKE ?)", pattern, pattern, pattern)
+	}
+	return readPage[models.PayrollTransaction](query.Preload("Details"), q, order)
 }
 
 func (r *gormPayrollRunRepository) ListCyclesByIDs(cycleIDs []uint) ([]models.PayrollCycle, error) {

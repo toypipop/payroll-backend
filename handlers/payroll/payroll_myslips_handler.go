@@ -6,6 +6,7 @@ import (
 	"payroll-backend/apperr"
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
+	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,7 +20,11 @@ func (h *Handler) GetMySlips(c *gin.Context) {
 		return
 	}
 
-	slips, err := h.PayrollRun.MySlips(userID)
+	q, ok := httpx.ParsePage(c)
+	if !ok {
+		return
+	}
+	page, err := h.PayrollRun.MySlips(userID, q)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -31,8 +36,8 @@ func (h *Handler) GetMySlips(c *gin.Context) {
 		StartDate string `json:"start_date"`
 		EndDate   string `json:"end_date"`
 	}
-	result := make([]slipRow, 0, len(slips))
-	for _, slip := range slips {
+	result := make([]slipRow, 0, len(page.Items))
+	for _, slip := range page.Items {
 		result = append(result, slipRow{
 			PayrollTransaction: slip.Transaction,
 			CycleName:          slip.CycleName,
@@ -40,5 +45,5 @@ func (h *Handler) GetMySlips(c *gin.Context) {
 			EndDate:            slip.EndDate,
 		})
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, repository.Page[slipRow]{Items: result, Pagination: page.Pagination})
 }

@@ -1045,19 +1045,20 @@ type MySlip struct {
 }
 
 // MySlips returns the caller's own payslips from closed cycles.
-func (s *PayrollRunService) MySlips(employeeID uint) ([]MySlip, error) {
-	transactions, err := s.repo.ListClosedCycleTransactionsForEmployee(employeeID)
+func (s *PayrollRunService) MySlips(employeeID uint, q repository.PageQuery) (repository.Page[MySlip], error) {
+	page, err := s.repo.ListClosedCycleTransactionsForEmployee(employeeID, q)
 	if err != nil {
-		return nil, err
+		return repository.Page[MySlip]{}, err
 	}
 
+	transactions := page.Items
 	cycleIDs := make([]uint, 0, len(transactions))
 	for _, transaction := range transactions {
 		cycleIDs = append(cycleIDs, transaction.CycleID)
 	}
 	cycles, err := s.repo.ListCyclesByIDs(cycleIDs)
 	if err != nil {
-		return nil, err
+		return repository.Page[MySlip]{}, err
 	}
 	byID := make(map[uint]models.PayrollCycle, len(cycles))
 	for _, cycle := range cycles {
@@ -1069,12 +1070,12 @@ func (s *PayrollRunService) MySlips(employeeID uint) ([]MySlip, error) {
 		cycle := byID[transaction.CycleID]
 		slip := MySlip{Transaction: transaction, CycleName: cycle.CycleName}
 		if !cycle.StartDate.IsZero() {
-			slip.StartDate = cycle.StartDate.Format("2006-01-02")
+			slip.StartDate = timeutil.DateKey(cycle.StartDate)
 		}
 		if !cycle.EndDate.IsZero() {
-			slip.EndDate = cycle.EndDate.Format("2006-01-02")
+			slip.EndDate = timeutil.DateKey(cycle.EndDate)
 		}
 		slips = append(slips, slip)
 	}
-	return slips, nil
+	return repository.Page[MySlip]{Items: slips, Pagination: page.Pagination}, nil
 }
