@@ -223,6 +223,9 @@ func (s *LeaveRequestService) Delete(scope repository.AccessScope, id uint) erro
 	if err != nil {
 		return ErrLeaveRequestNotDeletable
 	}
+	if leave.Status == models.LeaveStatusApproved {
+		return repository.ErrApprovedLeaveNotDeletable
+	}
 	audit, err := leaveAudit(scope, models.AuditEventLeaveDeleted, "Leave request deleted", leave, leaveAuditData(leave))
 	if err != nil {
 		return err

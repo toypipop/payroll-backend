@@ -153,10 +153,17 @@ func (r *gormLeaveRequestRepository) UpdateFields(leave *models.LeaveRequest, fi
 	})
 }
 
+var ErrApprovedLeaveNotDeletable = apperr.Conflict("Approved leave requests cannot be deleted")
+
 func (r *gormLeaveRequestRepository) Delete(leave *models.LeaveRequest, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(leave).Error; err != nil {
-			return err
+		// Recheck in the write itself so a concurrent approval cannot be deleted.
+		result := tx.Where("status <> ?", models.LeaveStatusApproved).Delete(leave)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return ErrApprovedLeaveNotDeletable
 		}
 		if audit != nil {
 			return tx.Create(audit).Error
