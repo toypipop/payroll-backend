@@ -7,6 +7,7 @@ on:
         description: "Target environment"
         required: true
         type: choice
+        default: server
         options:
           - server
       branch:
