@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -10,7 +11,9 @@ import (
 
 // Auth failures.
 var (
-	ErrAuthPasswordWrong = apperr.Unauthorized("Invalid password")
+	ErrAuthInvalidCredentials = apperr.Unauthorized("Invalid email or password")
+	// Keep the existing error alias for callers using errors.Is.
+	ErrAuthPasswordWrong = ErrAuthInvalidCredentials
 	ErrAuthNoRoleAccess  = apperr.Forbidden("No role access configured")
 	ErrAuthInactive      = apperr.Unauthorized("This employee account is inactive. Please contact your administrator.")
 )
@@ -41,6 +44,12 @@ func NewAuthService(repo repository.AuthRepository) *AuthService {
 // Authenticate checks an email and password pair.
 func (s *AuthService) Authenticate(email string, password string) (models.Employees, error) {
 	employee, err := s.repo.FindByEmail(email)
+	if errors.Is(err, repository.ErrAuthEmailUnknown) {
+		// Do comparable password work even when lookup found no account. Never
+		// authenticate a missing account, even if the dummy password matches.
+		_ = bcrypt.CompareHashAndPassword(dummyLoginHash, []byte(password))
+		return models.Employees{}, ErrAuthInvalidCredentials
+	}
 	if err != nil {
 		return models.Employees{}, err
 	}
