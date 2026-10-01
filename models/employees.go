@@ -22,7 +22,7 @@ type Employees struct {
 
 	FirstName string `gorm:"not null" json:"first_name"`
 	LastName  string `gorm:"not null" json:"last_name"`
-	Password  string `gorm:"not null" json:"password,omitempty"`
+	Password  string `gorm:"not null" json:"-"`
 
 	DeptID  uint `json:"dept_id"`
 	PosID   uint `json:"pos_id"`

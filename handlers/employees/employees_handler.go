@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/models"
 
 	"github.com/gin-gonic/gin"
 )
@@ -47,12 +46,12 @@ func (h *Handler) CreateEmployees(c *gin.Context) {
 		return
 	}
 
-	input := models.Employees{IsActive: true}
+	input := createEmployeeRequest{IsActive: true}
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	created, err := h.Employees.Create(scope, input)
+	created, err := h.Employees.Create(scope, input.employee())
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
