@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"os"
 	"payroll-backend/config"
+	"payroll-backend/middleware"
 	"payroll-backend/migrations"
 	"payroll-backend/routes"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,6 +58,13 @@ func main() {
 
 	// 3. Compose every repository, service and handler once. This is the only place that knows config.DB.
 	r := routes.SetupRouter(buildHandlers(config.DB), buildGuard(config.DB), buildDatabaseAdmission(config.DB))
+	trustedProxyCIDRs := os.Getenv("TRUSTED_PROXY_CIDRS")
+	if requiresTrustedProxyConfiguration() && strings.TrimSpace(trustedProxyCIDRs) == "" {
+		log.Fatal("FATAL: TRUSTED_PROXY_CIDRS must list the reverse-proxy Docker subnet in UAT or production")
+	}
+	if err := middleware.ConfigureTrustedProxies(r, trustedProxyCIDRs); err != nil {
+		log.Fatalf("FATAL: configure trusted proxies: %v", err)
+	}
 
 	// 4. Start Web Server
 	port := os.Getenv("PORT")
@@ -74,6 +83,11 @@ func configureGinMode() {
 		mode = gin.ReleaseMode
 	}
 	gin.SetMode(mode)
+}
+
+func requiresTrustedProxyConfiguration() bool {
+	environment := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	return environment == "uat" || environment == "production"
 }
 
 // All Modules seeded by seed/main.go.
