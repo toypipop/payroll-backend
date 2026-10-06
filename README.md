@@ -8,7 +8,7 @@ Go + Gin + PostgreSQL API. It runs on `http://localhost:8000` and serves `/api/v
 Copy-Item .env.local.example .env
 docker compose -f docker-compose.local.yml up -d postgres
 go run ./migrate
-go run ./seed
+go run ./seed --mock --reset
 go run .
 ```
 
@@ -22,7 +22,15 @@ go build ./...
 go test ./...
 ```
 
-`.env` is ignored by Git. Copy `.env.local.example` for local work. For UAT deployment, copy `.env.uat.example` to `.env` on the host and replace every placeholder, preferably injecting secrets from the deployment system. Never commit real credentials or environment values. `go run ./seed --reset` deletes all database rows and is only for a local non-production database.
+`.env` is ignored by Git. Copy `.env.local.example` for local work. For UAT deployment, copy `.env.uat.example` to `.env` on the host and replace every placeholder, preferably injecting secrets from the deployment system. Never commit real credentials or environment values.
+
+## Seeding
+
+- `go run ./seed` is the production-safe core seed. It never resets the database, creates only system/reference setup, and creates the first system administrator from `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`. It will not overwrite an existing administrator.
+- `go run ./seed --mock --reset` resets the database and then creates the core setup plus disposable fixture users and payroll data. Use it for Dev and UAT only. It refuses to run when `APP_ENV` or `GO_ENV` is `production`.
+- `--reset` is rejected unless `--mock` is also present.
+
+The local Compose `seed` tool service runs the mock/reset command. UAT has a separate `seed-mock` service (`docker compose -f docker-compose.uat.yml --profile mock-tools run --rm seed-mock`); production uses the `seed` service, which invokes `/app/seed` without flags. Provide the two `BOOTSTRAP_ADMIN_*` secrets only for the initial production run.
 
 ## List pagination
 

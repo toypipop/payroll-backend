@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"math"
+	"os"
 	"payroll-backend/config"
 	"payroll-backend/migrations"
 	"payroll-backend/models"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func ptr(u uint) *uint {
@@ -96,18 +99,81 @@ func syncAppModuleIDSequence() {
 	`)
 }
 
+// isMockForbiddenEnvironment deliberately checks the deployment environment,
+// not GIN_MODE: UAT runs Gin in release mode but is explicitly allowed to use
+// disposable fixtures.
+func isMockForbiddenEnvironment() bool {
+	return strings.EqualFold(os.Getenv("APP_ENV"), "production") ||
+		strings.EqualFold(os.Getenv("GO_ENV"), "production")
+}
+
+// seedInitialAdministrator creates the only credential core seed is allowed to
+// create. It never overwrites an existing administrator's password or profile.
+func seedInitialAdministrator(company models.Companies, role models.Roles, dept models.Department, position models.Position) {
+	email := strings.TrimSpace(os.Getenv("BOOTSTRAP_ADMIN_EMAIL"))
+	password := os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")
+	if email == "" || password == "" {
+		log.Fatal("BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD are required for core seed")
+	}
+	if len(password) < 12 {
+		log.Fatal("BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters")
+	}
+
+	var admin models.Employees
+	err := config.DB.Where("email = ? AND companies_id = ?", email, company.ID).First(&admin).Error
+	if err == nil {
+		log.Printf("Core seed: initial administrator %q already exists; leaving it unchanged", email)
+		return
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Fatalf("Core seed: check initial administrator: %v", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		log.Fatalf("Core seed: secure initial administrator password: %v", err)
+	}
+	admin = models.Employees{
+		CompaniesID: company.ID, RolesID: role.ID, DeptID: dept.ID, PosID: position.ID,
+		EmployeesCode: "SYS-001", FirstName: "System", LastName: "Administrator",
+		Email: email, Password: string(hash), IsActive: true,
+	}
+	if err := config.DB.Create(&admin).Error; err != nil {
+		log.Fatalf("Core seed: create initial administrator: %v", err)
+	}
+	upsertEmployeeCompanyAccess(admin.ID, company.ID, role.ID)
+	log.Printf("Core seed: created initial administrator %q", email)
+}
+
+// coreSeedAlreadyInitialized keeps production seed from reapplying its legacy
+// reference-data upserts to a live system. The initial administrator is the
+// final core-seed step, so any employee (including a soft-deleted one) means
+// this database has already been initialized.
+func coreSeedAlreadyInitialized() (bool, error) {
+	var count int64
+	if err := config.DB.Unscoped().Model(&models.Employees{}).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func main() {
-	// Opt-in only: without --reset the seed keeps merging onto whatever the database already holds, which is the long-standing behaviour.
+	// The core seed is safe to run against production: it creates only system
+	// reference data and the initial administrator. Mock fixtures are opt-in.
+	mock := flag.Bool("mock", false, "seed disposable development/UAT mock data")
 	reset := flag.Bool("reset", false, "delete every row in the database before seeding")
 	flag.Parse()
 
 	config.LoadDotEnv()
+	if *reset && !*mock {
+		log.Fatal("--reset is only allowed together with --mock")
+	}
+	if *mock && isMockForbiddenEnvironment() {
+		log.Fatal("refusing to seed mock data when APP_ENV or GO_ENV is production")
+	}
 	config.ConnectDatabase()
 
 	if *reset {
-		if isProduction() {
-			log.Fatal("Refusing to run --reset: this environment is marked as production")
-		}
 		if err := resetDatabase(config.DB); err != nil {
 			log.Fatalf("Database reset failed: %v", err)
 		}
@@ -128,6 +194,19 @@ func main() {
 	}
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
 		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
+	}
+	if !*mock {
+		initialized, err := coreSeedAlreadyInitialized()
+		if err != nil {
+			log.Fatalf("Core seed: check initialization state: %v", err)
+		}
+		if initialized {
+			if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
+				log.Fatalf("Module capability sync failed: %v", err)
+			}
+			log.Println("Core seed: database is already initialized; leaving existing data unchanged")
+			return
+		}
 	}
 
 	// Initialize companies
@@ -674,6 +753,15 @@ func main() {
 	grantAccess(financeRoleB.ID, compB.ID, financeGrants)
 	grantAccess(managerRoleB.ID, compB.ID, managerGrants)
 	grantAccess(staffRoleB.ID, compB.ID, staffGrants)
+
+	if !*mock {
+		seedInitialAdministrator(sysComp, sysRole, sysDept, sysPos)
+		if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
+			log.Fatalf("Module capability sync failed: %v", err)
+		}
+		log.Println("Core production-safe seed completed")
+		return
+	}
 
 	// --- Employees Seeding (Using your existing logic) ---
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("admin@admin.com"), 10)

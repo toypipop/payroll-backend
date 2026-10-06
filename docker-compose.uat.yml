@@ -21,6 +21,8 @@ x-backend-env: &backend_env
   GIN_MODE: ${GIN_MODE}
   COOKIE_SECURE: ${COOKIE_SECURE}
   COOKIE_SAMESITE: ${COOKIE_SAMESITE}
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+  BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
 
 services:
   backend:
@@ -62,6 +64,18 @@ services:
         condition: service_healthy
     profiles:
       - tools
+
+  seed-mock:
+    image: *backend_image
+    build: *backend_build
+    container_name: payroll-seed-mock
+    environment: *backend_env
+    command: [ "/app/seed", "--mock", "--reset" ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - mock-tools
 
   frontend:
     build:
