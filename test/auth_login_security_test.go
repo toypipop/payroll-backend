@@ -81,6 +81,40 @@ func TestAuthenticationPreservesSuccessfulLoginAndDatabaseErrors(t *testing.T) {
 	}
 }
 
+func TestLoginWarnsAfterFiveFailuresAndLimitsAtTen(t *testing.T) {
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &authhandler.Handler{
+		Auth:          service.NewAuthService(loginRepo{employee: models.Employees{ID: 1, Password: string(hash), IsActive: true}}),
+		LoginAttempts: service.NewLoginAttemptLimiter(),
+	}
+
+	for attempt := 1; attempt <= 10; attempt++ {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(`{"email":"user@example.invalid","password":"wrong-password"}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.Login(c)
+
+		if attempt < 10 && w.Code != 401 {
+			t.Fatalf("attempt %d: status = %d, want 401", attempt, w.Code)
+		}
+		if attempt == 5 && !strings.Contains(w.Body.String(), "5 unsuccessful attempts") {
+			t.Fatalf("attempt 5: missing warning: %s", w.Body.String())
+		}
+		if attempt == 10 {
+			if w.Code != 429 {
+				t.Fatalf("attempt 10: status = %d, want 429", w.Code)
+			}
+			if w.Header().Get("Retry-After") != "900" {
+				t.Fatalf("retry-after = %q, want 900", w.Header().Get("Retry-After"))
+			}
+		}
+	}
+}
+
 // Measure the real bcrypt paths without a flaky wall-clock assertion in CI.
 func BenchmarkRejectedLogin(b *testing.B) {
 	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), 12)

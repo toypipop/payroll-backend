@@ -2,9 +2,11 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -137,6 +139,13 @@ func (h *Handler) Login(c *gin.Context) {
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
+	input.Email = service.NormalizeLoginEmail(input.Email)
+	if h.LoginAttempts != nil {
+		if attempt := h.LoginAttempts.Check(input.Email); attempt.Limited {
+			respondLoginRateLimited(c, attempt)
+			return
+		}
+	}
 
 	employee, err := h.Auth.Authenticate(input.Email, input.Password)
 	if err != nil {
@@ -146,9 +155,28 @@ func (h *Handler) Login(c *gin.Context) {
 				"client_ip", c.ClientIP(),
 				"reason", "invalid_credentials",
 			)
+			if h.LoginAttempts != nil {
+				attempt := h.LoginAttempts.RecordFailure(input.Email)
+				if attempt.Limited {
+					respondLoginRateLimited(c, attempt)
+					return
+				}
+				if attempt.Warn {
+					c.JSON(http.StatusUnauthorized, gin.H{
+						"error": fmt.Sprintf(
+							"Invalid email or password. You have made %d unsuccessful attempts. Further unsuccessful attempts will temporarily limit login.",
+							attempt.Count,
+						),
+					})
+					return
+				}
+			}
 		}
 		httpx.RespondError(c, err)
 		return
+	}
+	if h.LoginAttempts != nil {
+		h.LoginAttempts.Clear(input.Email)
 	}
 
 	secret, err := GetJWTSecret()
@@ -165,6 +193,17 @@ func (h *Handler) Login(c *gin.Context) {
 
 	SetAuthCookie(c, tokenString)
 	c.JSON(http.StatusOK, h.Auth.Identity(employee))
+}
+
+func respondLoginRateLimited(c *gin.Context, attempt service.LoginAttemptResult) {
+	seconds := int(attempt.RetryAfter.Round(time.Second) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	c.Header("Retry-After", strconv.Itoa(seconds))
+	c.JSON(http.StatusTooManyRequests, gin.H{
+		"error": "Too many unsuccessful login attempts. Please try again in 15 minutes.",
+	})
 }
 
 func (h *Handler) Me(c *gin.Context) {

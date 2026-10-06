@@ -3,6 +3,7 @@ package test
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -91,6 +92,43 @@ func TestCreateEmployeeIgnoresServerOwnedFields(t *testing.T) {
 	}
 	if !repo.row.IsActive {
 		t.Fatal("omitted active flag should default to true")
+	}
+}
+
+func TestEmployeeWritesRejectPasswordsOutsideAllowedLength(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+		message  string
+	}{
+		{name: "too short", password: "short", message: "Password must be at least 6 characters"},
+		{name: "too long", password: strings.Repeat("a", 31), message: "Password must be at most 30 characters"},
+	}
+
+	for _, method := range []string{"POST", "PUT"} {
+		for _, tt := range tests {
+			t.Run(method+"/"+tt.name, func(t *testing.T) {
+				repo := &passwordRepo{row: models.Employees{ID: 7, CompaniesID: 1, RolesID: 2, Password: "old-hash"}}
+				h := &employees.Handler{Employees: service.NewEmployeesService(repo)}
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				c.Set("scope_user", models.Employees{ID: 99, CompaniesID: 1})
+				c.Set("data_scope", models.ScopeCompanies)
+				c.Set("authorized_company_ids", []uint{1})
+				c.Params = gin.Params{{Key: "id", Value: "7"}}
+				body := `{"companies_id":1,"roles_id":2,"password":` + strconv.Quote(tt.password) + `}`
+				c.Request = httptest.NewRequest(method, "/employees", strings.NewReader(body))
+				c.Request.Header.Set("Content-Type", "application/json")
+				if method == "POST" {
+					h.CreateEmployees(c)
+				} else {
+					h.UpdateEmployees(c)
+				}
+				if w.Code != 400 || !strings.Contains(w.Body.String(), tt.message) {
+					t.Fatalf("response = %d %s, want password validation error", w.Code, w.Body.String())
+				}
+			})
+		}
 	}
 }
 

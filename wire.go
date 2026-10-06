@@ -54,7 +54,8 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 			TimeLog: service.NewTimeLogService(repository.NewTimeLogRepository(db), employeesRepo),
 		},
 		Auth: &authhandler.Handler{
-			Auth: service.NewAuthService(repository.NewAuthRepository(db)),
+			Auth:          service.NewAuthService(repository.NewAuthRepository(db)),
+			LoginAttempts: service.NewLoginAttemptLimiter(),
 		},
 		Employees: &emphandler.Handler{
 			Employees: service.NewEmployeesService(employeesRepo),

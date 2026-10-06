@@ -5,6 +5,7 @@ import (
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -12,10 +13,17 @@ import (
 // bcryptCost matches what the login path expects to verify against.
 const bcryptCost = 12
 
+const (
+	minimumPasswordLength = 6
+	maximumPasswordLength = 30
+)
+
 // Business-rule failures; the kind decides the status, so nothing here names an HTTP code.
 var (
 	ErrCompanyAccessDenied = apperr.Forbidden("Access denied for this company")
 	ErrRoleCompanyMismatch = apperr.Validation("Role does not belong to selected company")
+	ErrPasswordTooShort    = apperr.Validation("Password must be at least 6 characters")
+	ErrPasswordTooLong     = apperr.Validation("Password must be at most 30 characters")
 	ErrPasswordHash        = errors.New("could not secure the password")
 )
 
@@ -60,13 +68,14 @@ func (s *EmployeesService) Create(scope repository.AccessScope, input models.Emp
 		return models.Employees{}, err
 	}
 
-	if input.Password != "" {
-		hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcryptCost)
-		if err != nil {
-			return models.Employees{}, ErrPasswordHash
-		}
-		input.Password = string(hashed)
+	if err := validatePassword(input.Password); err != nil {
+		return models.Employees{}, err
 	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcryptCost)
+	if err != nil {
+		return models.Employees{}, ErrPasswordHash
+	}
+	input.Password = string(hashed)
 
 	if err := s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
 		if err := repo.Create(&input); err != nil {
@@ -102,6 +111,9 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 	}
 
 	if password, ok := patch["password"].(string); ok && password != "" {
+		if err := validatePassword(password); err != nil {
+			return models.Employees{}, err
+		}
 		hashed, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 		if hashErr != nil {
 			return models.Employees{}, ErrPasswordHash
@@ -123,6 +135,19 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 		return models.Employees{}, err
 	}
 	return s.repo.FindDetail(id)
+}
+
+// validatePassword mirrors the employee form's 6–30-character range and
+// keeps direct API callers from bypassing the UI validation.
+func validatePassword(password string) error {
+	length := utf8.RuneCountInString(password)
+	if length < minimumPasswordLength {
+		return ErrPasswordTooShort
+	}
+	if length > maximumPasswordLength {
+		return ErrPasswordTooLong
+	}
+	return nil
 }
 
 // employeeUpdatableFields is every column a client may patch on an employee.
