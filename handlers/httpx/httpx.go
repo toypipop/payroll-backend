@@ -22,7 +22,16 @@ func RequestScope(c *gin.Context) (repository.AccessScope, bool) {
 		return repository.AccessScope{}, false
 	}
 	_, dataScope := ContextAuth(c)
-	return repository.NewAccessScope(user, dataScope, AuthorizedCompanyIDs(c)), true
+	scope := repository.NewAccessScope(user, dataScope, AuthorizedCompanyIDs(c))
+	if value, exists := c.Get("company_data_scopes"); exists {
+		companyScopes, valid := value.(map[uint]models.DataScope)
+		if !valid || companyScopes == nil {
+			// A malformed permission context must never fall back to a wider scope.
+			companyScopes = make(map[uint]models.DataScope)
+		}
+		scope.CompanyDataScopes = companyScopes
+	}
+	return scope, true
 }
 
 // ContextAuth reads the authenticated user id and the data scope CheckPermission resolved for this route.

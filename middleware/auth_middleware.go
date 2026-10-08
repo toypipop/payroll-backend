@@ -161,7 +161,7 @@ func permissionAllows(access *models.RolesModuleAccess, action string) bool {
 }
 
 // resolveAuthorizedCompanies keeps only the companies whose role actually grants the action.
-func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses []models.RolesModuleAccess, action string) ([]uint, models.DataScope, bool) {
+func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses []models.RolesModuleAccess, action string) ([]uint, models.DataScope, map[uint]models.DataScope, bool) {
 	type roleResult struct {
 		allowed bool
 		scope   models.DataScope
@@ -169,7 +169,7 @@ func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses 
 	roleResults := make(map[uint]roleResult)
 	for i := range accesses {
 		access := &accesses[i]
-		if !permissionAllows(access, action) {
+		if !permissionAllows(access, action) || scopeRank(access.DataScope) == 0 {
 			continue
 		}
 		cur := roleResults[access.RolesID]
@@ -180,19 +180,25 @@ func resolveAuthorizedCompanies(companyRoles []repository.CompanyRole, accesses 
 
 	var companyIDs []uint
 	var bestScope models.DataScope
+	companyScopes := make(map[uint]models.DataScope)
 	found := false
 	for _, cr := range companyRoles {
 		res, ok := roleResults[cr.RoleID]
 		if !ok || !res.allowed {
 			continue
 		}
-		companyIDs = append(companyIDs, cr.CompanyID)
+		if current, exists := companyScopes[cr.CompanyID]; !exists {
+			companyIDs = append(companyIDs, cr.CompanyID)
+			companyScopes[cr.CompanyID] = res.scope
+		} else if scopeRank(res.scope) > scopeRank(current) {
+			companyScopes[cr.CompanyID] = res.scope
+		}
 		if !found || scopeRank(res.scope) > scopeRank(bestScope) {
 			bestScope = res.scope
 			found = true
 		}
 	}
-	return companyIDs, bestScope, found
+	return companyIDs, bestScope, companyScopes, found
 }
 
 // CheckPermission gates the request on the module granting the action, and publishes the scope it resolved.
@@ -244,7 +250,7 @@ func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc
 			return
 		}
 
-		companyIDs, scope, found := resolveAuthorizedCompanies(companyRoles, accesses, action)
+		companyIDs, scope, companyScopes, found := resolveAuthorizedCompanies(companyRoles, accesses, action)
 		if !found {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":  "Permission denied",
@@ -256,6 +262,7 @@ func (g *Guard) CheckPermission(moduleKey string, action string) gin.HandlerFunc
 
 		c.Set("data_scope", scope)
 		c.Set("authorized_company_ids", companyIDs)
+		c.Set("company_data_scopes", companyScopes)
 		c.Next()
 	}
 }
