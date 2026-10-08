@@ -69,7 +69,7 @@ func (r *gormPayrollConfigRepository) FindActiveForCompany(companyID uint) (mode
 // UpsertForCompany writes the configuration, updating in place when the company already has one.
 func (r *gormPayrollConfigRepository) UpsertForCompany(configuration *models.PayrollConfig, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.OnConflict{
+		if err := tx.Omit(clause.Associations).Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "companies_id"}},
 			DoUpdates: clause.Assignments(map[string]any{
 				"sso_rate":        configuration.SsoRate,

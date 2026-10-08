@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/models"
+	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,8 +35,8 @@ func (h *Handler) UpdatePayrollConfig(c *gin.Context) {
 		return
 	}
 
-	var input models.PayrollConfig
-	if !httpx.BindJSON(c, &input) {
+	var input service.PayrollConfigInput
+	if !httpx.BindStrictJSON(c, &input) {
 		return
 	}
 

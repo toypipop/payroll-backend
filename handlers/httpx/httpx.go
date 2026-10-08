@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 	"payroll-backend/repository"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 )
 
 // RequestScope resolves the caller's authorization context from what AuthMiddleware and CheckPermission stored, or answers 401 and reports false.
@@ -82,6 +85,27 @@ func ParseID(c *gin.Context, param string, label string) (uint, bool) {
 func BindJSON(c *gin.Context, dst any) bool {
 	if err := c.ShouldBindJSON(dst); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format"})
+		return false
+	}
+	return true
+}
+
+// BindStrictJSON accepts one JSON value with only fields declared by the input DTO.
+// Keep this opt-in so existing endpoint contracts are not changed globally.
+func BindStrictJSON(c *gin.Context, dst any) bool {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		RespondError(c, apperr.Validation("Invalid request body"))
+		return false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		RespondError(c, apperr.Validation("Invalid request body"))
+		return false
+	}
+	if err := binding.Validator.ValidateStruct(dst); err != nil {
+		RespondError(c, apperr.Validation("Invalid request body"))
 		return false
 	}
 	return true

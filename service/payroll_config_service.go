@@ -22,6 +22,15 @@ type CycleConfig struct {
 	CompaniesID uint
 }
 
+// PayrollConfigInput excludes model identity, metadata, and company associations.
+type PayrollConfigInput struct {
+	CompaniesID    uint    `json:"companies_id"`
+	SsoRate        float64 `json:"sso_rate"`
+	SsoMaxAmount   float64 `json:"sso_max_amount"`
+	SsoMinSalary   float64 `json:"sso_min_salary"`
+	TaxCalculation string  `json:"tax_calculation"`
+}
+
 // PayrollConfigService owns the payroll-configuration rules.
 type PayrollConfigService struct {
 	repo repository.PayrollConfigRepository
@@ -38,7 +47,7 @@ func (s *PayrollConfigService) List(scope repository.AccessScope, q repository.P
 }
 
 // Save writes the configuration for a company the caller administers, updating the existing row when there is one.
-func (s *PayrollConfigService) Save(scope repository.AccessScope, input models.PayrollConfig) (models.PayrollConfig, error) {
+func (s *PayrollConfigService) Save(scope repository.AccessScope, input PayrollConfigInput) (models.PayrollConfig, error) {
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.PayrollConfig{}, ErrPayrollConfigCompanyDenied
 	}
@@ -47,10 +56,15 @@ func (s *PayrollConfigService) Save(scope repository.AccessScope, input models.P
 	if err != nil {
 		return models.PayrollConfig{}, err
 	}
-	if err := s.repo.UpsertForCompany(&input, &audit); err != nil {
+	configuration := models.PayrollConfig{
+		CompaniesID: input.CompaniesID, SsoRate: input.SsoRate,
+		SsoMaxAmount: input.SsoMaxAmount, SsoMinSalary: input.SsoMinSalary,
+		TaxCalculation: input.TaxCalculation,
+	}
+	if err := s.repo.UpsertForCompany(&configuration, &audit); err != nil {
 		return models.PayrollConfig{}, err
 	}
-	return input, nil
+	return configuration, nil
 }
 
 // ForCycle returns the configuration in force for a cycle's company.
