@@ -14,6 +14,7 @@ type SessionRepository interface {
 	IsActive(tokenID string, employeeID uint, now time.Time) (bool, error)
 	Revoke(tokenID string, employeeID uint, now time.Time) error
 	RevokeAll(employeeID uint, now time.Time) error
+	DeleteExpired(now time.Time) error
 }
 
 type gormSessionRepository struct {
@@ -46,4 +47,8 @@ func (r *gormSessionRepository) RevokeAll(employeeID uint, now time.Time) error 
 	return r.db.Model(&models.AuthSession{}).
 		Where("employee_id = ? AND revoked_at IS NULL", employeeID).
 		Update("revoked_at", now).Error
+}
+
+func (r *gormSessionRepository) DeleteExpired(now time.Time) error {
+	return r.db.Where("expires_at <= ?", now).Delete(&models.AuthSession{}).Error
 }

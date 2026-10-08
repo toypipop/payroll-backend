@@ -54,3 +54,12 @@ func (s *SessionService) RevokeAll(employeeID uint, now time.Time) error {
 	}
 	return s.repo.RevokeAll(employeeID, now)
 }
+
+// PruneExpired permanently removes sessions that can no longer authenticate.
+// It is maintenance only; callers should log failure but must not deny a valid login.
+func (s *SessionService) PruneExpired(now time.Time) error {
+	if s == nil || s.repo == nil {
+		return errors.New("authentication session store is not configured")
+	}
+	return s.repo.DeleteExpired(now)
+}

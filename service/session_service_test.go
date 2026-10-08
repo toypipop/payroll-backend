@@ -40,6 +40,15 @@ func (r *memorySessionRepository) RevokeAll(employeeID uint, now time.Time) erro
 	return nil
 }
 
+func (r *memorySessionRepository) DeleteExpired(now time.Time) error {
+	for tokenID, session := range r.sessions {
+		if !session.ExpiresAt.After(now) {
+			delete(r.sessions, tokenID)
+		}
+	}
+	return nil
+}
+
 func TestSessionLifecycleRevokesOnlyTheSelectedDevice(t *testing.T) {
 	repo := &memorySessionRepository{}
 	sessions := NewSessionService(repo)
@@ -71,5 +80,28 @@ func TestSessionLifecycleRevokesOnlyTheSelectedDevice(t *testing.T) {
 	}
 	if active, _ := sessions.IsActive(second, 7, now); active {
 		t.Fatal("revoke all left a session active")
+	}
+}
+
+func TestSessionCleanupRemovesOnlyExpiredSessions(t *testing.T) {
+	repo := &memorySessionRepository{}
+	sessions := NewSessionService(repo)
+	now := time.Now()
+	expired, err := sessions.Create(7, now.Add(-time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := sessions.Create(7, now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.PruneExpired(now); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := repo.sessions[expired]; exists {
+		t.Fatal("expired session was retained")
+	}
+	if _, exists := repo.sessions[active]; !exists {
+		t.Fatal("active session was removed")
 	}
 }

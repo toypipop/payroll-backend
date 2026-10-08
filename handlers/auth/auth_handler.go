@@ -180,6 +180,9 @@ func (h *Handler) Login(c *gin.Context) {
 	if h.LoginAttempts != nil {
 		h.LoginAttempts.Clear(input.Email)
 	}
+	if err := h.Sessions.PruneExpired(time.Now()); err != nil {
+		slog.Warn("expired authentication session cleanup failed", "request_id", observability.RequestID(c))
+	}
 
 	secret, err := GetJWTSecret()
 	if err != nil || len(secret) == 0 {
