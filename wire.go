@@ -21,7 +21,12 @@ import (
 
 // buildGuard assembles the request-gating middleware from the lookups it needs.
 func buildGuard(db *gorm.DB) *middleware.Guard {
-	return middleware.NewGuard(repository.NewAccessRepository(db), repository.NewDeleteGuardRepository(db), service.NewCompanyAccessService(repository.NewCompanyAccessRepository(db)))
+	return middleware.NewGuard(
+		repository.NewAccessRepository(db),
+		repository.NewDeleteGuardRepository(db),
+		service.NewCompanyAccessService(repository.NewCompanyAccessRepository(db)),
+		service.NewSessionService(repository.NewSessionRepository(db)),
+	)
 }
 
 // buildHandlers is the composition root: repositories and services are built here so nothing below main needs a database handle of its own.
@@ -33,6 +38,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 
 	// Repositories shared by more than one service are built once and reused.
 	employeesRepo := repository.NewEmployeesRepository(db)
+	sessionService := service.NewSessionService(repository.NewSessionRepository(db))
 	earningTypeRepo := repository.NewEarningTypeRepository(db)
 	deductionTypeRepo := repository.NewDeductionTypeRepository(db)
 	payrollRunRepo := repository.NewPayrollRunRepository(db)
@@ -55,10 +61,11 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 		},
 		Auth: &authhandler.Handler{
 			Auth:          service.NewAuthService(repository.NewAuthRepository(db)),
+			Sessions:      sessionService,
 			LoginAttempts: service.NewLoginAttemptLimiter(),
 		},
 		Employees: &emphandler.Handler{
-			Employees: service.NewEmployeesService(employeesRepo),
+			Employees: service.NewEmployeesService(employeesRepo, sessionService),
 			EmployeeDeduction: service.NewEmployeeDeductionService(
 				repository.NewEmployeeDeductionRepository(db),
 				employeesRepo,

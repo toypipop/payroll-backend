@@ -74,7 +74,7 @@ func SetupRouter(h Handlers, g *middleware.Guard, databaseAdmission gin.HandlerF
 	authGroup := r.Group("/api/v1/auth")
 	{
 		authGroup.POST("/login", h.Auth.Login)
-		authGroup.POST("/logout", h.Auth.Logout)
+		authGroup.POST("/logout", g.Auth(), h.Auth.Logout)
 		authGroup.GET("/me", g.Auth(), h.Auth.Me)
 	}
 	r.GET("/api/v1/modules", h.Auth.GetAppModules)

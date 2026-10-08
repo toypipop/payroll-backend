@@ -34,9 +34,10 @@ func GetJWTSecret() ([]byte, error) {
 }
 
 type TokenClaims struct {
-	UserID      uint `json:"user_id"`
-	CompaniesID uint `json:"companies_id"`
-	RolesID     uint `json:"roles_id"`
+	UserID      uint   `json:"user_id"`
+	CompaniesID uint   `json:"companies_id"`
+	RolesID     uint   `json:"roles_id"`
+	SessionID   string `json:"sid"`
 	jwt.RegisteredClaims
 }
 
@@ -116,7 +117,7 @@ func GetAuthCookieName() string {
 }
 
 // issueToken signs a token for an authenticated employee.
-func issueToken(subject service.TokenSubject) (string, error) {
+func issueToken(subject service.TokenSubject, sessionID string) (string, error) {
 	secret, err := GetJWTSecret()
 	if err != nil {
 		return "", err
@@ -126,6 +127,7 @@ func issueToken(subject service.TokenSubject) (string, error) {
 		UserID:      subject.UserID,
 		CompaniesID: subject.CompaniesID,
 		RolesID:     subject.RolesID,
+		SessionID:   sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(authTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -185,7 +187,13 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	tokenString, err := issueToken(h.Auth.Subject(employee))
+	sessionID, err := h.Sessions.Create(employee.ID, time.Now().Add(authTokenTTL))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not create login session"})
+		return
+	}
+
+	tokenString, err := issueToken(h.Auth.Subject(employee), sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
 		return
@@ -227,6 +235,16 @@ func (h *Handler) Me(c *gin.Context) {
 }
 
 func (h *Handler) Logout(c *gin.Context) {
+	userID, userOK := c.Get("user_id")
+	sessionID, sessionOK := c.Get("session_id")
+	if userIDValue, ok := userID.(uint); userOK && ok {
+		if sessionIDValue, ok := sessionID.(string); sessionOK && ok {
+			if err := h.Sessions.Revoke(sessionIDValue, userIDValue, time.Now()); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not end login session"})
+				return
+			}
+		}
+	}
 	ClearAuthCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out"})
 }

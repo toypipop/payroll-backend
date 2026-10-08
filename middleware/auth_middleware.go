@@ -3,6 +3,7 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	authhandler "payroll-backend/handlers/auth"
 	"payroll-backend/handlers/httpx"
@@ -20,11 +21,12 @@ type Guard struct {
 	access    repository.AccessRepository
 	delete    repository.DeleteGuardRepository
 	companies *service.CompanyAccessService
+	sessions  *service.SessionService
 }
 
 // NewGuard builds the middleware set from the repositories main composed.
-func NewGuard(access repository.AccessRepository, deleteGuard repository.DeleteGuardRepository, companies *service.CompanyAccessService) *Guard {
-	return &Guard{access: access, delete: deleteGuard, companies: companies}
+func NewGuard(access repository.AccessRepository, deleteGuard repository.DeleteGuardRepository, companies *service.CompanyAccessService, sessions *service.SessionService) *Guard {
+	return &Guard{access: access, delete: deleteGuard, companies: companies, sessions: sessions}
 }
 
 // Auth validates the JWT cookie and puts the caller's identity and reachable companies on the request.
@@ -55,6 +57,26 @@ func (g *Guard) Auth() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
+			authhandler.ClearAuthCookie(c)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+		if claims.SessionID == "" {
+			authhandler.ClearAuthCookie(c)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+		active, err := g.sessions.IsActive(claims.SessionID, claims.UserID, time.Now())
+		if err != nil {
+			slog.Error("authentication session lookup failed", "request_id", observability.RequestID(c))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Authentication service is unavailable"})
+			c.Abort()
+			return
+		}
+		if !active {
+			authhandler.ClearAuthCookie(c)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
 			c.Abort()
 			return
@@ -78,6 +100,7 @@ func (g *Guard) Auth() gin.HandlerFunc {
 
 		// Set tenant data to context
 		c.Set("user_id", claims.UserID)
+		c.Set("session_id", claims.SessionID)
 		access, err := g.access.ResolveAccess(user)
 		if err != nil {
 			slog.Error("company access lookup failed", "request_id", observability.RequestID(c))

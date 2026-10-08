@@ -5,6 +5,7 @@ import (
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
@@ -32,12 +33,17 @@ var ErrEmployeeNotFound = repository.ErrEmployeeNotFound
 
 // EmployeesService owns the employee business rules: which company a record may belong to, that a role must match that company, and how credentials are stored.
 type EmployeesService struct {
-	repo repository.EmployeesRepository
+	repo     repository.EmployeesRepository
+	sessions *SessionService
 }
 
 // NewEmployeesService wires the service to a repository implementation.
-func NewEmployeesService(repo repository.EmployeesRepository) *EmployeesService {
-	return &EmployeesService{repo: repo}
+func NewEmployeesService(repo repository.EmployeesRepository, sessions ...*SessionService) *EmployeesService {
+	var sessionService *SessionService
+	if len(sessions) > 0 {
+		sessionService = sessions[0]
+	}
+	return &EmployeesService{repo: repo, sessions: sessionService}
 }
 
 func (s *EmployeesService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Employees], error) {
@@ -110,6 +116,7 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 		return models.Employees{}, err
 	}
 
+	passwordChanged := false
 	if password, ok := patch["password"].(string); ok && password != "" {
 		if err := validatePassword(password); err != nil {
 			return models.Employees{}, err
@@ -119,6 +126,7 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 			return models.Employees{}, ErrPasswordHash
 		}
 		patch["password"] = string(hashed)
+		passwordChanged = true
 	} else {
 		delete(patch, "password")
 	}
@@ -127,6 +135,15 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 
 	before := employeeAuditData(employee)
 	if err := s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
+		// A password reset or account deactivation must invalidate every device.
+		// Revocation happens first: if the employee write later fails, signing out is
+		// still the safe outcome rather than leaving a possibly compromised session alive.
+		active, statusChanged := patch["is_active"].(bool)
+		if s.sessions != nil && (passwordChanged || (statusChanged && !active)) {
+			if err := s.sessions.RevokeAll(employee.ID, time.Now()); err != nil {
+				return err
+			}
+		}
 		if err := repo.UpdateFields(&employee, patch); err != nil {
 			return err
 		}

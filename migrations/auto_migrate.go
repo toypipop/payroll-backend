@@ -45,6 +45,7 @@ func autoMigrateTables(db *gorm.DB) error {
 		&models.Department{},
 		&models.Position{},
 		&models.Employees{},
+		&models.AuthSession{},
 		&models.SalariesStructure{},
 		&models.SalaryAudit{},
 		&models.AuditLog{},
