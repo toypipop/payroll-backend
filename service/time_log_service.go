@@ -46,6 +46,17 @@ var (
 	ErrTimeLogNotDeletable = repository.ErrTimeLogNotDeletable
 )
 
+// TimeLogInput accepts only editable fields, never persistence metadata or associations.
+type TimeLogInput struct {
+	CompaniesID    uint       `json:"companies_id"`
+	EmployeesID    uint       `json:"employees_id"`
+	CheckIn        *time.Time `json:"check_in"`
+	CheckOut       *time.Time `json:"check_out"`
+	WorkLocationID *uint      `json:"work_location_id"`
+	LocationIn     string     `json:"location_in"`
+	Remark         string     `json:"remark"`
+}
+
 // BulkTimeLogInput describes a run of generated logs for one employee.
 type BulkTimeLogInput struct {
 	EmployeesID    uint
@@ -145,7 +156,7 @@ func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, chec
 }
 
 // validateInput enforces the field rules shared by create and update.
-func validateTimeLogInput(input models.TimeLog) error {
+func validateTimeLogInput(input TimeLogInput) error {
 	if input.EmployeesID == 0 {
 		return ErrTimeLogEmployeeRequired
 	}
@@ -156,7 +167,7 @@ func validateTimeLogInput(input models.TimeLog) error {
 }
 
 // Create files a log against an employee, deriving its status.
-func (s *TimeLogService) Create(scope repository.AccessScope, input models.TimeLog) (models.TimeLog, error) {
+func (s *TimeLogService) Create(scope repository.AccessScope, input TimeLogInput) (models.TimeLog, error) {
 	if err := validateTimeLogInput(input); err != nil {
 		return models.TimeLog{}, err
 	}
@@ -169,25 +180,29 @@ func (s *TimeLogService) Create(scope repository.AccessScope, input models.TimeL
 		return models.TimeLog{}, err
 	}
 
-	// The company comes from the employee, never from the request.
-	input.CompaniesID = employee.CompaniesID
-	input.Status, err = s.DeriveStatus(input.CompaniesID, input.CheckIn, input.CheckOut)
+	// Persist only editable fields and the employee identity that passed authorization.
+	log := models.TimeLog{
+		CompaniesID: employee.CompaniesID, EmployeesID: employee.ID,
+		CheckIn: input.CheckIn, CheckOut: input.CheckOut, WorkLocationID: input.WorkLocationID,
+		LocationIn: input.LocationIn, Remark: input.Remark,
+	}
+	log.Status, err = s.DeriveStatus(log.CompaniesID, log.CheckIn, log.CheckOut)
 	if err != nil {
 		return models.TimeLog{}, err
 	}
 
-	audit, err := timeLogAudit(scope, models.AuditEventTimeLogCreated, "Time log created", input, nil)
+	audit, err := timeLogAudit(scope, models.AuditEventTimeLogCreated, "Time log created", log, nil)
 	if err != nil {
 		return models.TimeLog{}, err
 	}
-	if err := s.repo.Create(&input, &audit); err != nil {
+	if err := s.repo.Create(&log, &audit); err != nil {
 		return models.TimeLog{}, err
 	}
-	return input, nil
+	return log, nil
 }
 
 // Update rewrites a log the caller's scope covers, re-deriving its status.
-func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input models.TimeLog) (models.TimeLog, error) {
+func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input TimeLogInput) (models.TimeLog, error) {
 	log, err := s.repo.FindScoped(scope, id)
 	if err != nil {
 		return models.TimeLog{}, err

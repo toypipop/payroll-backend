@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"payroll-backend/handlers/httpx"
-	"payroll-backend/models"
 	"payroll-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +33,7 @@ func (h *Handler) CreateTimeLog(c *gin.Context) {
 		return
 	}
 
-	var input models.TimeLog
+	var input service.TimeLogInput
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
@@ -102,7 +101,7 @@ func (h *Handler) UpdateTimeLog(c *gin.Context) {
 		return
 	}
 
-	var input models.TimeLog
+	var input service.TimeLogInput
 	if !httpx.BindJSON(c, &input) {
 		return
 	}

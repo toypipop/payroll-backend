@@ -8,6 +8,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Time-log lookup failures.
@@ -82,7 +83,7 @@ func (r *gormTimeLogRepository) Create(log *models.TimeLog, audit *models.AuditL
 		if err := lockActiveEmployees(tx, log.EmployeesID); err != nil {
 			return err
 		}
-		if err := tx.Create(log).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Create(log).Error; err != nil {
 			return err
 		}
 		if audit != nil && audit.EntityID != nil {
@@ -108,7 +109,7 @@ func (r *gormTimeLogRepository) CreateMany(logs []models.TimeLog, audit *models.
 		if err := lockActiveEmployees(tx, ids...); err != nil {
 			return err
 		}
-		if err := tx.Create(&logs).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Create(&logs).Error; err != nil {
 			return err
 		}
 		if audit != nil {
@@ -123,7 +124,7 @@ func (r *gormTimeLogRepository) Save(log *models.TimeLog, audit *models.AuditLog
 		if err := lockActiveEmployees(tx, log.EmployeesID); err != nil {
 			return err
 		}
-		if err := tx.Save(log).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Save(log).Error; err != nil {
 			return err
 		}
 		if audit != nil {
