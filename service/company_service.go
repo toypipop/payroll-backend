@@ -54,8 +54,7 @@ func (s *CompanyService) Create(scope repository.AccessScope, input models.Compa
 	if name == "" {
 		return models.Companies{}, ErrCompanyNameRequired
 	}
-	input.Name = name
-	input.IsActive = true
+	input = models.Companies{Name: name, TaxID: input.TaxID, Address: input.Address, Phone: input.Phone, IsActive: true}
 
 	boot := repository.TenantBootstrap{
 		RoleName:        bootstrapRoleName,

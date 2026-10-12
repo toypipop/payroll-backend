@@ -151,7 +151,7 @@ func (r *gormCompanyRepository) CreateTenant(company *models.Companies, boot Ten
 	}
 
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(company).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Create(company).Error; err != nil {
 			return err
 		}
 		if audit != nil {

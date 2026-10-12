@@ -46,12 +46,17 @@ func (h *Handler) CreateCompanies(c *gin.Context) {
 		return
 	}
 
-	var input models.Companies
-	if !httpx.BindJSON(c, &input) {
+	var input struct {
+		Name    string `json:"name"`
+		TaxID   string `json:"tax_id"`
+		Address string `json:"address"`
+		Phone   string `json:"phone"`
+	}
+	if !httpx.BindStrictJSON(c, &input) {
 		return
 	}
 
-	company, err := h.Company.Create(scope, input)
+	company, err := h.Company.Create(scope, models.Companies{Name: input.Name, TaxID: input.TaxID, Address: input.Address, Phone: input.Phone})
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

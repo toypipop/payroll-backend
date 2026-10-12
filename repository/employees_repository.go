@@ -28,6 +28,7 @@ type EmployeesRepository interface {
 	FindScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindBriefScoped(scope AccessScope, id uint) (models.Employees, error)
 	FindRole(roleID uint) (models.Roles, error)
+	ValidateCompanyReferences(employee models.Employees) error
 	Create(employee *models.Employees) error
 	UpdateFields(employee *models.Employees, fields map[string]any) error
 	Delete(employee *models.Employees) error
@@ -96,6 +97,34 @@ func (r *gormEmployeesRepository) FindBriefScoped(scope AccessScope, id uint) (m
 		return models.Employees{}, err
 	}
 	return employee, nil
+}
+
+var ErrEmployeeReferenceCompany = apperr.Validation("Employee department, position and employment type must belong to the employee company")
+
+func (r *gormEmployeesRepository) ValidateCompanyReferences(employee models.Employees) error {
+	checks := []struct {
+		model any
+		id    uint
+	}{{&models.Department{}, employee.DeptID}, {&models.Position{}, employee.PosID}}
+	if employee.EmploymentTypeID != nil {
+		checks = append(checks, struct {
+			model any
+			id    uint
+		}{&models.EmploymentType{}, *employee.EmploymentTypeID})
+	}
+	for _, check := range checks {
+		if check.id == 0 {
+			continue
+		}
+		var count int64
+		if err := r.db.Model(check.model).Where("id = ? AND companies_id = ?", check.id, employee.CompaniesID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 1 {
+			return ErrEmployeeReferenceCompany
+		}
+	}
+	return nil
 }
 
 func (r *gormEmployeesRepository) FindRole(roleID uint) (models.Roles, error) {

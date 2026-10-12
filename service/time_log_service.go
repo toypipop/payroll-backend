@@ -80,11 +80,31 @@ type BulkTimeLogResult struct {
 type TimeLogService struct {
 	repo      repository.TimeLogRepository
 	employees repository.EmployeesRepository
+	locations repository.WorkLocationRepository
 }
 
 // NewTimeLogService wires the service to repository implementations.
-func NewTimeLogService(repo repository.TimeLogRepository, employees repository.EmployeesRepository) *TimeLogService {
-	return &TimeLogService{repo: repo, employees: employees}
+func NewTimeLogService(repo repository.TimeLogRepository, employees repository.EmployeesRepository, locations repository.WorkLocationRepository) *TimeLogService {
+	return &TimeLogService{repo: repo, employees: employees, locations: locations}
+}
+
+var ErrTimeLogWorkLocationCompany = apperr.Validation("Work location must belong to the time log company")
+
+func (s *TimeLogService) validateWorkLocation(scope repository.AccessScope, companyID, locationID uint) error {
+	if locationID == 0 {
+		return ErrTimeLogWorkLocationRequired
+	}
+	if s.locations == nil {
+		return ErrTimeLogWorkLocationCompany
+	}
+	location, err := s.locations.FindScoped(scope, locationID)
+	if err != nil {
+		return err
+	}
+	if location.CompaniesID != companyID {
+		return ErrTimeLogWorkLocationCompany
+	}
+	return nil
 }
 
 // List returns the logs the caller's scope covers, with relations loaded.
@@ -181,6 +201,9 @@ func (s *TimeLogService) Create(scope repository.AccessScope, input TimeLogInput
 	}
 
 	// Persist only editable fields and the employee identity that passed authorization.
+	if err := s.validateWorkLocation(scope, employee.CompaniesID, *input.WorkLocationID); err != nil {
+		return models.TimeLog{}, err
+	}
 	log := models.TimeLog{
 		CompaniesID: employee.CompaniesID, EmployeesID: employee.ID,
 		CheckIn: input.CheckIn, CheckOut: input.CheckOut, WorkLocationID: input.WorkLocationID,
@@ -207,6 +230,9 @@ func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input Tim
 	if err != nil {
 		return models.TimeLog{}, err
 	}
+	if err := requireSameCompany(log.CompaniesID, input.CompaniesID); err != nil {
+		return models.TimeLog{}, err
+	}
 	if err := validateTimeLogInput(input); err != nil {
 		return models.TimeLog{}, err
 	}
@@ -217,6 +243,9 @@ func (s *TimeLogService) Update(scope repository.AccessScope, id uint, input Tim
 	}
 
 	before := timeLogAuditData(log)
+	if err := s.validateWorkLocation(scope, employee.CompaniesID, *input.WorkLocationID); err != nil {
+		return models.TimeLog{}, err
+	}
 	log.EmployeesID = employee.ID
 	log.CompaniesID = employee.CompaniesID
 	log.CheckIn = input.CheckIn
@@ -305,6 +334,9 @@ func (s *TimeLogService) BulkCreate(scope repository.AccessScope, input BulkTime
 	}
 
 	workLocationID := input.WorkLocationID
+	if err := s.validateWorkLocation(scope, employee.CompaniesID, workLocationID); err != nil {
+		return BulkTimeLogResult{}, err
+	}
 	result := BulkTimeLogResult{}
 	pending := make([]models.TimeLog, 0)
 

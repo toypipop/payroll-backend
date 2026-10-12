@@ -33,16 +33,18 @@ type EmployeeCompanyAccessInput struct {
 
 // EmployeeCompanyAccessService owns the rules for granting an employee access to a company.
 type EmployeeCompanyAccessService struct {
-	repo  repository.EmployeeCompanyAccessRepository
-	roles repository.RoleRepository
+	repo        repository.EmployeeCompanyAccessRepository
+	roles       repository.RoleRepository
+	assignments *RoleAssignmentService
 }
 
 // NewEmployeeCompanyAccessService wires the service to repository implementations.
 func NewEmployeeCompanyAccessService(
 	repo repository.EmployeeCompanyAccessRepository,
 	roles repository.RoleRepository,
+	assignments *RoleAssignmentService,
 ) *EmployeeCompanyAccessService {
-	return &EmployeeCompanyAccessService{repo: repo, roles: roles}
+	return &EmployeeCompanyAccessService{repo: repo, roles: roles, assignments: assignments}
 }
 
 // List returns the mappings the caller's scope covers, with relations loaded.
@@ -65,7 +67,7 @@ func (s *EmployeeCompanyAccessService) validate(scope repository.AccessScope, in
 	if _, ok := scope.ResolveCompanyID(input.CompanyID); !ok {
 		return ErrCompanyAccessDenied
 	}
-	employee, err := s.repo.FindEmployeeBrief(input.EmployeeID)
+	employee, err := s.repo.FindEmployeeBriefScoped(scope, input.EmployeeID, input.CompanyID)
 	if err != nil {
 		return ErrAccessEmployeeMissing
 	}
@@ -80,7 +82,7 @@ func (s *EmployeeCompanyAccessService) validate(scope repository.AccessScope, in
 	if role.CompaniesID != input.CompanyID {
 		return ErrAccessRoleMismatch
 	}
-	return nil
+	return s.assignments.Require(scope, input.CompanyID)
 }
 
 // Create grants an employee access to a company under a role of that company.
@@ -109,6 +111,9 @@ func (s *EmployeeCompanyAccessService) Create(scope repository.AccessScope, inpu
 func (s *EmployeeCompanyAccessService) Update(scope repository.AccessScope, id uint, input EmployeeCompanyAccessInput) (models.EmployeeCompanyAccess, error) {
 	existing, err := s.repo.FindScoped(scope, id)
 	if err != nil {
+		return models.EmployeeCompanyAccess{}, err
+	}
+	if err := requireSameCompany(existing.CompanyID, input.CompanyID); err != nil {
 		return models.EmployeeCompanyAccess{}, err
 	}
 	if err := s.validate(scope, input); err != nil {

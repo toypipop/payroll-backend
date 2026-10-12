@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"payroll-backend/internal/testfixture"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"payroll-backend/service"
@@ -18,7 +19,7 @@ type createAccessStatusRepo struct {
 	mapping models.EmployeeCompanyAccess
 }
 
-func (r *createAccessStatusRepo) FindEmployeeBrief(uint) (models.Employees, error) {
+func (r *createAccessStatusRepo) FindEmployeeBriefScoped(repository.AccessScope, uint, uint) (models.Employees, error) {
 	return models.Employees{ID: 9, CompaniesID: 7, IsActive: true}, nil
 }
 func (r *createAccessStatusRepo) Create(mapping *models.EmployeeCompanyAccess, _ *models.AuditLog) error {
@@ -43,7 +44,7 @@ func TestCreateCompanyAccessStatusDefaultAndExplicitFalse(t *testing.T) {
 		active bool
 	}{{"", true}, {`,"is_active":false`, false}, {`,"is_active":true`, true}} {
 		t.Run(tc.suffix, func(t *testing.T) {
-			h := &Handler{EmployeeCompanyAccess: service.NewEmployeeCompanyAccessService(&createAccessStatusRepo{}, createAccessRoleRepo{})}
+			h := &Handler{EmployeeCompanyAccess: service.NewEmployeeCompanyAccessService(&createAccessStatusRepo{}, createAccessRoleRepo{}, testfixture.RoleAssignments(7))}
 			router := gin.New()
 			router.Use(func(c *gin.Context) {
 				c.Set("scope_user", models.Employees{ID: 1})

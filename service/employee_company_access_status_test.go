@@ -12,7 +12,7 @@ type inactiveCompanyAccessRepo struct {
 	repository.EmployeeCompanyAccessRepository
 }
 
-func (inactiveCompanyAccessRepo) FindEmployeeBrief(uint) (models.Employees, error) {
+func (inactiveCompanyAccessRepo) FindEmployeeBriefScoped(repository.AccessScope, uint, uint) (models.Employees, error) {
 	return models.Employees{ID: 9, CompaniesID: 7, IsActive: false}, nil
 }
 
@@ -21,7 +21,7 @@ func (inactiveCompanyAccessRepo) FindScoped(repository.AccessScope, uint) (model
 }
 
 func TestInactiveEmployeeCannotReceiveCompanyAccess(t *testing.T) {
-	svc := NewEmployeeCompanyAccessService(inactiveCompanyAccessRepo{}, nil)
+	svc := NewEmployeeCompanyAccessService(inactiveCompanyAccessRepo{}, nil, nil)
 	scope := repository.AccessScope{AuthorizedCompanyIDs: []uint{7}, DataScope: models.ScopeCompanies}
 	input := EmployeeCompanyAccessInput{EmployeeID: 9, CompanyID: 7, RoleID: 2, IsActive: true}
 	if _, err := svc.Create(scope, input); !errors.Is(err, ErrEmployeeInactive) {

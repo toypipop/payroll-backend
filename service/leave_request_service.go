@@ -165,6 +165,9 @@ func (s *LeaveRequestService) Update(scope repository.AccessScope, id uint, inpu
 	if err != nil {
 		return models.LeaveRequest{}, err
 	}
+	if err := requireSameCompany(leave.CompaniesID, input.CompaniesID); err != nil {
+		return models.LeaveRequest{}, err
+	}
 	if leave.Status != models.LeaveStatusPending {
 		return models.LeaveRequest{}, ErrLeaveNotPending
 	}
@@ -174,17 +177,17 @@ func (s *LeaveRequestService) Update(scope repository.AccessScope, id uint, inpu
 		return models.LeaveRequest{}, ErrLeaveEndBeforeStart
 	}
 
+	employee, leaveType, err := s.resolveTarget(scope, input)
+	if err != nil {
+		return models.LeaveRequest{}, err
+	}
+
 	overlapping, err := s.repo.CountOverlapping(input.EmployeesID, start, end, leave.ID)
 	if err != nil {
 		return models.LeaveRequest{}, err
 	}
 	if overlapping > 0 {
 		return models.LeaveRequest{}, ErrLeaveOverlap
-	}
-
-	employee, leaveType, err := s.resolveTarget(scope, input)
-	if err != nil {
-		return models.LeaveRequest{}, err
 	}
 
 	before := leaveAuditData(leave)

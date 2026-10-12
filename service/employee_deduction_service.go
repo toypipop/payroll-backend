@@ -92,6 +92,9 @@ func (s *EmployeeDeductionService) Update(scope repository.AccessScope, id uint,
 	if err != nil {
 		return models.EmployeeDeduction{}, err
 	}
+	if err := requireSameCompany(item.CompaniesID, input.CompaniesID); err != nil {
+		return models.EmployeeDeduction{}, err
+	}
 
 	companyID, err := s.resolveTarget(scope, input.EmployeesID, input.CompaniesID, input.DeductionTypeID)
 	if err != nil {

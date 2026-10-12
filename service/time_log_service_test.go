@@ -63,7 +63,7 @@ func (r *bulkTimeLogEmployees) FindDetail(uint) (models.Employees, error) {
 func TestBulkCreateSkipsCompanyHoliday(t *testing.T) {
 	repo := &bulkTimeLogRepo{holidays: map[string]int64{"2027-07-28": 1}}
 	employees := &bulkTimeLogEmployees{employee: models.Employees{ID: 10, CompaniesID: 1, IsActive: true}}
-	service := NewTimeLogService(repo, employees)
+	service := NewTimeLogService(repo, employees, timeLogLocations{companyID: 1})
 	scope := repository.NewAccessScope(models.Employees{ID: 99, CompaniesID: 1}, models.ScopeCompanies, []uint{1})
 
 	result, err := service.BulkCreate(scope, BulkTimeLogInput{
@@ -89,3 +89,13 @@ func (f *bulkTimeLogEmployees) WithinTx(fn func(repository.EmployeesRepository) 
 	return fn(f)
 }
 func (f *bulkTimeLogEmployees) AppendAuditLog(*models.AuditLog) error { return nil }
+
+type timeLogLocations struct {
+	repository.WorkLocationRepository
+	companyID uint
+	err       error
+}
+
+func (l timeLogLocations) FindScoped(_ repository.AccessScope, id uint) (models.WorkLocation, error) {
+	return models.WorkLocation{ID: id, CompaniesID: l.companyID}, l.err
+}

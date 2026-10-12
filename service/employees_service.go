@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"math"
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -33,17 +34,18 @@ var ErrEmployeeNotFound = repository.ErrEmployeeNotFound
 
 // EmployeesService owns the employee business rules: which company a record may belong to, that a role must match that company, and how credentials are stored.
 type EmployeesService struct {
-	repo     repository.EmployeesRepository
-	sessions *SessionService
+	repo        repository.EmployeesRepository
+	sessions    *SessionService
+	assignments *RoleAssignmentService
 }
 
 // NewEmployeesService wires the service to a repository implementation.
-func NewEmployeesService(repo repository.EmployeesRepository, sessions ...*SessionService) *EmployeesService {
+func NewEmployeesService(repo repository.EmployeesRepository, assignments *RoleAssignmentService, sessions ...*SessionService) *EmployeesService {
 	var sessionService *SessionService
 	if len(sessions) > 0 {
 		sessionService = sessions[0]
 	}
-	return &EmployeesService{repo: repo, sessions: sessionService}
+	return &EmployeesService{repo: repo, sessions: sessionService, assignments: assignments}
 }
 
 func (s *EmployeesService) List(scope repository.AccessScope, q repository.PageQuery) (repository.Page[models.Employees], error) {
@@ -75,6 +77,12 @@ func (s *EmployeesService) Create(scope repository.AccessScope, input models.Emp
 	}
 
 	if err := validatePassword(input.Password); err != nil {
+		return models.Employees{}, err
+	}
+	if err := s.assignments.Require(scope, companyID); err != nil {
+		return models.Employees{}, err
+	}
+	if err := s.repo.ValidateCompanyReferences(input); err != nil {
 		return models.Employees{}, err
 	}
 	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcryptCost)
@@ -109,8 +117,18 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 	}
 
 	nextRoleID := employee.RolesID
-	if rolesID, ok := patch["roles_id"].(float64); ok {
-		nextRoleID = uint(rolesID)
+	if value, exists := patch["roles_id"]; exists {
+		id, err := employeePatchID(value, false)
+		if err != nil || id == 0 {
+			return models.Employees{}, apperr.Validation("Invalid role ID")
+		}
+		nextRoleID = id
+		patch["roles_id"] = id
+	}
+	if nextRoleID != employee.RolesID {
+		if err := s.assignments.Require(scope, companyID); err != nil {
+			return models.Employees{}, err
+		}
 	}
 	if err := s.assertRoleBelongsTo(nextRoleID, companyID); err != nil {
 		return models.Employees{}, err
@@ -132,6 +150,9 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 	}
 
 	normalizeBankID(patch)
+	if err := s.validateReferencePatch(scope, employee, patch); err != nil {
+		return models.Employees{}, err
+	}
 
 	before := employeeAuditData(employee)
 	if err := s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
@@ -196,7 +217,66 @@ func pickEmployeeFields(patch map[string]any) map[string]any {
 	return allowed
 }
 
-// normalizeBankID turns the shapes a JSON client can send for an optional bank into an id or a clear marker.
+// validateReferencePatch validates the resulting relationships before writing.
+func (s *EmployeesService) validateReferencePatch(scope repository.AccessScope, employee models.Employees, patch map[string]any) error {
+	references := employee
+	changed := false
+	for _, field := range []string{"dept_id", "pos_id", "employment_type_id"} {
+		value, exists := patch[field]
+		if !exists {
+			continue
+		}
+		changed = true
+		id, err := employeePatchID(value, field == "employment_type_id")
+		if err != nil {
+			return err
+		}
+		switch field {
+		case "dept_id":
+			references.DeptID = id
+		case "pos_id":
+			references.PosID = id
+		case "employment_type_id":
+			if id == 0 {
+				references.EmploymentTypeID = nil
+				patch[field] = repository.ClearField
+				continue
+			}
+			references.EmploymentTypeID = &id
+		}
+		patch[field] = id
+	}
+	if !changed {
+		return nil
+	}
+	// Department defines row visibility; a restricted editor cannot expand their
+	// scope by moving themselves to another department.
+	if references.DeptID != employee.DeptID {
+		dataScope := scope.DataScope
+		if scope.CompanyDataScopes != nil {
+			dataScope = scope.CompanyDataScopes[employee.CompaniesID]
+		}
+		if dataScope != models.ScopeCompanies {
+			if err := s.assignments.Require(scope, employee.CompaniesID); err != nil {
+				return err
+			}
+		}
+	}
+	return s.repo.ValidateCompanyReferences(references)
+}
+
+func employeePatchID(value any, nullable bool) (uint, error) {
+	if value == nil && nullable {
+		return 0, nil
+	}
+	number, ok := value.(float64)
+	if !ok || math.IsNaN(number) || math.IsInf(number, 0) || number < 0 || number > 9007199254740991 || math.Trunc(number) != number {
+		return 0, apperr.Validation("Invalid employee reference ID")
+	}
+	return uint(number), nil
+}
+
+// normalizeBankID converts an optional bank ID to a value or clear marker.
 func normalizeBankID(patch map[string]any) {
 	raw, present := patch["bank_id"]
 	if !present {

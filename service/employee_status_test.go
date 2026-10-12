@@ -15,7 +15,10 @@ func TestInactiveEmployeeRejectedByOperationalServices(t *testing.T) {
 		name string
 		call func() error
 	}{
-		{"time log", func() error { _, err := NewTimeLogService(nil, employees).resolveEmployee(scope, 5, 1); return err }},
+		{"time log", func() error {
+			_, err := NewTimeLogService(nil, employees, nil).resolveEmployee(scope, 5, 1)
+			return err
+		}},
 		{"leave", func() error {
 			_, _, err := NewLeaveRequestService(nil, employees, nil).resolveTarget(scope, LeaveInput{EmployeesID: 5, CompaniesID: 1})
 			return err

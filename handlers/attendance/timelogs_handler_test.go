@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"payroll-backend/internal/testfixture"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"payroll-backend/service"
@@ -58,7 +59,7 @@ func TestTimeLogWritesIgnoreInjectedAssociationsAndMetadata(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				repo := &timeLogWriteRepo{}
-				h := &Handler{TimeLog: service.NewTimeLogService(repo, &timeLogScopeEmployees{})}
+				h := &Handler{TimeLog: service.NewTimeLogService(repo, &timeLogScopeEmployees{}, testfixture.WorkLocations(1))}
 				router := gin.New()
 				router.Use(func(c *gin.Context) {
 					c.Set("scope_user", models.Employees{ID: 9, CompaniesID: 1})
@@ -98,7 +99,7 @@ func TestTimeLogWritesIgnoreInjectedAssociationsAndMetadata(t *testing.T) {
 
 func TestTimeLogCreateRejectsUnauthorizedScalarEmployee(t *testing.T) {
 	repo := &timeLogWriteRepo{}
-	svc := service.NewTimeLogService(repo, &timeLogScopeEmployees{})
+	svc := service.NewTimeLogService(repo, &timeLogScopeEmployees{}, testfixture.WorkLocations(1))
 	scope := repository.NewAccessScope(models.Employees{ID: 9, CompaniesID: 1}, models.ScopeOwn, []uint{1})
 	location := uint(4)
 	_, err := svc.Create(scope, service.TimeLogInput{CompaniesID: 1, EmployeesID: 77, WorkLocationID: &location})

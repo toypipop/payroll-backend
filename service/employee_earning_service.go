@@ -92,6 +92,9 @@ func (s *EmployeeEarningService) Update(scope repository.AccessScope, id uint, i
 	if err != nil {
 		return models.EmployeeEarning{}, err
 	}
+	if err := requireSameCompany(item.CompaniesID, input.CompaniesID); err != nil {
+		return models.EmployeeEarning{}, err
+	}
 
 	companyID, err := s.resolveTarget(scope, input.EmployeesID, input.CompaniesID, input.EarningTypeID)
 	if err != nil {

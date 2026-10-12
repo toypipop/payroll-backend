@@ -45,6 +45,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 	payrollConfigRepo := repository.NewPayrollConfigRepository(db)
 	roleRepo := repository.NewRoleRepository(db)
 	companyRepo := repository.NewCompanyRepository(db)
+	roleAssignments := service.NewRoleAssignmentService(repository.NewAccessRepository(db))
 
 	payrollConfigSvc := service.NewPayrollConfigService(payrollConfigRepo)
 
@@ -57,7 +58,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 				employeesRepo,
 				repository.NewLeaveTypeSettingRepository(db),
 			),
-			TimeLog: service.NewTimeLogService(repository.NewTimeLogRepository(db), employeesRepo),
+			TimeLog: service.NewTimeLogService(repository.NewTimeLogRepository(db), employeesRepo, repository.NewWorkLocationRepository(db)),
 		},
 		Auth: &authhandler.Handler{
 			Auth:          service.NewAuthService(repository.NewAuthRepository(db)),
@@ -65,7 +66,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 			LoginAttempts: service.NewLoginAttemptLimiter(),
 		},
 		Employees: &emphandler.Handler{
-			Employees: service.NewEmployeesService(employeesRepo, sessionService),
+			Employees: service.NewEmployeesService(employeesRepo, roleAssignments, sessionService),
 			EmployeeDeduction: service.NewEmployeeDeductionService(
 				repository.NewEmployeeDeductionRepository(db),
 				employeesRepo,
@@ -113,7 +114,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 			DayOff:                service.NewDayOffService(repository.NewDayOffRepository(db), companyRepo),
 			Department:            service.NewDepartmentService(repository.NewDepartmentRepository(db)),
 			DepartmentCategory:    service.NewDepartmentCategoryService(repository.NewDepartmentCategoryRepository(db)),
-			EmployeeCompanyAccess: service.NewEmployeeCompanyAccessService(repository.NewEmployeeCompanyAccessRepository(db), roleRepo),
+			EmployeeCompanyAccess: service.NewEmployeeCompanyAccessService(repository.NewEmployeeCompanyAccessRepository(db), roleRepo, roleAssignments),
 			Holiday:               service.NewHolidayService(repository.NewHolidayRepository(db)),
 			LeaveType:             service.NewLeaveTypeSettingService(repository.NewLeaveTypeSettingRepository(db)),
 			Permission:            service.NewPermissionService(repository.NewPermissionRepository(db), roleRepo),

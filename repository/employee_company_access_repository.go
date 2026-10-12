@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"strconv"
 
 	"payroll-backend/apperr"
 	"payroll-backend/models"
@@ -17,7 +18,7 @@ type EmployeeCompanyAccessRepository interface {
 	ListScoped(scope AccessScope, q PageQuery) (Page[models.EmployeeCompanyAccess], error)
 	FindScoped(scope AccessScope, id uint) (models.EmployeeCompanyAccess, error)
 	FindDetail(id uint) (models.EmployeeCompanyAccess, error)
-	FindEmployeeBrief(id uint) (models.Employees, error)
+	FindEmployeeBriefScoped(scope AccessScope, id uint, companyID uint) (models.Employees, error)
 	Create(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error
 	UpdateFields(mapping *models.EmployeeCompanyAccess, fields map[string]any, audit *models.AuditLog) error
 	Delete(mapping *models.EmployeeCompanyAccess, audit *models.AuditLog) error
@@ -71,10 +72,13 @@ func (r *gormEmployeeCompanyAccessRepository) FindDetail(id uint) (models.Employ
 	return mapping, nil
 }
 
-// FindEmployeeBrief confirms the target employee exists without loading the whole row.
-func (r *gormEmployeeCompanyAccessRepository) FindEmployeeBrief(id uint) (models.Employees, error) {
+// FindEmployeeBriefScoped authorizes the target employee without loading credentials.
+func (r *gormEmployeeCompanyAccessRepository) FindEmployeeBriefScoped(scope AccessScope, id uint, companyID uint) (models.Employees, error) {
 	var employee models.Employees
-	if err := r.db.Select("id, companies_id, is_active").First(&employee, id).Error; err != nil {
+	// Evaluate the employee against the destination company's permission scope.
+	// Payroll ownership may differ: this grants app access, not a payroll transfer.
+	companyColumn := strconv.FormatUint(uint64(companyID), 10)
+	if err := r.db.Scopes(scope.ApplyEmployee(companyColumn, "employees.id")).Select("id, companies_id, is_active").First(&employee, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Employees{}, ErrEmployeeNotFound
 		}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"payroll-backend/internal/testfixture"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"payroll-backend/service"
@@ -15,6 +16,7 @@ import (
 
 type createStatusRepository struct{ repository.EmployeesRepository }
 
+func (r createStatusRepository) ValidateCompanyReferences(models.Employees) error { return nil }
 func (r createStatusRepository) FindRole(uint) (models.Roles, error) {
 	return models.Roles{CompaniesID: 7}, nil
 }
@@ -35,7 +37,7 @@ func TestCreateEmployeeStatusDefaultAndExplicitFalse(t *testing.T) {
 		{`{"companies_id":7,"roles_id":1,"password":"secret","is_active":true}`, true},
 	} {
 		t.Run(tc.body, func(t *testing.T) {
-			h := &Handler{Employees: service.NewEmployeesService(createStatusRepository{})}
+			h := &Handler{Employees: service.NewEmployeesService(createStatusRepository{}, testfixture.RoleAssignments(7))}
 			router := gin.New()
 			router.Use(func(c *gin.Context) {
 				c.Set("scope_user", models.Employees{ID: 1})

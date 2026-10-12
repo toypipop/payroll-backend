@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"payroll-backend/handlers/employees"
+	"payroll-backend/internal/testfixture"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"payroll-backend/service"
@@ -23,6 +24,7 @@ type passwordRepo struct {
 }
 
 func (r *passwordRepo) WithinTx(fn func(repository.EmployeesRepository) error) error { return fn(r) }
+func (r *passwordRepo) ValidateCompanyReferences(models.Employees) error             { return nil }
 func (r *passwordRepo) FindRole(uint) (models.Roles, error) {
 	return models.Roles{CompaniesID: 1}, nil
 }
@@ -43,7 +45,7 @@ func TestEmployeeWritesKeepPasswordPrivate(t *testing.T) {
 	for _, method := range []string{"POST", "PUT"} {
 		t.Run(method, func(t *testing.T) {
 			repo := &passwordRepo{row: models.Employees{ID: 7, CompaniesID: 1, RolesID: 2, Password: "old-hash"}}
-			h := &employees.Handler{Employees: service.NewEmployeesService(repo)}
+			h := &employees.Handler{Employees: service.NewEmployeesService(repo, testfixture.RoleAssignments(1))}
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
 			c.Set("scope_user", models.Employees{ID: 99, CompaniesID: 1})
@@ -75,7 +77,7 @@ func TestEmployeeWritesKeepPasswordPrivate(t *testing.T) {
 
 func TestCreateEmployeeIgnoresServerOwnedFields(t *testing.T) {
 	repo := &passwordRepo{}
-	h := &employees.Handler{Employees: service.NewEmployeesService(repo)}
+	h := &employees.Handler{Employees: service.NewEmployeesService(repo, testfixture.RoleAssignments(1))}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set("scope_user", models.Employees{ID: 99, CompaniesID: 1})
@@ -109,7 +111,7 @@ func TestEmployeeWritesRejectPasswordsOutsideAllowedLength(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(method+"/"+tt.name, func(t *testing.T) {
 				repo := &passwordRepo{row: models.Employees{ID: 7, CompaniesID: 1, RolesID: 2, Password: "old-hash"}}
-				h := &employees.Handler{Employees: service.NewEmployeesService(repo)}
+				h := &employees.Handler{Employees: service.NewEmployeesService(repo, testfixture.RoleAssignments(1))}
 				w := httptest.NewRecorder()
 				c, _ := gin.CreateTestContext(w)
 				c.Set("scope_user", models.Employees{ID: 99, CompaniesID: 1})
