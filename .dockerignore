@@ -8,4 +8,5 @@ Dockerfile
 *.test
 *.out
 .env
+.env.*
 skills-lock.json
