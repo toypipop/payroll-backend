@@ -2,6 +2,7 @@ package service
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"payroll-backend/apperr"
 	"payroll-backend/models"
@@ -34,15 +35,10 @@ func (s *BankService) List() ([]models.Bank, error) {
 
 // Create adds a bank after trimming its fields.
 func (s *BankService) Create(scope repository.AccessScope, input models.Bank) (models.Bank, error) {
-	code, name := strings.TrimSpace(input.BankCode), strings.TrimSpace(input.BankName)
-	if code == "" {
-		return models.Bank{}, ErrBankCodeRequired
+	bank, err := validatedBankInput(input)
+	if err != nil {
+		return models.Bank{}, err
 	}
-	if name == "" {
-		return models.Bank{}, ErrBankNameRequired
-	}
-
-	bank := models.Bank{BankCode: code, BankName: name, SwiftCode: strings.TrimSpace(input.SwiftCode)}
 	audit, err := bankAudit(scope, models.AuditEventBankCreated, "Bank created", bank, nil)
 	if err != nil {
 		return models.Bank{}, err
@@ -55,12 +51,9 @@ func (s *BankService) Create(scope repository.AccessScope, input models.Bank) (m
 
 // Update rewrites a bank's code, name and swift code.
 func (s *BankService) Update(scope repository.AccessScope, id uint, input models.Bank) (models.Bank, error) {
-	code, name := strings.TrimSpace(input.BankCode), strings.TrimSpace(input.BankName)
-	if code == "" {
-		return models.Bank{}, ErrBankCodeRequired
-	}
-	if name == "" {
-		return models.Bank{}, ErrBankNameRequired
+	fields, err := validatedBankInput(input)
+	if err != nil {
+		return models.Bank{}, err
 	}
 
 	bank, err := s.repo.Find(id)
@@ -69,9 +62,9 @@ func (s *BankService) Update(scope repository.AccessScope, id uint, input models
 	}
 
 	before := bankAuditData(bank)
-	bank.BankCode = code
-	bank.BankName = name
-	bank.SwiftCode = strings.TrimSpace(input.SwiftCode)
+	bank.BankCode = fields.BankCode
+	bank.BankName = fields.BankName
+	bank.SwiftCode = fields.SwiftCode
 	audit, err := bankAudit(scope, models.AuditEventBankUpdated, "Bank updated", bank, before)
 	if err != nil {
 		return models.Bank{}, err
@@ -101,6 +94,28 @@ func bankAudit(scope repository.AccessScope, event models.AuditEventType, summar
 
 func bankAuditData(bank models.Bank) map[string]any {
 	return map[string]any{"bank_code": bank.BankCode, "bank_name": bank.BankName, "swift_code": bank.SwiftCode}
+}
+
+// Return only editable fields, normalized and bounded to the database columns.
+func validatedBankInput(input models.Bank) (models.Bank, error) {
+	bank := models.Bank{BankCode: strings.TrimSpace(input.BankCode), BankName: strings.TrimSpace(input.BankName), SwiftCode: strings.TrimSpace(input.SwiftCode)}
+	if bank.BankCode == "" {
+		return models.Bank{}, ErrBankCodeRequired
+	}
+	if bank.BankName == "" {
+		return models.Bank{}, ErrBankNameRequired
+	}
+	for _, field := range []struct {
+		name, value string
+		maximum     int
+	}{
+		{"bank_code", bank.BankCode, 10}, {"bank_name", bank.BankName, 200}, {"swift_code", bank.SwiftCode, 20},
+	} {
+		if utf8.RuneCountInString(field.value) > field.maximum {
+			return models.Bank{}, apperr.Validation(field.name + " exceeds maximum length")
+		}
+	}
+	return bank, nil
 }
 
 func (s *BankService) ListPage(q repository.PageQuery) (repository.Page[models.Bank], error) {
