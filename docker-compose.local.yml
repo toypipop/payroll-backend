@@ -26,8 +26,16 @@ x-backend-env: &backend_env
   BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
   BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
 
+x-container-security: &container_security
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
 services:
   backend:
+    <<: *container_security
     image: *backend_image
     build: *backend_build
     container_name: payroll-backend-local
@@ -46,6 +54,7 @@ services:
     restart: unless-stopped
 
   migrate:
+    <<: *container_security
     image: *backend_image
     build: *backend_build
     container_name: payroll-migrate-local
@@ -58,6 +67,7 @@ services:
       - tools
 
   seed:
+    <<: *container_security
     image: *backend_image
     build: *backend_build
     container_name: payroll-seed-local
@@ -70,6 +80,9 @@ services:
       - tools
 
   frontend:
+    <<: *container_security
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
     build:
       context: ../payroll-frontend
       dockerfile: Dockerfile
@@ -90,6 +103,18 @@ services:
     restart: unless-stopped
 
   postgres:
+    <<: *container_security
+    # Retain only capabilities needed by the official root initialization entrypoint.
+    # The database server runs as postgres after ownership setup.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3777
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
     image: postgres:17
     container_name: payroll-postgres-local
     environment:
