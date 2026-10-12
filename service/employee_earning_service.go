@@ -65,6 +65,9 @@ func (s *EmployeeEarningService) resolveTarget(scope repository.AccessScope, emp
 
 // Create attaches an earning type and amount to an employee.
 func (s *EmployeeEarningService) Create(scope repository.AccessScope, input models.EmployeeEarning) (models.EmployeeEarning, error) {
+	if err := validateEmployeeAdjustmentAmount(input.Amount); err != nil {
+		return models.EmployeeEarning{}, err
+	}
 	companyID, err := s.resolveTarget(scope, input.EmployeesID, input.CompaniesID, input.EarningTypeID)
 	if err != nil {
 		return models.EmployeeEarning{}, err
@@ -93,6 +96,9 @@ func (s *EmployeeEarningService) Update(scope repository.AccessScope, id uint, i
 		return models.EmployeeEarning{}, err
 	}
 	if err := requireSameCompany(item.CompaniesID, input.CompaniesID); err != nil {
+		return models.EmployeeEarning{}, err
+	}
+	if err := validateEmployeeAdjustmentAmount(input.Amount); err != nil {
 		return models.EmployeeEarning{}, err
 	}
 
