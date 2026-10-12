@@ -534,6 +534,11 @@ func (s *SalariesStructureService) DeleteRecord(scope repository.AccessScope, id
 	if !scope.CanAccessCompany(record.CompaniesID) {
 		return ErrSalaryCompanyDenied
 	}
+	// Company access alone does not authorize deleting another employee's salary.
+	// Use the route's Own/Department/Company scope before any transaction or write.
+	if _, err := s.employees.FindBriefScoped(scope, record.EmployeesID); err != nil {
+		return ErrSalaryEmployeeDenied
+	}
 
 	// The lock and the in-transaction usage check keep a cycle from closing between "this record was never used"
 	// and the delete. Nothing is promoted afterwards: the record before it is the latest one by simply still being there.
