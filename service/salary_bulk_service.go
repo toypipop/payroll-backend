@@ -100,7 +100,7 @@ func validateBulkInput(input BulkRaiseInput) (string, error) {
 	}
 	switch input.Mode {
 	case BulkRaisePercent, BulkRaiseAmount:
-		if input.Value <= 0 {
+		if validateSalaryAmount(input.Value, 0.01) != nil {
 			return "", ErrBulkValueInvalid
 		}
 	case BulkRaiseManual:
@@ -177,6 +177,10 @@ func bulkRows(
 			row.NewSalary = newSalaryFor(input, person.target, row.CurrentSalary)
 		}
 
+		if !row.Blocked && validateSalaryAmount(row.NewSalary, 0.01) != nil {
+			row.NewSalary = 0
+			block("New salary exceeds the supported range")
+		}
 		if !row.Blocked {
 			inClosed, seen := closedByCompany[person.employee.CompaniesID]
 			if !seen {

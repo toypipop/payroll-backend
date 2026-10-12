@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -36,9 +34,12 @@ func (s *WorkLocationService) Options(scope repository.AccessScope) ([]models.Wo
 
 // Create adds a work location under a company the caller is authorized for.
 func (s *WorkLocationService) Create(scope repository.AccessScope, input models.WorkLocation) (models.WorkLocation, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.WorkLocation{}, ErrWorkLocationNameRequired
+	}
+	if err := validateText("name", name, 1, 200); err != nil {
+		return models.WorkLocation{}, err
 	}
 
 	companyID, ok := scope.ResolveCompanyID(input.CompaniesID)
@@ -59,9 +60,12 @@ func (s *WorkLocationService) Create(scope repository.AccessScope, input models.
 
 // Update renames a work location. The company is immutable after creation.
 func (s *WorkLocationService) Update(scope repository.AccessScope, id uint, name string) (models.WorkLocation, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return models.WorkLocation{}, ErrWorkLocationNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 200); err != nil {
+		return models.WorkLocation{}, err
 	}
 
 	location, err := s.repo.FindScoped(scope, id)

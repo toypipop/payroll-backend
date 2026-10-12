@@ -241,6 +241,10 @@ func (s *PayrollRunService) Cycles(scope repository.AccessScope) ([]models.Payro
 
 // CreateCycle opens a new cycle for a company the caller is authorized for.
 func (s *PayrollRunService) CreateCycle(scope repository.AccessScope, name string, startValue string, endValue string, companiesID uint) (models.PayrollCycle, error) {
+	name = trimText(name)
+	if err := validateText("cycle_name", name, 1, 255); err != nil {
+		return models.PayrollCycle{}, err
+	}
 	// A cycle spans whole business days: it opens at midnight of its first day and closes on the last
 	// instant of its last one, so `stored_date <= end_date` is true for anything on the closing day.
 	start, err := timeutil.ParseDayStart(startValue)

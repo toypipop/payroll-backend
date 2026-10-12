@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -36,9 +34,12 @@ func (s *PositionService) Options(scope repository.AccessScope) ([]models.Positi
 
 // Create adds a position under a company the caller is authorized for.
 func (s *PositionService) Create(scope repository.AccessScope, input models.Position) (models.Position, error) {
-	name := strings.TrimSpace(input.PosName)
+	name := trimText(input.PosName)
 	if name == "" {
 		return models.Position{}, ErrPositionNameRequired
+	}
+	if err := validateText("name", name, 1, 255); err != nil {
+		return models.Position{}, err
 	}
 
 	companyID, ok := scope.ResolveCompanyID(input.CompaniesID)
@@ -59,9 +60,12 @@ func (s *PositionService) Create(scope repository.AccessScope, input models.Posi
 
 // Update renames a position. The company is immutable after creation, so it is never taken from input.
 func (s *PositionService) Update(scope repository.AccessScope, id uint, name string) (models.Position, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return models.Position{}, ErrPositionNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 255); err != nil {
+		return models.Position{}, err
 	}
 
 	position, err := s.repo.FindScoped(scope, id)

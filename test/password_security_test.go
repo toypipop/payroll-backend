@@ -83,7 +83,7 @@ func TestCreateEmployeeIgnoresServerOwnedFields(t *testing.T) {
 	c.Set("scope_user", models.Employees{ID: 99, CompaniesID: 1})
 	c.Set("data_scope", models.ScopeCompanies)
 	c.Set("authorized_company_ids", []uint{1})
-	c.Request = httptest.NewRequest("POST", "/employees", strings.NewReader(`{"companies_id":1,"roles_id":2,"password":"test-password","id":888,"created_at":"2020-01-01T00:00:00Z","company_access":[{"company_id":999}],"companies":{"id":999},"roles":{"id":999}}`))
+	c.Request = httptest.NewRequest("POST", "/employees", strings.NewReader(`{"employees_code":"E01","email":"test@example.com","first_name":"Test","last_name":"User","dept_id":3,"pos_id":4,"companies_id":1,"roles_id":2,"password":"test-password","id":888,"created_at":"2020-01-01T00:00:00Z","company_access":[{"company_id":999}],"companies":{"id":999},"roles":{"id":999}}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 	h.CreateEmployees(c)
 	if w.Code != 201 {
@@ -118,7 +118,7 @@ func TestEmployeeWritesRejectPasswordsOutsideAllowedLength(t *testing.T) {
 				c.Set("data_scope", models.ScopeCompanies)
 				c.Set("authorized_company_ids", []uint{1})
 				c.Params = gin.Params{{Key: "id", Value: "7"}}
-				body := `{"companies_id":1,"roles_id":2,"password":` + strconv.Quote(tt.password) + `}`
+				body := `{"employees_code":"E01","email":"test@example.com","first_name":"Test","last_name":"User","dept_id":3,"pos_id":4,"companies_id":1,"roles_id":2,"password":` + strconv.Quote(tt.password) + `}`
 				c.Request = httptest.NewRequest(method, "/employees", strings.NewReader(body))
 				c.Request.Header.Set("Content-Type", "application/json")
 				if method == "POST" {

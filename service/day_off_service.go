@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -53,9 +51,12 @@ func (s *DayOffService) Companies(scope repository.AccessScope) ([]models.Compan
 
 // validateDayOff enforces the name and weekday rules shared by create and update.
 func validateDayOff(name string, weekday int) (string, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return "", ErrDayOffNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 200); err != nil {
+		return "", err
 	}
 	if weekday < 0 || weekday > 6 {
 		return "", ErrDayOffWeekdayRange

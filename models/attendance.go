@@ -80,7 +80,7 @@ type LeaveRequest struct {
 	CompaniesID     uint                  `gorm:"not null;index" json:"companies_id"`
 	EmployeesID     uint                  `gorm:"not null;index" json:"employees_id"`
 	LeaveTypeID     *uint                 `json:"leave_type_id"` // FK: LeaveTypeSetting
-	LeaveType       LeaveType             `gorm:"not null;size:50" json:"leave_type"`
+	LeaveType       LeaveType             `gorm:"not null;size:100" json:"leave_type"`
 	StartDate       time.Time             `gorm:"not null" json:"start_date"`
 	EndDate         time.Time             `gorm:"not null" json:"end_date"`
 	TotalDays       float64               `gorm:"type:decimal(5,2)" json:"total_days"`
@@ -100,7 +100,7 @@ type LeaveBalance struct {
 	CompaniesID uint                  `gorm:"uniqueIndex:idx_emp_year_type_deleted;not null" json:"companies_id"`
 	EmployeesID uint                  `gorm:"uniqueIndex:idx_emp_year_type_deleted;not null" json:"employees_id"`
 	Year        int                   `gorm:"uniqueIndex:idx_emp_year_type_deleted;not null" json:"year"`
-	LeaveType   LeaveType             `gorm:"uniqueIndex:idx_emp_year_type_deleted;not null;size:50" json:"leave_type"`
+	LeaveType   LeaveType             `gorm:"uniqueIndex:idx_emp_year_type_deleted;not null;size:100" json:"leave_type"`
 	MaxQuota    float64               `gorm:"type:decimal(5,2);default:0" json:"max_quota"`
 	UsedQuota   float64               `gorm:"type:decimal(5,2);default:0" json:"used_quota"`
 	Remaining   float64               `gorm:"type:decimal(5,2);default:0" json:"remaining"`

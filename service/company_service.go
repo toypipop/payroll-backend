@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -50,11 +48,11 @@ func (s *CompanyService) ListAll() ([]models.Companies, error) {
 
 // Create bootstraps a usable tenant: the company, a default ADMIN role with full permissions on every active module, and company access for the creator.
 func (s *CompanyService) Create(scope repository.AccessScope, input models.Companies) (models.Companies, error) {
-	name := strings.TrimSpace(input.Name)
-	if name == "" {
-		return models.Companies{}, ErrCompanyNameRequired
+	profile, err := normalizeCompanyProfile(CompanyUpdate{Name: input.Name, TaxID: input.TaxID, Address: input.Address, Phone: input.Phone})
+	if err != nil {
+		return models.Companies{}, err
 	}
-	input = models.Companies{Name: name, TaxID: input.TaxID, Address: input.Address, Phone: input.Phone, IsActive: true}
+	input = models.Companies{Name: profile.Name, TaxID: profile.TaxID, Address: profile.Address, Phone: profile.Phone, IsActive: true}
 
 	boot := repository.TenantBootstrap{
 		RoleName:        bootstrapRoleName,
@@ -86,18 +84,11 @@ func (s *CompanyService) Update(scope repository.AccessScope, id uint, input Com
 		return models.Companies{}, err
 	}
 
-	if name := strings.TrimSpace(input.Name); name != "" {
-		company.Name = name
+	profile, err := normalizeCompanyProfile(input)
+	if err != nil {
+		return models.Companies{}, err
 	}
-	if taxID := strings.TrimSpace(input.TaxID); taxID != "" {
-		company.TaxID = taxID
-	}
-	if address := strings.TrimSpace(input.Address); address != "" {
-		company.Address = address
-	}
-	if phone := strings.TrimSpace(input.Phone); phone != "" {
-		company.Phone = phone
-	}
+	company.Name, company.TaxID, company.Address, company.Phone = profile.Name, profile.TaxID, profile.Address, profile.Phone
 
 	companyID := company.ID
 	audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &companyID, EventType: models.AuditEventCompanyUpdated, EntityType: "company", Summary: "Company updated", AfterData: map[string]any{"name": company.Name}})

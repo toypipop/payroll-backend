@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -28,9 +26,12 @@ func (s *DepartmentCategoryService) List() ([]models.DepartmentCategory, error) 
 
 // Create adds a category, trimming the name so whitespace cannot slip past the unique index.
 func (s *DepartmentCategoryService) Create(scope repository.AccessScope, name string) (models.DepartmentCategory, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return models.DepartmentCategory{}, ErrCategoryNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 100); err != nil {
+		return models.DepartmentCategory{}, err
 	}
 
 	category := models.DepartmentCategory{Name: trimmed}

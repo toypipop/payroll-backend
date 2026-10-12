@@ -1,7 +1,6 @@
 package service
 
 import (
-	"strings"
 	"time"
 
 	"payroll-backend/apperr"
@@ -44,9 +43,12 @@ func (s *HolidayService) List(scope repository.AccessScope, q repository.PageQue
 
 // parseHolidayFields validates the shared name and date rules.
 func parseHolidayFields(name string, date string) (string, time.Time, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return "", time.Time{}, ErrHolidayNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 200); err != nil {
+		return "", time.Time{}, err
 	}
 	parsed, err := timeutil.ParseDayStart(date)
 	if err != nil {

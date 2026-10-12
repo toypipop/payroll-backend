@@ -71,6 +71,9 @@ func (s *EmployeesService) Create(scope repository.AccessScope, input models.Emp
 		return models.Employees{}, ErrCompanyAccessDenied
 	}
 	input.CompaniesID = companyID
+	if err := normalizeEmployeeProfile(&input); err != nil {
+		return models.Employees{}, err
+	}
 
 	if err := s.assertRoleBelongsTo(input.RolesID, companyID); err != nil {
 		return models.Employees{}, err
@@ -110,6 +113,9 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 	}
 
 	patch = pickEmployeeFields(patch)
+	if err := validateEmployeeProfilePatch(patch); err != nil {
+		return models.Employees{}, err
+	}
 
 	companyID, ok := scope.ResolveCompanyID(employee.CompaniesID)
 	if !ok {
@@ -149,7 +155,17 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 		delete(patch, "password")
 	}
 
-	normalizeBankID(patch)
+	if raw, exists := patch["bank_id"]; exists {
+		id, err := employeePatchID(raw, true)
+		if err != nil {
+			return models.Employees{}, err
+		}
+		if id == 0 {
+			patch["bank_id"] = repository.ClearField
+		} else {
+			patch["bank_id"] = id
+		}
+	}
 	if err := s.validateReferencePatch(scope, employee, patch); err != nil {
 		return models.Employees{}, err
 	}
@@ -221,6 +237,14 @@ func pickEmployeeFields(patch map[string]any) map[string]any {
 func (s *EmployeesService) validateReferencePatch(scope repository.AccessScope, employee models.Employees, patch map[string]any) error {
 	references := employee
 	changed := false
+	if bank, exists := patch["bank_id"]; exists {
+		changed = true
+		if id, ok := bank.(uint); ok {
+			references.BankID = &id
+		} else {
+			references.BankID = nil
+		}
+	}
 	for _, field := range []string{"dept_id", "pos_id", "employment_type_id"} {
 		value, exists := patch[field]
 		if !exists {
@@ -230,6 +254,9 @@ func (s *EmployeesService) validateReferencePatch(scope repository.AccessScope, 
 		id, err := employeePatchID(value, field == "employment_type_id")
 		if err != nil {
 			return err
+		}
+		if id == 0 && field != "employment_type_id" {
+			return apperr.Validation(field + " is required")
 		}
 		switch field {
 		case "dept_id":
@@ -274,24 +301,6 @@ func employeePatchID(value any, nullable bool) (uint, error) {
 		return 0, apperr.Validation("Invalid employee reference ID")
 	}
 	return uint(number), nil
-}
-
-// normalizeBankID converts an optional bank ID to a value or clear marker.
-func normalizeBankID(patch map[string]any) {
-	raw, present := patch["bank_id"]
-	if !present {
-		return
-	}
-	switch v := raw.(type) {
-	case float64:
-		if uint(v) == 0 {
-			patch["bank_id"] = repository.ClearField
-			return
-		}
-		patch["bank_id"] = uint(v)
-	case nil:
-		patch["bank_id"] = repository.ClearField
-	}
 }
 
 // Delete removes an employee the caller is scoped to see.

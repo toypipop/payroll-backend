@@ -43,7 +43,7 @@ func TestCompanyCreateRejectsInjectedAssociationsBeforeBootstrap(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set("scope_user", models.Employees{ID: 9})
-	c.Request = httptest.NewRequest("POST", "/companies", strings.NewReader(`{"name":"New","tax_id":"","address":"Example","phone":"123"}`))
+	c.Request = httptest.NewRequest("POST", "/companies", strings.NewReader(`{"name":"New","tax_id":"1234567890123","address":"Example","phone":"0812345678"}`))
 	h.CreateCompanies(c)
 	if w.Code != 201 || !repo.created || repo.bootstrap.CreatorID != 9 {
 		t.Fatalf("bootstrap failed %d %s", w.Code, w.Body.String())

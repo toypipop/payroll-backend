@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -39,9 +37,12 @@ func (s *EarningTypeService) Options(scope repository.AccessScope) ([]models.Ear
 
 // Create adds an earning type to an explicitly named company; this domain has never defaulted to the caller's home company.
 func (s *EarningTypeService) Create(scope repository.AccessScope, input models.EarningType) (models.EarningType, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.EarningType{}, ErrEarningTypeNameRequired
+	}
+	if err := validateText("name", name, 1, 200); err != nil {
+		return models.EarningType{}, err
 	}
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.EarningType{}, ErrCompanyAccessDenied
@@ -66,9 +67,12 @@ func (s *EarningTypeService) Create(scope repository.AccessScope, input models.E
 
 // Update rewrites the flags and name.
 func (s *EarningTypeService) Update(scope repository.AccessScope, id uint, input models.EarningType) (models.EarningType, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.EarningType{}, ErrEarningTypeNameRequired
+	}
+	if err := validateText("name", name, 1, 200); err != nil {
+		return models.EarningType{}, err
 	}
 
 	earningType, err := s.repo.FindScoped(scope, id)

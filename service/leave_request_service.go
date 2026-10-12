@@ -6,6 +6,7 @@ import (
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
+	"payroll-backend/timeutil"
 )
 
 // Leave-request rule failures.
@@ -73,9 +74,9 @@ func NewLeaveRequestService(
 	return &LeaveRequestService{repo: repo, employees: employees, leaveTypes: leaveTypes}
 }
 
-// dateOnly strips the time of day, anchored to UTC.
+// dateOnly anchors a leave date to the business calendar.
 func dateOnly(value time.Time) time.Time {
-	return time.Date(value.Year(), value.Month(), value.Day(), 0, 0, 0, 0, time.UTC)
+	return timeutil.DayStart(value)
 }
 
 // totalDays counts the inclusive span between two date-only values.
@@ -116,6 +117,9 @@ func (s *LeaveRequestService) resolveTarget(scope repository.AccessScope, input 
 
 // Create files a pending leave request.
 func (s *LeaveRequestService) Create(scope repository.AccessScope, input LeaveInput) (models.LeaveRequest, error) {
+	if err := validateLeaveInput(input); err != nil {
+		return models.LeaveRequest{}, err
+	}
 	start, end := dateOnly(input.StartDate), dateOnly(input.EndDate)
 	if end.Before(start) {
 		return models.LeaveRequest{}, ErrLeaveEndBeforeStart
@@ -172,6 +176,9 @@ func (s *LeaveRequestService) Update(scope repository.AccessScope, id uint, inpu
 		return models.LeaveRequest{}, ErrLeaveNotPending
 	}
 
+	if err := validateLeaveInput(input); err != nil {
+		return models.LeaveRequest{}, err
+	}
 	start, end := dateOnly(input.StartDate), dateOnly(input.EndDate)
 	if end.Before(start) {
 		return models.LeaveRequest{}, ErrLeaveEndBeforeStart
@@ -337,4 +344,21 @@ func leaveAuditData(leave models.LeaveRequest) map[string]any {
 		data["approved_by"] = *leave.ApprovedBy
 	}
 	return data
+}
+
+func validateLeaveInput(input LeaveInput) error {
+	if input.StartDate.IsZero() || input.EndDate.IsZero() {
+		return apperr.Validation("Start and end dates are required")
+	}
+	if err := validateText("reason", input.Reason, 0, 500); err != nil {
+		return err
+	}
+	start, end := dateOnly(input.StartDate), dateOnly(input.EndDate)
+	if end.Before(start) {
+		return ErrLeaveEndBeforeStart
+	}
+	if totalDays(start, end) > 999.99 {
+		return apperr.Validation("Leave cannot exceed 999 days")
+	}
+	return nil
 }

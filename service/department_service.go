@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -39,9 +37,12 @@ func (s *DepartmentService) Options(scope repository.AccessScope) ([]models.Depa
 
 // Create adds a department under a company the caller is authorized for.
 func (s *DepartmentService) Create(scope repository.AccessScope, input models.Department) (models.Department, error) {
-	name := strings.TrimSpace(input.DeptName)
+	name := trimText(input.DeptName)
 	if name == "" {
 		return models.Department{}, ErrDepartmentNameRequired
+	}
+	if err := validateText("name", name, 2, 255); err != nil {
+		return models.Department{}, err
 	}
 	if input.CategoryID == 0 {
 		return models.Department{}, ErrDepartmentCategoryReq
@@ -69,9 +70,12 @@ func (s *DepartmentService) Create(scope repository.AccessScope, input models.De
 
 // Update renames a department and moves its category. The company is immutable after creation, so it is never taken from input.
 func (s *DepartmentService) Update(scope repository.AccessScope, id uint, name string, categoryID uint) (models.Department, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return models.Department{}, ErrDepartmentNameRequired
+	}
+	if err := validateText("name", trimmed, 2, 255); err != nil {
+		return models.Department{}, err
 	}
 	if categoryID == 0 {
 		return models.Department{}, ErrDepartmentCategoryReq

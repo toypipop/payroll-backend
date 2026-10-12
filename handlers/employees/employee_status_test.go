@@ -32,9 +32,9 @@ func TestCreateEmployeeStatusDefaultAndExplicitFalse(t *testing.T) {
 		body   string
 		active bool
 	}{
-		{`{"companies_id":7,"roles_id":1,"password":"secret"}`, true},
-		{`{"companies_id":7,"roles_id":1,"password":"secret","is_active":false}`, false},
-		{`{"companies_id":7,"roles_id":1,"password":"secret","is_active":true}`, true},
+		{`{"employees_code":"E01","email":"employee@example.com","first_name":"Test","last_name":"User","dept_id":1,"pos_id":1,"companies_id":7,"roles_id":1,"password":"secret"}`, true},
+		{`{"employees_code":"E01","email":"employee@example.com","first_name":"Test","last_name":"User","dept_id":1,"pos_id":1,"companies_id":7,"roles_id":1,"password":"secret","is_active":false}`, false},
+		{`{"employees_code":"E01","email":"employee@example.com","first_name":"Test","last_name":"User","dept_id":1,"pos_id":1,"companies_id":7,"roles_id":1,"password":"secret","is_active":true}`, true},
 	} {
 		t.Run(tc.body, func(t *testing.T) {
 			h := &Handler{Employees: service.NewEmployeesService(createStatusRepository{}, testfixture.RoleAssignments(7))}

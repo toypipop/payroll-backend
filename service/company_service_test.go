@@ -23,7 +23,7 @@ func (r *lifecycleCompanyRepo) CreateTenant(company *models.Companies, boot repo
 func TestCompanyCreateAlwaysStartsActive(t *testing.T) {
 	repo := &lifecycleCompanyRepo{}
 	var input models.Companies
-	if err := json.Unmarshal([]byte(`{"name":" Example ","is_active":false}`), &input); err != nil {
+	if err := json.Unmarshal([]byte(`{"name":" Example ","tax_id":"1234567890123","address":"Example address","phone":"0812345678","is_active":false}`), &input); err != nil {
 		t.Fatal(err)
 	}
 	company, err := NewCompanyService(repo).Create(repository.NewAccessScope(models.Employees{ID: 1}, models.ScopeCompanies, nil), input)
@@ -47,7 +47,7 @@ func TestCompanyBootstrapKeepsServerOwnedIdentityAndGrants(t *testing.T) {
 	r := &lifecycleCompanyRepo{}
 	svc := NewCompanyService(r)
 	scope := repository.NewAccessScope(models.Employees{ID: 9}, models.ScopeCompanies, []uint{1})
-	_, err := svc.Create(scope, models.Companies{ID: 99, Name: "New", PayrollConfig: &models.PayrollConfig{ID: 77}, AttendanceConfig: &models.AttendanceConfig{ID: 88}, EmployeeAccess: []models.EmployeeCompanyAccess{{EmployeeID: 100, RoleID: 90}}})
+	_, err := svc.Create(scope, models.Companies{ID: 99, Name: "New", TaxID: "1234567890123", Address: "Example address", Phone: "0812345678", PayrollConfig: &models.PayrollConfig{ID: 77}, AttendanceConfig: &models.AttendanceConfig{ID: 88}, EmployeeAccess: []models.EmployeeCompanyAccess{{EmployeeID: 100, RoleID: 90}}})
 	if err != nil {
 		t.Fatal(err)
 	}

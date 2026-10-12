@@ -102,6 +102,15 @@ func (r *gormEmployeesRepository) FindBriefScoped(scope AccessScope, id uint) (m
 var ErrEmployeeReferenceCompany = apperr.Validation("Employee department, position and employment type must belong to the employee company")
 
 func (r *gormEmployeesRepository) ValidateCompanyReferences(employee models.Employees) error {
+	if employee.BankID != nil {
+		var count int64
+		if err := r.db.Model(&models.Bank{}).Where("id = ?", *employee.BankID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 1 {
+			return apperr.Validation("Invalid bank")
+		}
+	}
 	checks := []struct {
 		model any
 		id    uint

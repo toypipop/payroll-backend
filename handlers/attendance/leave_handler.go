@@ -2,15 +2,57 @@ package attendance
 
 import (
 	"net/http"
+	"payroll-backend/apperr"
 	"time"
 
 	"payroll-backend/handlers/httpx"
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"payroll-backend/service"
+	"payroll-backend/timeutil"
 
 	"github.com/gin-gonic/gin"
 )
+
+type leaveWriteRequest struct {
+	EmployeesID uint   `json:"employees_id" binding:"required"`
+	CompaniesID uint   `json:"companies_id" binding:"required"`
+	LeaveTypeID *uint  `json:"leave_type_id" binding:"required"`
+	StartDate   string `json:"start_date" binding:"required"`
+	EndDate     string `json:"end_date" binding:"required"`
+	Reason      string `json:"reason"`
+}
+
+// Calendar dates are the current wire contract. Accept legacy RFC3339 clients
+// during rollout, interpreting their instants on the Bangkok calendar.
+func parseLeaveDate(value string) (time.Time, error) {
+	if date, err := timeutil.ParseDayStart(value); err == nil {
+		return date, nil
+	}
+	instant, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return timeutil.DayStart(instant), nil
+}
+
+func (input leaveWriteRequest) serviceInput(c *gin.Context) (service.LeaveInput, bool) {
+	start, err := parseLeaveDate(input.StartDate)
+	if err != nil {
+		httpx.RespondError(c, apperr.Validation("Invalid start_date; use YYYY-MM-DD"))
+		return service.LeaveInput{}, false
+	}
+	end, err := parseLeaveDate(input.EndDate)
+	if err != nil {
+		httpx.RespondError(c, apperr.Validation("Invalid end_date; use YYYY-MM-DD"))
+		return service.LeaveInput{}, false
+	}
+	leaveTypeID := uint(0)
+	if input.LeaveTypeID != nil {
+		leaveTypeID = *input.LeaveTypeID
+	}
+	return service.LeaveInput{EmployeesID: input.EmployeesID, CompaniesID: input.CompaniesID, LeaveTypeID: leaveTypeID, StartDate: start, EndDate: end, Reason: input.Reason}, true
+}
 
 func (h *Handler) GetLeaveRequests(c *gin.Context) {
 	scope, ok := httpx.RequestScope(c)
@@ -36,24 +78,16 @@ func (h *Handler) CreateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	var input models.LeaveRequest
+	var input leaveWriteRequest
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	leaveTypeID := uint(0)
-	if input.LeaveTypeID != nil {
-		leaveTypeID = *input.LeaveTypeID
+	request, ok := input.serviceInput(c)
+	if !ok {
+		return
 	}
-
-	leave, err := h.LeaveRequest.Create(scope, service.LeaveInput{
-		EmployeesID: input.EmployeesID,
-		CompaniesID: input.CompaniesID,
-		LeaveTypeID: leaveTypeID,
-		StartDate:   input.StartDate,
-		EndDate:     input.EndDate,
-		Reason:      input.Reason,
-	})
+	leave, err := h.LeaveRequest.Create(scope, request)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return
@@ -71,26 +105,16 @@ func (h *Handler) UpdateLeaveRequest(c *gin.Context) {
 		return
 	}
 
-	var input struct {
-		EmployeesID uint      `json:"employees_id" binding:"required"`
-		CompaniesID uint      `json:"companies_id" binding:"required"`
-		LeaveTypeID uint      `json:"leave_type_id" binding:"required"`
-		StartDate   time.Time `json:"start_date" binding:"required"`
-		EndDate     time.Time `json:"end_date" binding:"required"`
-		Reason      string    `json:"reason"`
-	}
+	var input leaveWriteRequest
 	if !httpx.BindJSON(c, &input) {
 		return
 	}
 
-	leave, err := h.LeaveRequest.Update(scope, id, service.LeaveInput{
-		EmployeesID: input.EmployeesID,
-		CompaniesID: input.CompaniesID,
-		LeaveTypeID: input.LeaveTypeID,
-		StartDate:   input.StartDate,
-		EndDate:     input.EndDate,
-		Reason:      input.Reason,
-	})
+	request, ok := input.serviceInput(c)
+	if !ok {
+		return
+	}
+	leave, err := h.LeaveRequest.Update(scope, id, request)
 	if err != nil {
 		httpx.RespondError(c, err)
 		return

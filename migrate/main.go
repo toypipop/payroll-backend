@@ -35,6 +35,10 @@ func main() {
 		log.Fatalf("Salary active-flag normalisation failed: %v", err)
 	}
 
+	if err := migrations.RunOnce(config.DB, "20261012_widen_copied_text_columns", migrations.WidenCopiedTextColumns); err != nil {
+		log.Fatalf("Copied text column migration failed: %v", err)
+	}
+
 	if err := migrations.RunOnce(config.DB, "20260827_normalize_business_dates_to_bangkok", migrations.NormalizeBusinessDatesToBangkok); err != nil {
 		log.Fatalf("Business date normalisation failed: %v", err)
 	}

@@ -268,6 +268,9 @@ type salaryWrite struct {
 // rather than reaching for the service's own, so the caller decides the transaction: a save opens one per
 // employee, a bulk raise opens one for the batch.
 func applySalaryOn(repo repository.SalariesStructureRepository, scope repository.AccessScope, write salaryWrite) error {
+	if err := validateSalaryAmount(write.BaseSalaries, 0); err != nil {
+		return err
+	}
 	// Backdating into a period that has already been paid out and closed would change a figure someone has already been paid against.
 	closedCycles, err := repo.CountClosedCyclesCovering(write.CompaniesID, write.EffectiveDate)
 	if err != nil {
@@ -339,6 +342,11 @@ func applySalaryOn(repo repository.SalariesStructureRepository, scope repository
 
 // Save either disables an employee's current salary or supersedes it with a new one.
 func (s *SalariesStructureService) Save(scope repository.AccessScope, input SalaryInput) (SaveResult, error) {
+	if !input.Disable {
+		if err := validateSalaryAmount(input.BaseSalaries, 0); err != nil {
+			return SaveResult{}, err
+		}
+	}
 	if input.EmployeesID == 0 || input.CompaniesID == 0 {
 		return SaveResult{}, ErrSalaryEmployeeTarget
 	}
@@ -419,6 +427,9 @@ func (s *SalariesStructureService) Save(scope repository.AccessScope, input Sala
 // Moving a record changes what two periods pay — the one it leaves and the one it lands in — so both sides are
 // checked against the cycles that have already been closed and paid out.
 func (s *SalariesStructureService) UpdateRecord(scope repository.AccessScope, id uint, input SalaryRecordEdit) error {
+	if err := validateSalaryAmount(input.BaseSalaries, 0.01); err != nil {
+		return err
+	}
 	reason, err := cleanReason(input.Reason)
 	if err != nil {
 		return err

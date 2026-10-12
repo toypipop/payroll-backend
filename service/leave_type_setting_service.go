@@ -2,8 +2,6 @@ package service
 
 import (
 	"math"
-	"strings"
-	"unicode/utf8"
 
 	"payroll-backend/apperr"
 	"payroll-backend/models"
@@ -42,12 +40,12 @@ func (s *LeaveTypeSettingService) Options(scope repository.AccessScope) ([]model
 
 // Create adds a leave type under a company the caller is authorized for.
 func (s *LeaveTypeSettingService) Create(scope repository.AccessScope, input models.LeaveTypeSetting) (models.LeaveTypeSetting, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeNameRequired
 	}
-	if utf8.RuneCountInString(name) > 100 {
-		return models.LeaveTypeSetting{}, ErrLeaveTypeNameTooLong
+	if err := validateText("name", name, 1, 100); err != nil {
+		return models.LeaveTypeSetting{}, err
 	}
 	if !validLeaveTypeMaxDays(input.MaxDaysPerYear) {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeMaxDaysRange
@@ -76,12 +74,12 @@ func (s *LeaveTypeSettingService) Create(scope repository.AccessScope, input mod
 
 // Update rewrites a leave type's name, paid flag and annual cap. The company is immutable after creation.
 func (s *LeaveTypeSettingService) Update(scope repository.AccessScope, id uint, input models.LeaveTypeSetting) (models.LeaveTypeSetting, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeNameRequired
 	}
-	if utf8.RuneCountInString(name) > 100 {
-		return models.LeaveTypeSetting{}, ErrLeaveTypeNameTooLong
+	if err := validateText("name", name, 1, 100); err != nil {
+		return models.LeaveTypeSetting{}, err
 	}
 	if !validLeaveTypeMaxDays(input.MaxDaysPerYear) {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeMaxDaysRange
@@ -125,5 +123,5 @@ func leaveTypeAuditData(leaveType models.LeaveTypeSetting) map[string]any {
 
 // Match the range of the decimal(5,2) database column; zero means unlimited.
 func validLeaveTypeMaxDays(days float64) bool {
-	return !math.IsNaN(days) && !math.IsInf(days, 0) && days >= 0 && days <= 999.99
+	return !math.IsNaN(days) && !math.IsInf(days, 0) && days >= 0 && days <= 999.99 && hasTwoDecimals(days)
 }

@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -39,9 +37,12 @@ func (s *DeductionTypeService) Options(scope repository.AccessScope) ([]models.D
 
 // Create adds a deduction type to an explicitly named company; this domain has never defaulted to the caller's home company.
 func (s *DeductionTypeService) Create(scope repository.AccessScope, input models.DeductionType) (models.DeductionType, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.DeductionType{}, ErrDeductionTypeNameRequired
+	}
+	if err := validateText("name", name, 1, 200); err != nil {
+		return models.DeductionType{}, err
 	}
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.DeductionType{}, ErrCompanyAccessDenied
@@ -65,9 +66,12 @@ func (s *DeductionTypeService) Create(scope repository.AccessScope, input models
 
 // Update rewrites the flags and name.
 func (s *DeductionTypeService) Update(scope repository.AccessScope, id uint, input models.DeductionType) (models.DeductionType, error) {
-	name := strings.TrimSpace(input.Name)
+	name := trimText(input.Name)
 	if name == "" {
 		return models.DeductionType{}, ErrDeductionTypeNameRequired
+	}
+	if err := validateText("name", name, 1, 200); err != nil {
+		return models.DeductionType{}, err
 	}
 
 	deductionType, err := s.repo.FindScoped(scope, id)

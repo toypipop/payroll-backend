@@ -1,9 +1,6 @@
 package service
 
 import (
-	"strings"
-	"unicode/utf8"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -98,7 +95,7 @@ func bankAuditData(bank models.Bank) map[string]any {
 
 // Return only editable fields, normalized and bounded to the database columns.
 func validatedBankInput(input models.Bank) (models.Bank, error) {
-	bank := models.Bank{BankCode: strings.TrimSpace(input.BankCode), BankName: strings.TrimSpace(input.BankName), SwiftCode: strings.TrimSpace(input.SwiftCode)}
+	bank := models.Bank{BankCode: trimText(input.BankCode), BankName: trimText(input.BankName), SwiftCode: trimText(input.SwiftCode)}
 	if bank.BankCode == "" {
 		return models.Bank{}, ErrBankCodeRequired
 	}
@@ -111,8 +108,8 @@ func validatedBankInput(input models.Bank) (models.Bank, error) {
 	}{
 		{"bank_code", bank.BankCode, 10}, {"bank_name", bank.BankName, 200}, {"swift_code", bank.SwiftCode, 20},
 	} {
-		if utf8.RuneCountInString(field.value) > field.maximum {
-			return models.Bank{}, apperr.Validation(field.name + " exceeds maximum length")
+		if err := validateText(field.name, field.value, 0, field.maximum); err != nil {
+			return models.Bank{}, err
 		}
 	}
 	return bank, nil

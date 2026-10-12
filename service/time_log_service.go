@@ -177,6 +177,12 @@ func (s *TimeLogService) DeriveStatus(companiesID uint, checkIn *time.Time, chec
 
 // validateInput enforces the field rules shared by create and update.
 func validateTimeLogInput(input TimeLogInput) error {
+	if err := validateText("remark", input.Remark, 0, 255); err != nil {
+		return err
+	}
+	if err := validateText("location_in", input.LocationIn, 0, 255); err != nil {
+		return err
+	}
 	if input.EmployeesID == 0 {
 		return ErrTimeLogEmployeeRequired
 	}

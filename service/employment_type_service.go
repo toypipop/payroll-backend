@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -36,9 +34,15 @@ func (s *EmploymentTypeService) Options(scope repository.AccessScope) ([]models.
 
 // Create adds an employment type to an explicitly named company; this domain has never defaulted to the caller's home company.
 func (s *EmploymentTypeService) Create(scope repository.AccessScope, input models.EmploymentType) (models.EmploymentType, error) {
-	name := strings.TrimSpace(input.Name)
+	if err := validateText("description", trimText(input.Description), 0, 255); err != nil {
+		return models.EmploymentType{}, err
+	}
+	name := trimText(input.Name)
 	if name == "" {
 		return models.EmploymentType{}, ErrEmploymentTypeNameRequired
+	}
+	if err := validateText("name", name, 1, 100); err != nil {
+		return models.EmploymentType{}, err
 	}
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.EmploymentType{}, ErrCompanyAccessDenied
@@ -47,7 +51,7 @@ func (s *EmploymentTypeService) Create(scope repository.AccessScope, input model
 	employmentType := models.EmploymentType{
 		CompaniesID: input.CompaniesID,
 		Name:        name,
-		Description: strings.TrimSpace(input.Description),
+		Description: trimText(input.Description),
 	}
 	audit, err := masterAudit(scope, models.AuditEventEmploymentTypeCreated, "Employment type created", "employment_type", employmentType.CompaniesID, &employmentType.ID, nil, employmentTypeAuditData(employmentType))
 	if err != nil {
@@ -61,9 +65,15 @@ func (s *EmploymentTypeService) Create(scope repository.AccessScope, input model
 
 // Update rewrites the name and description. The company is immutable after creation.
 func (s *EmploymentTypeService) Update(scope repository.AccessScope, id uint, name string, description string) (models.EmploymentType, error) {
-	trimmed := strings.TrimSpace(name)
+	if err := validateText("description", trimText(description), 0, 255); err != nil {
+		return models.EmploymentType{}, err
+	}
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return models.EmploymentType{}, ErrEmploymentTypeNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 100); err != nil {
+		return models.EmploymentType{}, err
 	}
 
 	employmentType, err := s.repo.FindScoped(scope, id)
@@ -73,7 +83,7 @@ func (s *EmploymentTypeService) Update(scope repository.AccessScope, id uint, na
 
 	before := employmentTypeAuditData(employmentType)
 	employmentType.Name = trimmed
-	employmentType.Description = strings.TrimSpace(description)
+	employmentType.Description = trimText(description)
 	audit, err := masterAudit(scope, models.AuditEventEmploymentTypeUpdated, "Employment type updated", "employment_type", employmentType.CompaniesID, &employmentType.ID, before, employmentTypeAuditData(employmentType))
 	if err != nil {
 		return models.EmploymentType{}, err

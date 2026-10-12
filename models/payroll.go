@@ -43,7 +43,7 @@ type PayrollTransaction struct {
 	PositionName       string  `gorm:"size:255" json:"position_name"`
 	DepartmentName     string  `gorm:"size:255" json:"department_name"`
 	EmploymentTypeName string  `gorm:"size:100" json:"employment_type_name"`
-	BankName           string  `gorm:"size:100" json:"bank_name"`
+	BankName           string  `gorm:"size:200" json:"bank_name"`
 	BankAccountName    string  `gorm:"size:200" json:"bank_account_name"`
 	BankAccountNo      string  `gorm:"size:50" json:"bank_account_no"`
 	TotalEarning       float64 `gorm:"type:decimal(15,2)" json:"total_earning"`

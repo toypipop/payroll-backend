@@ -1,8 +1,6 @@
 package service
 
 import (
-	"strings"
-
 	"payroll-backend/apperr"
 	"payroll-backend/models"
 	"payroll-backend/repository"
@@ -36,9 +34,12 @@ func (s *RoleService) Options(scope repository.AccessScope) ([]models.Roles, err
 
 // Create adds a role to an explicitly named company; unlike other master data it does not fall back to the caller's home company.
 func (s *RoleService) Create(scope repository.AccessScope, input models.Roles) (models.Roles, error) {
-	name := strings.TrimSpace(input.RolesName)
+	name := trimText(input.RolesName)
 	if name == "" {
 		return models.Roles{}, ErrRoleNameRequired
+	}
+	if err := validateText("name", name, 1, 255); err != nil {
+		return models.Roles{}, err
 	}
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.Roles{}, ErrCompanyAccessDenied
@@ -63,9 +64,12 @@ func (s *RoleService) Create(scope repository.AccessScope, input models.Roles) (
 
 // Update renames a role. The company is immutable after creation, so it is never taken from input.
 func (s *RoleService) Update(scope repository.AccessScope, id uint, name string) (models.Roles, error) {
-	trimmed := strings.TrimSpace(name)
+	trimmed := trimText(name)
 	if trimmed == "" {
 		return models.Roles{}, ErrRoleNameRequired
+	}
+	if err := validateText("name", trimmed, 1, 255); err != nil {
+		return models.Roles{}, err
 	}
 
 	role, err := s.repo.FindScoped(scope, id)
