@@ -95,6 +95,9 @@ func (s *CycleEarningService) validateAgainstCycle(scope repository.AccessScope,
 
 // Create attaches a one-off earning to an open cycle.
 func (s *CycleEarningService) Create(scope repository.AccessScope, input models.PayrollCycleEarning) (models.PayrollCycleEarning, error) {
+	if err := validateAdjustmentAmount(input.Amount); err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
 	var saved models.PayrollCycleEarning
 	err := s.repo.WithinTx(func(repo repository.CycleEarningRepository, cycles repository.PayrollRunRepository) error {
 		txService := *s
@@ -156,6 +159,13 @@ func (s *CycleEarningService) Update(scope repository.AccessScope, id uint, inpu
 func (s *CycleEarningService) update(scope repository.AccessScope, id uint, input models.PayrollCycleEarning) (models.PayrollCycleEarning, error) {
 	item, err := s.repo.FindScoped(scope, id)
 	if err != nil {
+		return models.PayrollCycleEarning{}, err
+	}
+
+	if input.CycleID != item.CycleID {
+		return models.PayrollCycleEarning{}, ErrAdjustmentCycleImmutable
+	}
+	if err := validateAdjustmentAmount(input.Amount); err != nil {
 		return models.PayrollCycleEarning{}, err
 	}
 

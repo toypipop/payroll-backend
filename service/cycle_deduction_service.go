@@ -76,6 +76,9 @@ func (s *CycleDeductionService) List(scope repository.AccessScope, cycleID uint,
 
 // Create attaches a one-off deduction to an open cycle.
 func (s *CycleDeductionService) Create(scope repository.AccessScope, input models.PayrollCycleDeduction) (models.PayrollCycleDeduction, error) {
+	if err := validateAdjustmentAmount(input.Amount); err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
 	var saved models.PayrollCycleDeduction
 	err := s.repo.WithinTx(func(repo repository.CycleDeductionRepository, cycles repository.PayrollRunRepository) error {
 		txService := *s
@@ -147,6 +150,13 @@ func (s *CycleDeductionService) Update(scope repository.AccessScope, id uint, in
 func (s *CycleDeductionService) update(scope repository.AccessScope, id uint, input models.PayrollCycleDeduction) (models.PayrollCycleDeduction, error) {
 	item, err := s.repo.FindScoped(scope, id)
 	if err != nil {
+		return models.PayrollCycleDeduction{}, err
+	}
+
+	if input.CycleID != item.CycleID {
+		return models.PayrollCycleDeduction{}, ErrAdjustmentCycleImmutable
+	}
+	if err := validateAdjustmentAmount(input.Amount); err != nil {
 		return models.PayrollCycleDeduction{}, err
 	}
 

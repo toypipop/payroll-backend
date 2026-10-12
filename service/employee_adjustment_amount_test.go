@@ -77,7 +77,7 @@ func TestEmployeeAdjustmentsRejectInvalidAmountsBeforeWrite(t *testing.T) {
 		amount float64
 	}{
 		{"negative", -500}, {"zero or missing", 0}, {"below minimum", 0.0099},
-		{"above maximum", math.Nextafter(maximumEmployeeAdjustmentAmount, math.Inf(1))},
+		{"above maximum", math.Nextafter(maximumAdjustmentAmount, math.Inf(1))},
 		{"decimal overflow", 1e13}, {"huge finite", math.MaxFloat64},
 		{"NaN", math.NaN()}, {"positive infinity", math.Inf(1)}, {"negative infinity", math.Inf(-1)},
 	}
@@ -98,7 +98,7 @@ func TestEmployeeAdjustmentsRejectInvalidAmountsBeforeWrite(t *testing.T) {
 				} else {
 					_, err = svc.Create(scope, input)
 				}
-				if !errors.Is(err, ErrEmployeeAdjustmentAmount) || r.writes != 0 || r.audits != 0 {
+				if !errors.Is(err, ErrAdjustmentAmount) || r.writes != 0 || r.audits != 0 {
 					t.Fatalf("invalid amount wrote: err=%v writes=%d audits=%d", err, r.writes, r.audits)
 				}
 			})
@@ -112,7 +112,7 @@ func TestEmployeeAdjustmentsRejectInvalidAmountsBeforeWrite(t *testing.T) {
 				} else {
 					_, err = svc.Create(scope, input)
 				}
-				if !errors.Is(err, ErrEmployeeAdjustmentAmount) || r.writes != 0 || r.audits != 0 {
+				if !errors.Is(err, ErrAdjustmentAmount) || r.writes != 0 || r.audits != 0 {
 					t.Fatalf("invalid amount wrote: err=%v writes=%d audits=%d", err, r.writes, r.audits)
 				}
 			})
@@ -122,7 +122,7 @@ func TestEmployeeAdjustmentsRejectInvalidAmountsBeforeWrite(t *testing.T) {
 func TestEmployeeAdjustmentsAcceptBoundariesWithoutChangingAmounts(t *testing.T) {
 	scope := repository.NewAccessScope(models.Employees{ID: 9}, models.ScopeCompanies, []uint{1})
 	employees := &fakeSalaryEmployees{employee: models.Employees{ID: 5, CompaniesID: 1, IsActive: true}}
-	for _, amount := range []float64{0.01, 500, 123.45, maximumEmployeeAdjustmentAmount} {
+	for _, amount := range []float64{0.01, 500, 123.45, maximumAdjustmentAmount} {
 		for _, update := range []bool{false, true} {
 			r := &amountEarningRepo{}
 			earning := NewEmployeeEarningService(r, employees, amountEarningTypes{})

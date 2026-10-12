@@ -65,7 +65,7 @@ func (s *EmployeeDeductionService) resolveTarget(scope repository.AccessScope, e
 
 // Create attaches a deduction type and amount to an employee.
 func (s *EmployeeDeductionService) Create(scope repository.AccessScope, input models.EmployeeDeduction) (models.EmployeeDeduction, error) {
-	if err := validateEmployeeAdjustmentAmount(input.Amount); err != nil {
+	if err := validateAdjustmentAmount(input.Amount); err != nil {
 		return models.EmployeeDeduction{}, err
 	}
 	companyID, err := s.resolveTarget(scope, input.EmployeesID, input.CompaniesID, input.DeductionTypeID)
@@ -98,7 +98,7 @@ func (s *EmployeeDeductionService) Update(scope repository.AccessScope, id uint,
 	if err := requireSameCompany(item.CompaniesID, input.CompaniesID); err != nil {
 		return models.EmployeeDeduction{}, err
 	}
-	if err := validateEmployeeAdjustmentAmount(input.Amount); err != nil {
+	if err := validateAdjustmentAmount(input.Amount); err != nil {
 		return models.EmployeeDeduction{}, err
 	}
 
