@@ -2,6 +2,7 @@ package service
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"payroll-backend/apperr"
@@ -13,6 +14,39 @@ type leaveTypeValidationRepo struct {
 	repository.LeaveTypeSettingRepository
 	writes int
 	saved  models.LeaveTypeSetting
+}
+
+func TestLeaveTypeNameValidation(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		for _, tc := range []struct {
+			name, want string
+			valid      bool
+		}{
+			{" ลาป่วย ", "ลาป่วย", true},
+			{strings.Repeat("ก", 100), strings.Repeat("ก", 100), true},
+			{strings.Repeat("😀", 100), strings.Repeat("😀", 100), true},
+			{"", "", false}, {" \t\n", "", false},
+			{strings.Repeat("ก", 101), "", false},
+			{strings.Repeat("😀", 101), "", false},
+		} {
+			repo := &leaveTypeValidationRepo{}
+			svc := NewLeaveTypeSettingService(repo)
+			input := models.LeaveTypeSetting{CompaniesID: 1, Name: tc.name}
+			var err error
+			if update {
+				_, err = svc.Update(configTestScope(), 1, input)
+			} else {
+				_, err = svc.Create(configTestScope(), input)
+			}
+			if tc.valid {
+				if err != nil || repo.writes != 1 || repo.saved.Name != tc.want {
+					t.Fatalf("name not preserved: update=%v err=%v saved=%q", update, err, repo.saved.Name)
+				}
+			} else if apperr.KindOf(err) != apperr.KindValidation || repo.writes != 0 {
+				t.Fatalf("invalid name persisted: update=%v err=%v", update, err)
+			}
+		}
+	}
 }
 
 func (r *leaveTypeValidationRepo) FindScoped(repository.AccessScope, uint) (models.LeaveTypeSetting, error) {

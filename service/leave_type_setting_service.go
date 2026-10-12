@@ -3,6 +3,7 @@ package service
 import (
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"payroll-backend/apperr"
 	"payroll-backend/models"
@@ -12,6 +13,7 @@ import (
 // Leave-type rule failures.
 var (
 	ErrLeaveTypeNameRequired = apperr.Validation("name is required")
+	ErrLeaveTypeNameTooLong  = apperr.Validation("name must be at most 100 characters")
 	ErrLeaveTypeMaxDaysRange = apperr.Validation("max_days_per_year must be a finite number between 0 and 999.99")
 )
 
@@ -44,6 +46,9 @@ func (s *LeaveTypeSettingService) Create(scope repository.AccessScope, input mod
 	if name == "" {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeNameRequired
 	}
+	if utf8.RuneCountInString(name) > 100 {
+		return models.LeaveTypeSetting{}, ErrLeaveTypeNameTooLong
+	}
 	if !validLeaveTypeMaxDays(input.MaxDaysPerYear) {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeMaxDaysRange
 	}
@@ -74,6 +79,9 @@ func (s *LeaveTypeSettingService) Update(scope repository.AccessScope, id uint, 
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeNameRequired
+	}
+	if utf8.RuneCountInString(name) > 100 {
+		return models.LeaveTypeSetting{}, ErrLeaveTypeNameTooLong
 	}
 	if !validLeaveTypeMaxDays(input.MaxDaysPerYear) {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeMaxDaysRange
