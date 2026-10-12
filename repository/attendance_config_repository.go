@@ -8,6 +8,7 @@ import (
 	"payroll-backend/models"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ErrAttendanceConfigNotFound means the company has no schedule configuration yet, which is a normal state rather than a failure: callers fall back to a default.
@@ -82,9 +83,15 @@ func (r *gormAttendanceConfigRepository) upsertForCompany(configuration *models.
 	fields["created_at"] = now
 	fields["updated_at"] = now
 	configuration.CreatedAt, configuration.UpdatedAt = now, now
-	if err := r.db.Create(configuration).Error; err != nil {
+	row := struct {
+		models.AttendanceConfig  `gorm:"embedded"`
+		IsLateDeductionEnabled   *bool `gorm:"column:is_late_deduction_enabled"`
+		IsAbsentDeductionEnabled *bool `gorm:"column:is_absent_deduction_enabled"`
+	}{AttendanceConfig: *configuration, IsLateDeductionEnabled: &configuration.IsLateDeductionEnabled, IsAbsentDeductionEnabled: &configuration.IsAbsentDeductionEnabled}
+	if err := r.db.Table("attendance_config").Omit(clause.Associations).Create(&row).Error; err != nil {
 		return err
 	}
+	*configuration = row.AttendanceConfig
 	if audit != nil && audit.EntityID != nil {
 		*audit.EntityID = configuration.ID
 	}

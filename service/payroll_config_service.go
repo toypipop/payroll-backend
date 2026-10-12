@@ -51,6 +51,23 @@ func (s *PayrollConfigService) Save(scope repository.AccessScope, input PayrollC
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.PayrollConfig{}, ErrPayrollConfigCompanyDenied
 	}
+	for _, field := range []struct {
+		name           string
+		value, maximum float64
+	}{
+		{"SSO rate (%)", input.SsoRate, 100},
+		{"Max SSO amount", input.SsoMaxAmount, maximumConfigAmount},
+		{"Min salary for SSO", input.SsoMinSalary, maximumConfigAmount},
+	} {
+		if err := validateConfigNumber(field.name, field.value, field.maximum); err != nil {
+			return models.PayrollConfig{}, err
+		}
+	}
+	taxCalculation, err := normalizeTaxCalculation(input.TaxCalculation)
+	if err != nil {
+		return models.PayrollConfig{}, err
+	}
+	input.TaxCalculation = taxCalculation
 
 	audit, err := masterAudit(scope, models.AuditEventPayrollConfigSaved, "Payroll configuration saved", "payroll_config", input.CompaniesID, nil, nil, map[string]any{"tax_calculation": input.TaxCalculation})
 	if err != nil {

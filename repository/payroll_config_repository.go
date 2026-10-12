@@ -69,7 +69,14 @@ func (r *gormPayrollConfigRepository) FindActiveForCompany(companyID uint) (mode
 // UpsertForCompany writes the configuration, updating in place when the company already has one.
 func (r *gormPayrollConfigRepository) UpsertForCompany(configuration *models.PayrollConfig, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Omit(clause.Associations).Clauses(clause.OnConflict{
+		// Non-nil pointers preserve deliberate zero values on initial INSERT.
+		row := struct {
+			models.PayrollConfig `gorm:"embedded"`
+			SsoRate              *float64 `gorm:"column:sso_rate"`
+			SsoMaxAmount         *float64 `gorm:"column:sso_max_amount"`
+			SsoMinSalary         *float64 `gorm:"column:sso_min_salary"`
+		}{PayrollConfig: *configuration, SsoRate: &configuration.SsoRate, SsoMaxAmount: &configuration.SsoMaxAmount, SsoMinSalary: &configuration.SsoMinSalary}
+		if err := tx.Table("payroll_config").Omit(clause.Associations).Clauses(clause.OnConflict{
 			Columns: []clause.Column{{Name: "companies_id"}},
 			DoUpdates: clause.Assignments(map[string]any{
 				"sso_rate":        configuration.SsoRate,
@@ -78,9 +85,10 @@ func (r *gormPayrollConfigRepository) UpsertForCompany(configuration *models.Pay
 				"tax_calculation": configuration.TaxCalculation,
 				"updated_at":      time.Now(),
 			}),
-		}).Create(configuration).Error; err != nil {
+		}).Create(&row).Error; err != nil {
 			return err
 		}
+		*configuration = row.PayrollConfig
 		if audit != nil {
 			return tx.Create(audit).Error
 		}

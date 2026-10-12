@@ -96,6 +96,19 @@ func (s *AttendanceConfigService) Save(scope repository.AccessScope, input Atten
 	if !scope.CanAccessCompany(input.CompaniesID) {
 		return models.AttendanceConfig{}, ErrAttendanceCompanyDenied
 	}
+	for _, field := range []struct {
+		name  string
+		value float64
+	}{
+		{"Late rate per minute", input.LateRatePerMinute},
+		{"Absent rate per day", input.AbsentRatePerDay},
+		{"Overtime rate per minute", input.OvertimeRatePerMinute},
+		{"Extra rate per day", input.ExtraRatePerDay},
+	} {
+		if err := validateConfigNumber(field.name, field.value, maximumConfigAmount); err != nil {
+			return models.AttendanceConfig{}, err
+		}
+	}
 
 	workStart, err := parseWorkTime(input.WorkStartTime)
 	if err != nil {
