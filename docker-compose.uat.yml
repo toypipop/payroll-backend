@@ -31,6 +31,11 @@ services:
     build: *backend_build
     container_name: payroll-backend
     environment: *backend_env
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
