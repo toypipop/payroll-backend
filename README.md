@@ -1,18 +1,28 @@
 # Payroll Backend
 
-Go + Gin API at `http://localhost:8000/api/v1`.
+Requires Go 1.27.2 (see `go.mod`) and Docker with Compose v2. The local database uses PostgreSQL 17.
 
 ## Install and run
 
 ```powershell
+# Run from payroll-backend. Copy the template only on first setup.
 Copy-Item .env.local.example .env
-# Set PGPASSWORD and JWT_SECRET in .env
+# Replace PGPASSWORD and JWT_SECRET in .env; keep PGHOST=127.0.0.1.
 docker compose -f docker-compose.local.yml up -d postgres
 go mod download
-go install github.com/air-verse/air@latest
 go run ./migrate
-go run ./seed --mock --reset
-air
+go run ./seed --mock
+go run .
 ```
 
-The local seed resets the local database and creates mock data. Air reloads the API when Go files change. Never commit `.env`.
+API: `http://localhost:8000/api/v1`. Mock seed is for local/UAT data only. Never commit `.env`.
+
+## Other commands
+
+```powershell
+go test ./...
+go vet ./...
+go build ./...
+```
+
+On Linux/macOS, use `cp .env.local.example .env`.
