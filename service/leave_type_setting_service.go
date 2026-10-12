@@ -1,6 +1,7 @@
 package service
 
 import (
+	"math"
 	"strings"
 
 	"payroll-backend/apperr"
@@ -11,7 +12,7 @@ import (
 // Leave-type rule failures.
 var (
 	ErrLeaveTypeNameRequired = apperr.Validation("name is required")
-	ErrLeaveTypeMaxDaysRange = apperr.Validation("max_days_per_year cannot be negative")
+	ErrLeaveTypeMaxDaysRange = apperr.Validation("max_days_per_year must be a finite number between 0 and 999.99")
 )
 
 // ErrLeaveTypeNotFound is re-exported so handlers import a single package.
@@ -43,7 +44,7 @@ func (s *LeaveTypeSettingService) Create(scope repository.AccessScope, input mod
 	if name == "" {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeNameRequired
 	}
-	if input.MaxDaysPerYear < 0 {
+	if !validLeaveTypeMaxDays(input.MaxDaysPerYear) {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeMaxDaysRange
 	}
 
@@ -74,7 +75,7 @@ func (s *LeaveTypeSettingService) Update(scope repository.AccessScope, id uint, 
 	if name == "" {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeNameRequired
 	}
-	if input.MaxDaysPerYear < 0 {
+	if !validLeaveTypeMaxDays(input.MaxDaysPerYear) {
 		return models.LeaveTypeSetting{}, ErrLeaveTypeMaxDaysRange
 	}
 
@@ -112,4 +113,9 @@ func (s *LeaveTypeSettingService) Delete(scope repository.AccessScope, id uint) 
 
 func leaveTypeAuditData(leaveType models.LeaveTypeSetting) map[string]any {
 	return map[string]any{"name": leaveType.Name, "is_paid": leaveType.IsPaid, "max_days_per_year": leaveType.MaxDaysPerYear}
+}
+
+// Match the range of the decimal(5,2) database column; zero means unlimited.
+func validLeaveTypeMaxDays(days float64) bool {
+	return !math.IsNaN(days) && !math.IsInf(days, 0) && days >= 0 && days <= 999.99
 }
