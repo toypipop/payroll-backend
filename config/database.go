@@ -3,8 +3,11 @@ package config
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
+	"payroll-backend/observability"
 	"strings"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -69,23 +72,26 @@ func buildPostgresDSN() string {
 func ConnectDatabase() {
 	pool, err := readDatabasePool()
 	if err != nil {
-		log.Fatal("Invalid database pool configuration: ", err)
+		log.Fatalf("Invalid database pool configuration: %T", err)
 	}
 	dbName := firstEnv("payrolldb", "DB_NAME", "PGDATABASE")
 
 	db, err := gorm.Open(postgres.Open(buildPostgresDSN()), &gorm.Config{
+		Logger: observability.NewDatabaseLogger(slog.Default(), 200*time.Millisecond),
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true, // Singular table names
 		},
 	})
 
 	if err != nil {
-		log.Fatal("Failed to connect to database: ", err)
+		observability.LogError("Failed to connect to database", err)
+		os.Exit(1)
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatal("Failed to obtain database pool: ", err)
+		observability.LogError("Failed to obtain database pool", err)
+		os.Exit(1)
 	}
 	pool.apply(sqlDB)
 	log.Printf("Database pool configured: max_open=%d max_idle=%d max_lifetime=%s max_idle_time=%s", pool.maxOpen, pool.maxIdle, pool.lifetime, pool.idleTime)

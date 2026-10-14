@@ -112,8 +112,8 @@ var auditEventTypes = map[AuditEventType]struct{}{
 	AuditEventPayrollConfigSaved:         {},
 	AuditEventEmployeeCompanyAccessSaved: {}, AuditEventEmployeeCompanyAccessDeleted: {},
 	AuditEventDepartmentCategoryCreated: {},
-	AuditEventBankCreated: {}, AuditEventBankUpdated: {}, AuditEventBankDeleted: {},
-	AuditEventSalaryCreated:             {}, AuditEventSalaryChanged: {}, AuditEventSalaryMoved: {}, AuditEventSalaryDeactivated: {}, AuditEventSalaryDeleted: {},
+	AuditEventBankCreated:               {}, AuditEventBankUpdated: {}, AuditEventBankDeleted: {},
+	AuditEventSalaryCreated: {}, AuditEventSalaryChanged: {}, AuditEventSalaryMoved: {}, AuditEventSalaryDeactivated: {}, AuditEventSalaryDeleted: {},
 }
 
 var errAuditSensitiveField = errors.New("audit data contains a sensitive field")
@@ -179,24 +179,40 @@ func marshalAuditData(data map[string]any) (json.RawMessage, error) {
 	if len(data) == 0 {
 		return json.RawMessage(`{}`), nil
 	}
-	if containsSensitiveAuditField(data) {
-		return nil, errAuditSensitiveField
-	}
 	encoded, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
+	// Inspect the actual JSON shape: typed maps, structs, arrays and RawMessage
+	// must not bypass the guard just because they are not map[string]any.
+	var normalized any
+	if err := json.Unmarshal(encoded, &normalized); err != nil {
+		return nil, err
+	}
+	if containsSensitiveAuditValue(normalized) {
+		return nil, errAuditSensitiveField
+	}
 	return encoded, nil
 }
 
-func containsSensitiveAuditField(data map[string]any) bool {
-	for key, value := range data {
-		switch strings.ToLower(strings.TrimSpace(key)) {
-		case "password", "password_hash", "token", "access_token", "refresh_token", "cookie", "authorization", "secret":
-			return true
+func containsSensitiveAuditValue(data any) bool {
+	switch value := data.(type) {
+	case []any:
+		for _, item := range value {
+			if containsSensitiveAuditValue(item) {
+				return true
+			}
 		}
-		if nested, ok := value.(map[string]any); ok && containsSensitiveAuditField(nested) {
-			return true
+	case map[string]any:
+		for key, item := range value {
+			normalizedKey := strings.NewReplacer("_", "", "-", "", " ", "").Replace(strings.ToLower(strings.TrimSpace(key)))
+			switch normalizedKey {
+			case "password", "passwordhash", "token", "accesstoken", "refreshtoken", "authtoken", "jwt", "jwtsecret", "cookie", "setcookie", "authorization", "secret", "clientsecret", "apikey", "privatekey", "pgpassword", "sid", "sessionid", "credentials":
+				return true
+			}
+			if containsSensitiveAuditValue(item) {
+				return true
+			}
 		}
 	}
 	return false

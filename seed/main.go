@@ -126,12 +126,12 @@ func seedInitialAdministrator(company models.Companies, role models.Roles, dept 
 		return
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Fatalf("Core seed: check initial administrator: %v", err)
+		log.Fatalf("Core seed: check initial administrator: %T", err)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
-		log.Fatalf("Core seed: secure initial administrator password: %v", err)
+		log.Fatalf("Core seed: secure initial administrator password: %T", err)
 	}
 	admin = models.Employees{
 		CompaniesID: company.ID, RolesID: role.ID, DeptID: dept.ID, PosID: position.ID,
@@ -139,7 +139,7 @@ func seedInitialAdministrator(company models.Companies, role models.Roles, dept 
 		Email: email, Password: string(hash), IsActive: true,
 	}
 	if err := config.DB.Create(&admin).Error; err != nil {
-		log.Fatalf("Core seed: create initial administrator: %v", err)
+		log.Fatalf("Core seed: create initial administrator: %T", err)
 	}
 	upsertEmployeeCompanyAccess(admin.ID, company.ID, role.ID)
 	log.Printf("Core seed: created initial administrator %q", email)
@@ -175,34 +175,34 @@ func main() {
 
 	if *reset {
 		if err := resetDatabase(config.DB); err != nil {
-			log.Fatalf("Database reset failed: %v", err)
+			log.Fatalf("Database reset failed: %T", err)
 		}
 	}
 
 	if err := migrations.RunOnce(config.DB, "20260525_drop_legacy_indexes", migrations.DropLegacyIndexes); err != nil {
-		log.Fatalf("Legacy index cleanup failed: %v", err)
+		log.Fatalf("Legacy index cleanup failed: %T", err)
 	}
 	if err := migrations.RunOnce(config.DB, "20260525_rename_employee_company_access_table", migrations.RenameEmployeeCompanyAccessTable); err != nil {
-		log.Fatalf("Employee-company-access table rename failed: %v", err)
+		log.Fatalf("Employee-company-access table rename failed: %T", err)
 	}
 	if err := migrations.RunOnce(config.DB, "20260525_backfill_salaries_structure_companies", migrations.BackfillSalariesStructureCompanies); err != nil {
-		log.Fatalf("Salaries company backfill failed: %v", err)
+		log.Fatalf("Salaries company backfill failed: %T", err)
 	}
 
 	if err := migrations.AutoMigrateSchema(config.DB); err != nil {
-		log.Fatalf("Migration failed: %v", err)
+		log.Fatalf("Migration failed: %T", err)
 	}
 	if err := migrations.RunOnce(config.DB, "20260525_remove_legacy_elevated_role", migrations.RemoveLegacyElevatedRole); err != nil {
-		log.Fatalf("Legacy elevated role cleanup failed: %v", err)
+		log.Fatalf("Legacy elevated role cleanup failed: %T", err)
 	}
 	if !*mock {
 		initialized, err := coreSeedAlreadyInitialized()
 		if err != nil {
-			log.Fatalf("Core seed: check initialization state: %v", err)
+			log.Fatalf("Core seed: check initialization state: %T", err)
 		}
 		if initialized {
 			if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
-				log.Fatalf("Module capability sync failed: %v", err)
+				log.Fatalf("Module capability sync failed: %T", err)
 			}
 			log.Println("Core seed: database is already initialized; leaving existing data unchanged")
 			return
@@ -568,13 +568,13 @@ func main() {
 		if m.ID != 0 {
 			// Upsert by primary key to avoid conflict when id is taken by a different module_key
 			if err := config.DB.Save(&m).Error; err != nil {
-				log.Fatalf("seed module %s: %v", m.ModuleKey, err)
+				log.Fatalf("seed module %s: %T", m.ModuleKey, err)
 			}
 			existingModule = m
 			syncAppModuleIDSequence()
 		} else {
 			if err := config.DB.Where(models.AppModule{ModuleKey: m.ModuleKey}).Assign(m).FirstOrCreate(&existingModule).Error; err != nil {
-				log.Fatalf("seed module %s: %v", m.ModuleKey, err)
+				log.Fatalf("seed module %s: %T", m.ModuleKey, err)
 			}
 		}
 		moduleIDByKey[existingModule.ModuleKey] = existingModule.ID
@@ -757,7 +757,7 @@ func main() {
 	if !*mock {
 		seedInitialAdministrator(sysComp, sysRole, sysDept, sysPos)
 		if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
-			log.Fatalf("Module capability sync failed: %v", err)
+			log.Fatalf("Module capability sync failed: %T", err)
 		}
 		log.Println("Core production-safe seed completed")
 		return
@@ -1600,7 +1600,7 @@ func main() {
 		var tx models.PayrollTransaction
 		result := config.DB.Where("cycle_id = ? AND employees_id = ?", s.cycleID, s.emp.ID).Limit(1).Find(&tx)
 		if result.Error != nil {
-			log.Printf("Failed to query mock transaction for emp %d: %v", s.emp.ID, result.Error)
+			log.Printf("Failed to query mock transaction for emp %d: %T", s.emp.ID, result.Error)
 			continue
 		}
 		if result.RowsAffected == 0 {
@@ -1632,7 +1632,7 @@ func main() {
 				BankAccountNo:       accNo,
 			}
 			if err := config.DB.Create(&tx).Error; err != nil {
-				log.Printf("Failed to create mock transaction for emp %d: %v", s.emp.ID, err)
+				log.Printf("Failed to create mock transaction for emp %d: %T", s.emp.ID, err)
 				continue
 			}
 		}
@@ -2236,7 +2236,7 @@ func main() {
 			var existingTx models.PayrollTransaction
 			result := config.DB.Where("cycle_id = ? AND employees_id = ?", cycle.ID, p.emp.ID).Limit(1).Find(&existingTx)
 			if result.Error != nil {
-				log.Printf("Failed to query 2027 transaction for emp %d: %v", p.emp.ID, result.Error)
+				log.Printf("Failed to query 2027 transaction for emp %d: %T", p.emp.ID, result.Error)
 				continue
 			}
 			if result.RowsAffected > 0 {
@@ -2283,7 +2283,7 @@ func main() {
 
 	// Project the capability registry onto the freshly seeded module rows, so the permission UI works immediately without waiting for a server restart.
 	if err := migrations.SyncModuleCapabilities(config.DB); err != nil {
-		log.Fatalf("Module capability sync failed: %v", err)
+		log.Fatalf("Module capability sync failed: %T", err)
 	}
 
 	log.Println("Migration & Setup completed with realistic Jan-Jun 2027 mock data!")

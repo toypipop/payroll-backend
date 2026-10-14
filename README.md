@@ -8,6 +8,7 @@ Requires Go 1.27.2 (see `go.mod`) and Docker with Compose v2. The local database
 # Run from payroll-backend. Copy the template only on first setup.
 Copy-Item .env.local.example .env
 # Replace PGPASSWORD and JWT_SECRET in .env; keep PGHOST=127.0.0.1.
+docker compose -f docker-compose.local.yml build --pull postgres
 docker compose -f docker-compose.local.yml up -d postgres
 go mod download
 go run ./migrate

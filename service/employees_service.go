@@ -171,6 +171,10 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 	}
 
 	before := employeeAuditData(employee)
+	after := employeeAuditPatch(patch)
+	if passwordChanged {
+		after["password_changed"] = true
+	}
 	if err := s.repo.WithinTx(func(repo repository.EmployeesRepository) error {
 		// A password reset or account deactivation must invalidate every device.
 		// Revocation happens first: if the employee write later fails, signing out is
@@ -184,7 +188,7 @@ func (s *EmployeesService) Update(scope repository.AccessScope, id uint, patch m
 		if err := repo.UpdateFields(&employee, patch); err != nil {
 			return err
 		}
-		return appendEmployeeAudit(repo, scope, models.AuditEventEmployeeUpdated, "Employee updated", employee, before, employeeAuditPatch(patch))
+		return appendEmployeeAudit(repo, scope, models.AuditEventEmployeeUpdated, "Employee updated", employee, before, after)
 	}); err != nil {
 		return models.Employees{}, err
 	}

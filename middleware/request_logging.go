@@ -17,7 +17,7 @@ func RequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID, err := newRequestID()
 		if err != nil {
-			slog.Error("request ID generation failed", "error", err)
+			observability.LogError("request ID generation failed", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Request could not be completed"})
 			return
 		}
@@ -32,12 +32,15 @@ func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startedAt := time.Now()
 		c.Next()
+		status := c.Writer.Status()
+		if disconnected, _ := c.Get(disconnectedKey); disconnected == true {
+			status = 499
+		}
 		slog.Info("request completed",
 			"request_id", observability.RequestID(c),
-			"status", c.Writer.Status(),
-			"method", c.Request.Method,
-			"route", c.FullPath(),
-			"path", c.Request.URL.Path,
+			"status", status,
+			"method", observability.Method(c),
+			"route", observability.Route(c),
 			"duration", time.Since(startedAt).String(),
 		)
 	}

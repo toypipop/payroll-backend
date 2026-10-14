@@ -80,7 +80,7 @@ type RolesModuleAccess struct {
 	ID          uint                  `gorm:"primaryKey" json:"id"`
 	CreatedAt   time.Time             `json:"created_at"`
 	UpdatedAt   time.Time             `json:"updated_at"`
-	DeletedAt   soft_delete.DeletedAt `gorm:"uniqueIndex:idx_roles_module_deleted;not null;default:0" json:"-"`
+	DeletedAt   soft_delete.DeletedAt `gorm:"softDelete:nano;uniqueIndex:idx_roles_module_deleted;not null;default:0" json:"-"`
 	CompaniesID uint                  `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"companies_id"`
 	RolesID     uint                  `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"roles_id"`
 	ModuleID    uint                  `gorm:"uniqueIndex:idx_roles_module_deleted;not null" json:"module_id"`

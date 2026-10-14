@@ -33,7 +33,7 @@ func buildGuard(db *gorm.DB) *middleware.Guard {
 func buildHandlers(db *gorm.DB) routes.Handlers {
 	// A unique-constraint failure must reach the client as a 409, not the generic 500 every untyped error becomes.
 	if err := repository.RegisterErrorTranslation(db); err != nil {
-		log.Fatalf("Database error translation setup failed: %v", err)
+		log.Fatalf("Database error translation setup failed: %T", err)
 	}
 
 	// Repositories shared by more than one service are built once and reused.
@@ -129,7 +129,7 @@ func buildHandlers(db *gorm.DB) routes.Handlers {
 func buildDatabaseAdmission(db *gorm.DB) gin.HandlerFunc {
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatal("Failed to obtain database pool: ", err)
+		log.Fatalf("Failed to obtain database pool: %T", err)
 	}
 	return middleware.DatabaseAdmission(sqlDB.Stats().MaxOpenConnections)
 }

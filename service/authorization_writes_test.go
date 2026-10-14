@@ -5,6 +5,7 @@ import (
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,7 @@ type employeeSecurityRepo struct {
 	row            models.Employees
 	patch          map[string]any
 	writes, audits int
+	audit          *models.AuditLog
 	referenceErr   error
 }
 
@@ -76,9 +78,28 @@ func (r *employeeSecurityRepo) UpdateFields(_ *models.Employees, p map[string]an
 	return nil
 }
 func (r *employeeSecurityRepo) FindDetail(uint) (models.Employees, error) { return r.row, nil }
-func (r *employeeSecurityRepo) AppendAuditLog(*models.AuditLog) error     { r.audits++; return nil }
+func (r *employeeSecurityRepo) AppendAuditLog(entry *models.AuditLog) error {
+	r.audits++
+	r.audit = entry
+	return nil
+}
 func (r *employeeSecurityRepo) ValidateCompanyReferences(models.Employees) error {
 	return r.referenceErr
+}
+
+func TestPasswordChangeAuditContainsOnlySafeChangeMetadata(t *testing.T) {
+	r := &employeeSecurityRepo{row: models.Employees{ID: 9, CompaniesID: 1, RolesID: 11, IsActive: true}}
+	scope := repository.NewAccessScope(r.row, models.ScopeOwn, []uint{1})
+	_, err := NewEmployeesService(r, nil).Update(scope, 9, map[string]any{"password": "test-only-password"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.audit == nil || !strings.Contains(string(r.audit.AfterData), `"password_changed":true`) {
+		t.Fatal("password-change metadata missing")
+	}
+	if strings.Contains(string(r.audit.AfterData), "test-only-password") || strings.Contains(string(r.audit.AfterData), "$2") {
+		t.Fatal("password or hash entered audit")
+	}
 }
 func TestEmployeeRoleAndScopeChangesRejectBeforeWrite(t *testing.T) {
 	for _, tc := range []struct {

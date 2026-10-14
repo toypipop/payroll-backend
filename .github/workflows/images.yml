@@ -1,0 +1,18 @@
+name: Image security
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dockerfile: ["Dockerfile","Dockerfile.postgres"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build patched image
+        run: docker build --pull --file "${{ matrix.dockerfile }}" --tag security-check:ci .
+      - name: Scan offline and reject fixable high/critical OS vulnerabilities
+        run: bash .github/scripts/scan-image.sh security-check:ci "$RUNNER_TEMP/image-scan"

@@ -129,7 +129,7 @@ func (s *PermissionService) replaceWithAudit(scope repository.AccessScope, role 
 	companyID, roleID := role.CompaniesID, role.ID
 	audit, err := BuildAuditLog(scope, models.AuditLogInput{CompaniesID: &companyID, EntityID: &roleID,
 		EventType: models.AuditEventPermissionUpdated, EntityType: "role", Summary: "Role permissions updated",
-		AfterData: map[string]any{"permission_count": len(permissions)}})
+		AfterData: models.PermissionAuditData(permissions)})
 	if err != nil {
 		return err
 	}

@@ -27,6 +27,11 @@ x-backend-env: &backend_env
   BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
 
 x-container-security: &container_security
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
   read_only: true
   cap_drop:
     - ALL
@@ -115,7 +120,10 @@ services:
     tmpfs:
       - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,mode=3777
       - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
-    image: postgres:17
+    image: payroll-postgres:17-patched
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     container_name: payroll-postgres-local
     environment:
       POSTGRES_USER: ${PGUSER}

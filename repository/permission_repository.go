@@ -91,6 +91,24 @@ func (r *gormPermissionRepository) CapabilitiesFor(moduleIDs []uint) (ModuleCapa
 // ReplaceRoleAccess swaps a role's permission rows in one transaction.
 func (r *gormPermissionRepository) ReplaceRoleAccess(scope AccessScope, rolesID uint, permissions []models.RolesModuleAccess, audit *models.AuditLog) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Serialize saves and snapshot the previous grants in the mutation transaction.
+		var role models.Roles
+		if err := tx.Scopes(scope.ApplyCompany("roles.companies_id")).Clauses(clause.Locking{Strength: "UPDATE"}).First(&role, rolesID).Error; err != nil {
+			return err
+		}
+		var previous []models.RolesModuleAccess
+		if err := tx.Scopes(scope.ApplyCompany("roles_module_access.companies_id")).Where("roles_id = ?", rolesID).Find(&previous).Error; err != nil {
+			return err
+		}
+		var entry models.AuditLog
+		if audit != nil {
+			validated, err := models.NewAuditLogInput(models.AuditLogInput{EventType: audit.EventType, BeforeData: models.PermissionAuditData(previous)})
+			if err != nil {
+				return err
+			}
+			entry = *audit
+			entry.BeforeData = validated.BeforeData
+		}
 		if err := tx.Scopes(scope.ApplyCompany("roles_module_access.companies_id")).
 			Where("roles_id = ?", rolesID).
 			Delete(&models.RolesModuleAccess{}).Error; err != nil {
@@ -102,7 +120,7 @@ func (r *gormPermissionRepository) ReplaceRoleAccess(scope AccessScope, rolesID 
 			}
 		}
 		if audit != nil {
-			return tx.Create(audit).Error
+			return tx.Create(&entry).Error
 		}
 		return nil
 	})

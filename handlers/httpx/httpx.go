@@ -115,14 +115,13 @@ func BindStrictJSON(c *gin.Context, dst any) bool {
 func RespondError(c *gin.Context, err error) {
 	status := statusFor(apperr.KindOf(err))
 	if status >= http.StatusInternalServerError {
-		slog.Error("request failed",
+		attrs := []any{
 			"request_id", observability.RequestID(c),
 			"status", status,
-			"method", c.Request.Method,
-			"route", c.FullPath(),
-			"path", c.Request.URL.Path,
-			"error", err,
-		)
+			"method", observability.Method(c),
+			"route", observability.Route(c),
+		}
+		slog.Error("request failed", append(attrs, observability.ErrorAttrs(err)...)...)
 	}
 	body := gin.H{"error": apperr.Message(err)}
 	if code := apperr.Code(err); code != "" {

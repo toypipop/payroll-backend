@@ -52,7 +52,7 @@ type Handlers struct {
 
 func SetupRouter(h Handlers, g *middleware.Guard, databaseAdmission gin.HandlerFunc) *gin.Engine {
 	r := gin.New()
-	r.Use(middleware.RequestID(), middleware.RequestLogger(), gin.Recovery())
+	r.Use(middleware.RequestID(), middleware.RequestLogger(), middleware.SafeRecovery())
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins(),
