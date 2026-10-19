@@ -1,6 +1,6 @@
 # payroll-backend — Codex instructions
 
-## Project at a glance
+## Scope and Read First
 
 - Go REST API (toolchain version in go.mod) using Gin, GORM, and PostgreSQL.
 - API base path: `/api/v1`; backend port: `8000`; default frontend origin: `http://localhost:5174`.
@@ -8,7 +8,9 @@
 - Seeded demo accounts use the email address as their password.
 - When a change affects routes, modules, auth responses, permissions, seed data, or JSON shapes, inspect `../payroll-frontend/src` too.
 
-## 1. File Organization and Responsibilities
+Read [README.md](README.md) for setup and the [core business summary](README.md#core-business-logic). Read the frontend instructions before changing shared API contracts.
+
+## Repository Map and Change Conventions
 
 - Keep installation, tool versions, and run commands in README.md. Keep pending discussions/tasks in the project's task file, not here.
 - Models: models/ owns GORM entities, relationships, column definitions, and module capability metadata. Keep database schema constraints consistent with service validation.
@@ -33,7 +35,7 @@ Use the handler → service → repository structure. The `employees` domain is 
 - `companies_id` is immutable after creation. For nullable updates, use `repository.ClearField` rather than leaking GORM types into services.
 - Tables are singular. Qualify scoped columns, for example `time_log.companies_id`.
 
-## 2. Business Logic and API Contracts
+## Rules and Invariants
 
 ### Auth, permission, and scoping
 
@@ -64,22 +66,16 @@ Use the handler → service → repository structure. The `employees` domain is 
 - Do not use ambient timezone, bare `UTC`, `time.Parse` for business dates, or `Truncate(24 * time.Hour)` for a Bangkok calendar day.
 - Calendar-date start values are Bangkok midnight; period end values are Bangkok 23:59:59. Compare dates by Bangkok day boundaries.
 
-## 3. Engineering Principles
+## Additional Engineering Constraints
 
-Apply all five principles to every change, including System Permissions, leave-type annual limits, permission-save refresh behavior, and paired date inputs.
+Apply the global engineering principles together with these repository-specific constraints.
 
-1. [Structure and Readability](#principle-1-structure-and-readability)
-2. [Data Integrity, Validation, and Transactions](#principle-2-data-integrity-validation-and-transactions)
-3. [Logging and HTTP Status](#principle-3-logging-and-http-status)
-4. [Performance](#principle-4-performance)
-5. [Security](#principle-5-security)
-
-## Principle 1: Structure and Readability
+### Structure and Readability
 
 - Prioritize readable code, explicit names, and small responsibilities. Use Go interfaces and composition for useful OOP boundaries; avoid unnecessary abstraction.
 - Keep handler, service, repository, and model responsibilities separate. Reuse existing abstractions and remove newly introduced duplication within the touched domain; avoid unrelated rewrites.
 
-## Principle 2: Data Integrity, Validation, and Transactions
+### Data Integrity, Validation, and Transactions
 
 - Keep frontend, service/API, and database constraints consistent for required fields, types, lengths, ranges, numeric precision, references, and business dates/times. The API must reject invalid input even when the UI already validates it.
 - Reuse shared validators. Preserve meaningful zero values and distinguish omitted/null updates according to the API contract.
@@ -87,7 +83,7 @@ Apply all five principles to every change, including System Permissions, leave-t
 - Preserve optimistic concurrency and make retryable mutations idempotent where required. Return explicit conflicts instead of silently overwriting stale data.
 - Review migrations for data preservation and registration in the relevant entrypoints. Do not truncate or reset real data without explicit authorization.
 
-## Principle 3: Logging and HTTP Status
+### Logging and HTTP Status
 
 - Use apperr and httpx.RespondError for consistent errors. Preserve 400 invalid input, 401 authentication, 403 permission, 404 missing/scoped-out records, 409 conflict, 412 stale-version preconditions, and 500 internal failures according to the API contract.
 - Do not leak record existence through unauthorized responses or return raw internal errors. Preserve error wrapping internally for traceability.
@@ -95,13 +91,13 @@ Apply all five principles to every change, including System Permissions, leave-t
 - Audit important mutations separately with actor, action, target, time, and reason as required. Keep salary audit writes in the same transaction as the mutation.
 - Never log secrets, credentials, tokens, cookies, unnecessary personal data, or entire request/response bodies.
 
-## Principle 4: Performance
+### Performance
 
 - Scope and paginate reads, prevent N+1 loading and duplicate queries, and select only needed relations/columns.
 - Inspect indexes and query plans when relevant; keep database work and transaction duration proportional to the operation.
 - Avoid broad cache/state invalidation when a targeted update is sufficient. Do not trade correctness or authorization for speed.
 
-## Principle 5: Security
+### Security
 
 - Enforce authentication, authorization, company scope, and ownership on every relevant endpoint. Never bypass scoped repositories or fail-closed filters.
 - Use parameterized GORM queries and validate untrusted input/references. Inspect XSS, upload/export, and information disclosure as relevant.
@@ -127,3 +123,11 @@ Apply all five principles to every change, including System Permissions, leave-t
 - `.env` is local runtime configuration. `PGPASSWORD` must match the password used when the Postgres volume was initialized.
 - `docker compose ... down -v` deletes database data. Never run it unless the user explicitly requests a reset or the task clearly requires one.
 - UAT/prod uses `docker-compose.uat.yml`; it can delete real environment data with `down -v`. Treat all production-like Docker actions as externally impactful and seek confirmation when needed.
+
+## Documentation Maintenance
+
+- Require only README.md and AGENTS.md as baseline documents. README owns purpose, verified versions, setup/run commands, and the primary business or infrastructure summary; AGENTS owns the repository map, change rules, verification, and safety.
+- Write new repository Markdown in English. Inspect code/configuration before documenting facts; distinguish pinned versions, supported ranges, and historical observations.
+- Preserve useful existing references. Do not create or migrate to docs/, an index, DESIGN.md, configs/, or scripts/ merely to satisfy a template.
+- Keep pending work in the existing [shared tracker](../payroll-frontend/TASKS.md). Do not create an empty tracker or copy task status into README/AGENTS. The tracker is working state, not a third required baseline document.
+- Update affected setup, version, and behavior summaries when implementation changes; check local links and anchors. Resolve missing or conflicting information before dependent changes.
