@@ -21,6 +21,31 @@ func (r statusCompanyRepository) SetActive(id uint, active bool, _ *models.Audit
 	return models.Companies{ID: id, IsActive: active}, nil
 }
 
+type optionsCompanyRepository struct {
+	repository.CompanyRepository
+}
+
+func (optionsCompanyRepository) ListAccessible(uint) ([]models.Companies, error) {
+	return []models.Companies{{ID: 2, Name: "Tech Corp", IsActive: true, TaxID: "1111111111111", Address: "111 Sukhumvit Rd", Phone: "021111111"}}, nil
+}
+
+func TestCompanyOptionsReturnOnlyDropdownFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := &Handler{Company: service.NewCompanyService(optionsCompanyRepository{})}
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set("user_id", uint(1)); c.Next() })
+	router.GET("/companies/options", handler.GetCompanies)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/companies/options", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", response.Code, response.Body.String())
+	}
+	if got, want := strings.TrimSpace(response.Body.String()), `[{"id":2,"name":"Tech Corp"}]`; got != want {
+		t.Fatalf("body %s, want %s", got, want)
+	}
+}
+
 func TestCompanyStatusRequiresBooleanAndAcceptsFalse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, tc := range []struct {

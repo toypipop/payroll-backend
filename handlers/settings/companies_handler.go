@@ -10,7 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetCompanies backs /companies/options and is limited to the caller's
+// GetCompanies backs /companies/options and is limited to the caller's accessible companies.
+// Dropdowns need only the id and name, so the profile (tax ID, address, phone) and configs stay out of
+// this ungated response; pages that show them read /companies/all or their own report endpoints.
 func (h *Handler) GetCompanies(c *gin.Context) {
 	userID, _ := httpx.ContextAuth(c)
 
@@ -19,7 +21,15 @@ func (h *Handler) GetCompanies(c *gin.Context) {
 		httpx.RespondError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, companies)
+	type option struct {
+		ID   uint   `json:"id"`
+		Name string `json:"name"`
+	}
+	options := make([]option, 0, len(companies))
+	for _, company := range companies {
+		options = append(options, option{ID: company.ID, Name: company.Name})
+	}
+	c.JSON(http.StatusOK, options)
 }
 
 func (h *Handler) GetAllCompanies(c *gin.Context) {
