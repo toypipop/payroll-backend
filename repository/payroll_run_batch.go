@@ -172,6 +172,7 @@ func transactionFromSnapshot(cycleID uint, employeeID uint, snapshot Transaction
 		TotalEarning:        snapshot.TotalEarning,
 		TotalDeduction:      snapshot.TotalDeduction,
 		SsoAmount:           snapshot.SsoAmount,
+		SsoWageBase:         snapshot.SsoWageBase,
 		TaxableIncome:       snapshot.TaxableIncome,
 		TaxAmount:           snapshot.TaxAmount,
 		NetPay:              snapshot.NetPay,
@@ -189,7 +190,7 @@ func snapshotConflict() clause.OnConflict {
 		Columns: []clause.Column{{Name: "cycle_id"}, {Name: "employees_id"}, {Name: "deleted_at"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"updated_at", "salaries_structure_id", "salaries_at_time",
-			"total_earning", "total_deduction", "sso_amount", "taxable_income", "tax_amount", "net_pay",
+			"total_earning", "total_deduction", "sso_amount", "sso_wage_base", "taxable_income", "tax_amount", "net_pay",
 			"position_name", "department_name", "employment_type_name",
 			"bank_name", "bank_account_name", "bank_account_no",
 		}),

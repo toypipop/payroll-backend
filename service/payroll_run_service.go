@@ -217,6 +217,7 @@ type runAbsence struct {
 // runStatutory is the social security and income tax pair, priced on income actually earned.
 type runStatutory struct {
 	sso              float64
+	ssoWage          float64
 	tax              float64
 	netTaxableIncome float64
 }
@@ -760,7 +761,12 @@ func (run runContext) absentDeduction(absence runAbsence) float64 {
 // statutoryFor prices social security within its configured floor and ceiling, then taxes what is left after the employee's own contribution comes off.
 func (run runContext) statutoryFor(bases runBases, taxDeductible float64) runStatutory {
 	sso := 0.0
+	ssoWage := 0.0
 	if bases.sso >= run.payrollConfig.SsoMinSalary {
+		ssoWage = bases.sso
+		if rate := run.payrollConfig.SsoRate; rate > 0 {
+			ssoWage = math.Min(ssoWage, run.payrollConfig.SsoMaxAmount*100/rate)
+		}
 		computed := bases.sso * run.payrollConfig.SsoRate / 100
 		if computed > run.payrollConfig.SsoMaxAmount {
 			computed = run.payrollConfig.SsoMaxAmount
@@ -771,6 +777,7 @@ func (run runContext) statutoryFor(bases runBases, taxDeductible float64) runSta
 	// The employee's own social security contribution is deductible from taxable income, on top of whatever deduction items are tax-deductible.
 	return runStatutory{
 		sso:              sso,
+		ssoWage:          round2(ssoWage),
 		netTaxableIncome: round2(math.Max(0, bases.taxable-(taxDeductible+sso))),
 		tax:              MonthlyTax(run.payrollConfig.TaxCalculation, bases.taxable, taxDeductible+sso),
 	}
@@ -778,12 +785,14 @@ func (run runContext) statutoryFor(bases runBases, taxDeductible float64) runSta
 
 // snapshotFor is the row a run stores for one employee, carrying the position, department and bank details as they stand at calculation time.
 func snapshotFor(pay runPay, figures runFigures) repository.TransactionSnapshot {
+	ssoWage := figures.statutory.ssoWage
 	snapshot := repository.TransactionSnapshot{
 		SalariesStructureID: pay.salaryRecord.ID,
 		SalariesAtTime:      pay.baseSalary,
 		TotalEarning:        figures.totalEarning,
 		TotalDeduction:      figures.totalDeduction,
 		SsoAmount:           figures.statutory.sso,
+		SsoWageBase:         &ssoWage,
 		TaxableIncome:       figures.statutory.netTaxableIncome,
 		TaxAmount:           figures.statutory.tax,
 		NetPay:              figures.netPay,

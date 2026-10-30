@@ -30,6 +30,7 @@ type TransactionSnapshot struct {
 	TotalEarning        float64
 	TotalDeduction      float64
 	SsoAmount           float64
+	SsoWageBase         *float64
 	TaxableIncome       float64
 	TaxAmount           float64
 	NetPay              float64

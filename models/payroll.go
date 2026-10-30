@@ -49,6 +49,8 @@ type PayrollTransaction struct {
 	TotalEarning       float64 `gorm:"type:decimal(15,2)" json:"total_earning"`
 	TotalDeduction     float64 `gorm:"type:decimal(15,2)" json:"total_deduction"`
 	SsoAmount          float64 `gorm:"type:decimal(15,2)" json:"sso_amount"`
+	// SsoWageBase is the wage base SSO was actually priced on, after the minimum and maximum caps. NULL on cycles run before it was stored; the SSO report falls back to SalariesAtTime for those.
+	SsoWageBase *float64 `gorm:"type:decimal(15,2)" json:"sso_wage_base"`
 	// TaxableIncome is income left after all tax-deductible items (SSO, provident fund, etc.) are subtracted — the base actually fed into the tax calculation.
 	TaxableIncome float64 `gorm:"type:decimal(15,2)" json:"taxable_income"`
 	TaxAmount     float64 `gorm:"type:decimal(15,2)" json:"tax_amount"`

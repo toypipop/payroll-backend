@@ -248,7 +248,7 @@ func (s *ReportService) SSO(scope repository.AccessScope, cycleID uint) (SSORepo
 			EmployeesCode: transaction.Employees.EmployeesCode,
 			FirstName:     transaction.Employees.FirstName,
 			LastName:      transaction.Employees.LastName,
-			Wages:         transaction.SalariesAtTime,
+			Wages:         ssoWages(transaction),
 			EmployeeSso:   transaction.SsoAmount,
 			EmployerSso:   transaction.SsoAmount,
 			CompaniesName: transaction.Employees.Companies.Name,
@@ -289,4 +289,12 @@ func (s *ReportService) Analysis(scope repository.AccessScope, cycleID uint) (An
 		{Account: "Other Deductions Payable", Credit: report.TotalOtherDeductions},
 	}
 	return report, nil
+}
+
+// ssoWages is the wage base the SSO return reports: the base the contribution was priced on (BR-114). Cycles run before it was stored have none, so they fall back to the base salary.
+func ssoWages(transaction models.PayrollTransaction) float64 {
+	if transaction.SsoWageBase == nil {
+		return transaction.SalariesAtTime
+	}
+	return *transaction.SsoWageBase
 }

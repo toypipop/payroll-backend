@@ -50,3 +50,37 @@ func TestUnpaidLeaveLargerThanBaseFloorsBasesAtZero(t *testing.T) {
 	assertFloat(t, "SsoAmount", saved.snapshot.SsoAmount, 0)
 	assertFloat(t, "TaxableIncome", saved.snapshot.TaxableIncome, 0)
 }
+
+// BR-114: the run stores the SSO wage base actually used, after the minimum and maximum caps.
+func TestStatutoryForReportsSsoWageBaseAfterCaps(t *testing.T) {
+	run := runContext{payrollConfig: models.PayrollConfig{SsoRate: 5, SsoMaxAmount: 750, SsoMinSalary: 1650, TaxCalculation: "None"}}
+	cases := []struct {
+		name string
+		base float64
+		want float64
+	}{
+		{"below minimum", 1000, 0},
+		{"within range", 10000, 10000},
+		{"above the cap", 30000, 15000}, // 750 ceiling / 5%
+	}
+	for _, tc := range cases {
+		got := run.statutoryFor(runBases{taxable: tc.base, sso: tc.base}, 0)
+		assertFloat(t, tc.name, got.ssoWage, tc.want)
+	}
+}
+
+func TestSnapshotStoresSsoWageBase(t *testing.T) {
+	saved := unpaidLeaveRun(t, 3, models.PayrollConfig{SsoRate: 5, SsoMaxAmount: 750, SsoMinSalary: 1650, TaxCalculation: "None"})
+	if saved.snapshot.SsoWageBase == nil {
+		t.Fatal("SsoWageBase = nil, want the capped wage base")
+	}
+	assertFloat(t, "SsoWageBase", *saved.snapshot.SsoWageBase, 15000)
+}
+
+func TestSsoWagesFallsBackForLegacyRows(t *testing.T) {
+	stored := 15000.0
+	assertFloat(t, "stored", ssoWages(models.PayrollTransaction{SalariesAtTime: 30000, SsoWageBase: &stored}), 15000)
+	assertFloat(t, "legacy", ssoWages(models.PayrollTransaction{SalariesAtTime: 30000}), 30000)
+	zero := 0.0
+	assertFloat(t, "stored zero", ssoWages(models.PayrollTransaction{SalariesAtTime: 30000, SsoWageBase: &zero}), 0)
+}
