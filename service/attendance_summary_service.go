@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -9,12 +8,6 @@ import (
 	"payroll-backend/models"
 	"payroll-backend/repository"
 	"payroll-backend/timeutil"
-)
-
-// Fallback schedule when a company has no attendance configuration.
-const (
-	defaultWorkEndHour   = 18
-	defaultWorkEndMinute = 0
 )
 
 // Summary range failures.
@@ -103,40 +96,36 @@ func ParseSummaryRange(fromValue string, toValue string) (SummaryRange, error) {
 	return window, nil
 }
 
-// dayRecord collapses an employee's logs for one calendar day.
-type dayRecord struct {
-	hasCheckPair    bool
-	earliestCheckIn *time.Time
-	latestCheckOut  *time.Time
-	hasLateStatus   bool
-}
-
-// summaryData is everything both summaries need, loaded once.
+// summaryData is everything both summaries need, loaded once. Logs and leave stay raw per employee so the payroll run's own functions can read them.
 type summaryData struct {
 	employees []models.Employees
 	configs   map[uint]models.AttendanceConfig
-	holidays  map[string]bool
+	holidays  map[uint]map[string]bool
 	dayOffs   map[uint]map[int]bool
-	leaveDays map[string]bool
-	logsByDay map[string]*dayRecord
+	leaves    map[uint][]models.LeaveRequest
+	logs      map[uint][]models.TimeLog
 }
 
-func companyDayKey(companiesID uint, day time.Time) string {
-	return fmt.Sprintf("%d|%s", companiesID, timeutil.DateKey(day))
-}
-
-func employeeDayKey(employeeID uint, day time.Time) string {
-	return fmt.Sprintf("%d|%s", employeeID, timeutil.DateKey(day))
+// runContextFor is the payroll run's view of one employee's company over the summary window, so both pages price attendance with the run's functions (BR-112).
+func (data summaryData) runContextFor(employee models.Employees, window SummaryRange) runContext {
+	configuration := data.configs[employee.CompaniesID]
+	return runContext{
+		cycle:            models.PayrollCycle{StartDate: window.From, EndDate: window.To},
+		attendanceConfig: configuration,
+		schedule:         newScheduleWindow(configuration),
+		holidays:         data.holidays[employee.CompaniesID],
+		dayOffWeekdays:   data.dayOffs[employee.CompaniesID],
+	}
 }
 
 // load reads the whole window.
 func (s *AttendanceSummaryService) load(scope repository.AccessScope, window SummaryRange, withLeave bool) (summaryData, error) {
 	data := summaryData{
-		configs:   map[uint]models.AttendanceConfig{},
-		holidays:  map[string]bool{},
-		dayOffs:   map[uint]map[int]bool{},
-		leaveDays: map[string]bool{},
-		logsByDay: map[string]*dayRecord{},
+		configs:  map[uint]models.AttendanceConfig{},
+		holidays: map[uint]map[string]bool{},
+		dayOffs:  map[uint]map[int]bool{},
+		leaves:   map[uint][]models.LeaveRequest{},
+		logs:     map[uint][]models.TimeLog{},
 	}
 
 	employees, err := s.repo.ListEmployeesScoped(scope)
@@ -172,7 +161,10 @@ func (s *AttendanceSummaryService) load(scope repository.AccessScope, window Sum
 		return summaryData{}, err
 	}
 	for _, holiday := range holidays {
-		data.holidays[companyDayKey(holiday.CompaniesID, holiday.Date)] = true
+		if data.holidays[holiday.CompaniesID] == nil {
+			data.holidays[holiday.CompaniesID] = map[string]bool{}
+		}
+		data.holidays[holiday.CompaniesID][timeutil.DateKey(holiday.Date)] = true
 	}
 
 	dayOffs, err := s.repo.ListDayOffsForCompanies(companyIDs)
@@ -192,9 +184,7 @@ func (s *AttendanceSummaryService) load(scope repository.AccessScope, window Sum
 			return summaryData{}, err
 		}
 		for _, leave := range leaves {
-			for day := timeutil.DayStart(leave.StartDate); !day.After(timeutil.DayStart(leave.EndDate)); day = day.AddDate(0, 0, 1) {
-				data.leaveDays[employeeDayKey(leave.EmployeesID, day)] = true
-			}
+			data.leaves[leave.EmployeesID] = append(data.leaves[leave.EmployeesID], leave)
 		}
 	}
 
@@ -202,42 +192,8 @@ func (s *AttendanceSummaryService) load(scope repository.AccessScope, window Sum
 	if err != nil {
 		return summaryData{}, err
 	}
-	known := map[uint]bool{}
-	for _, employee := range employees {
-		known[employee.ID] = true
-	}
 	for _, log := range logs {
-		if !known[log.EmployeesID] {
-			continue
-		}
-
-		// A log with no check-in is placed by when it was created.
-		logDate := log.CreatedAt
-		if log.CheckIn != nil {
-			logDate = *log.CheckIn
-		}
-
-		key := employeeDayKey(log.EmployeesID, logDate)
-		record := data.logsByDay[key]
-		if record == nil {
-			record = &dayRecord{}
-			data.logsByDay[key] = record
-		}
-
-		if log.CheckIn != nil && log.CheckOut != nil {
-			record.hasCheckPair = true
-			if record.earliestCheckIn == nil || log.CheckIn.Before(*record.earliestCheckIn) {
-				checkIn := *log.CheckIn
-				record.earliestCheckIn = &checkIn
-			}
-			if record.latestCheckOut == nil || log.CheckOut.After(*record.latestCheckOut) {
-				checkOut := *log.CheckOut
-				record.latestCheckOut = &checkOut
-			}
-		}
-		if log.Status == models.StatusLate {
-			record.hasLateStatus = true
-		}
+		data.logs[log.EmployeesID] = append(data.logs[log.EmployeesID], log)
 	}
 
 	return data, nil
@@ -248,7 +204,7 @@ func round2(value float64) float64 {
 	return math.Round(value*100) / 100
 }
 
-// Deductions totals late minutes and absent days per employee, and prices them.
+// Deductions totals late minutes and absent days per employee, and prices them with the payroll run's own calculation (BR-112).
 func (s *AttendanceSummaryService) Deductions(scope repository.AccessScope, window SummaryRange) ([]DeductionSummaryRow, error) {
 	data, err := s.load(scope, window, true)
 	if err != nil {
@@ -258,61 +214,21 @@ func (s *AttendanceSummaryService) Deductions(scope repository.AccessScope, wind
 	rows := make([]DeductionSummaryRow, 0, len(data.employees))
 	for _, employee := range data.employees {
 		configuration := data.configs[employee.CompaniesID]
-
-		startHour, startMinute := defaultWorkStartHour, defaultWorkStartMinute
-		if configuration.WorkStartTime != nil {
-			scheduled := timeutil.ToBangkok(*configuration.WorkStartTime)
-			startHour, startMinute = scheduled.Hour(), scheduled.Minute()
-		}
+		run := data.runContextFor(employee, window)
+		absence := run.absenceFor(attendanceFor(data.logs[employee.ID], run), leaveFor(data.leaves[employee.ID]))
 
 		lateMinutes := 0.0
-		absentDays := 0
-
-		for day := timeutil.DayStart(window.From); !day.After(timeutil.DayStart(window.To)); day = day.AddDate(0, 0, 1) {
-			isDayOff := data.dayOffs[employee.CompaniesID] != nil && data.dayOffs[employee.CompaniesID][int(day.Weekday())]
-			if data.holidays[companyDayKey(employee.CompaniesID, day)] || isDayOff {
-				continue
-			}
-			if data.leaveDays[employeeDayKey(employee.ID, day)] {
-				continue
-			}
-
-			record := data.logsByDay[employeeDayKey(employee.ID, day)]
-			if record == nil || !record.hasCheckPair {
-				absentDays++
-				continue
-			}
-
-			scheduledStart := time.Date(day.Year(), day.Month(), day.Day(), startHour, startMinute, 0, 0, timeutil.BangkokLocation)
-			switch {
-			case record.earliestCheckIn != nil && record.earliestCheckIn.After(scheduledStart):
-				lateMinutes += record.earliestCheckIn.Sub(scheduledStart).Minutes()
-			case record.hasLateStatus:
-				// Marked late but the arithmetic says on time: count one minute.
-				lateMinutes += 1.0
-			}
-		}
-
-		if !configuration.IsLateDeductionEnabled {
-			lateMinutes = 0
-		}
-		if !configuration.IsAbsentDeductionEnabled {
-			absentDays = 0
-		}
-
-		lateAmount := 0.0
 		if configuration.IsLateDeductionEnabled {
-			lateAmount = round2(lateMinutes * configuration.LateRatePerMinute)
-			// A day of lateness can never cost more than a day of absence.
-			if lateAmount > configuration.AbsentRatePerDay {
-				lateAmount = configuration.AbsentRatePerDay
+			for _, minutes := range absence.lateMinutesPerDay {
+				lateMinutes += minutes
 			}
 		}
-
-		absentAmount := 0.0
+		absentDays := 0
 		if configuration.IsAbsentDeductionEnabled {
-			absentAmount = round2(float64(absentDays) * configuration.AbsentRatePerDay)
+			absentDays = absence.days
 		}
+		lateAmount := run.lateDeduction(absence)
+		absentAmount := run.absentDeduction(absence)
 
 		rows = append(rows, DeductionSummaryRow{
 			EmployeesID:   employee.ID,
@@ -329,7 +245,7 @@ func (s *AttendanceSummaryService) Deductions(scope repository.AccessScope, wind
 	return rows, nil
 }
 
-// Earnings totals overtime minutes and extra days worked per employee, and prices them.
+// Earnings totals overtime minutes and extra days worked per employee, and prices them with the payroll run's own calculation (BR-112).
 func (s *AttendanceSummaryService) Earnings(scope repository.AccessScope, window SummaryRange) ([]EarningSummaryRow, error) {
 	data, err := s.load(scope, window, false)
 	if err != nil {
@@ -339,62 +255,19 @@ func (s *AttendanceSummaryService) Earnings(scope repository.AccessScope, window
 	rows := make([]EarningSummaryRow, 0, len(data.employees))
 	for _, employee := range data.employees {
 		configuration := data.configs[employee.CompaniesID]
-
-		startHour, startMinute := defaultWorkStartHour, defaultWorkStartMinute
-		endHour, endMinute := defaultWorkEndHour, defaultWorkEndMinute
-		if configuration.WorkStartTime != nil {
-			scheduled := timeutil.ToBangkok(*configuration.WorkStartTime)
-			startHour, startMinute = scheduled.Hour(), scheduled.Minute()
-		}
-		if configuration.WorkEndTime != nil {
-			scheduled := timeutil.ToBangkok(*configuration.WorkEndTime)
-			endHour, endMinute = scheduled.Hour(), scheduled.Minute()
-		}
+		run := data.runContextFor(employee, window)
+		attendance := attendanceFor(data.logs[employee.ID], run)
 
 		overtimeMinutes := 0.0
-		extraDates := map[string]bool{}
-
-		for day := timeutil.DayStart(window.From); !day.After(timeutil.DayStart(window.To)); day = day.AddDate(0, 0, 1) {
-			record := data.logsByDay[employeeDayKey(employee.ID, day)]
-			if record == nil || !record.hasCheckPair || record.latestCheckOut == nil {
-				continue
-			}
-
-			isDayOff := data.dayOffs[employee.CompaniesID] != nil && data.dayOffs[employee.CompaniesID][int(day.Weekday())]
-			if data.holidays[companyDayKey(employee.CompaniesID, day)] || isDayOff {
-				// Working a holiday or a day off earns the extra-day rate, not overtime.
-				extraDates[day.Format("2006-01-02")] = true
-				continue
-			}
-
-			scheduledEnd := time.Date(day.Year(), day.Month(), day.Day(), endHour, endMinute, 0, 0, timeutil.BangkokLocation)
-			// An end at or before the start means the shift runs past midnight.
-			if endHour < startHour || (endHour == startHour && endMinute <= startMinute) {
-				scheduledEnd = scheduledEnd.AddDate(0, 0, 1)
-			}
-
-			if record.latestCheckOut.After(scheduledEnd) {
-				overtimeMinutes += record.latestCheckOut.Sub(scheduledEnd).Minutes()
-			}
-		}
-
-		if !configuration.IsOvertimeEarningsEnabled {
-			overtimeMinutes = 0
-		}
-		extraDays := len(extraDates)
-		if !configuration.IsExtraEarningsEnabled {
-			extraDays = 0
-		}
-
-		overtimeAmount := 0.0
 		if configuration.IsOvertimeEarningsEnabled {
-			overtimeAmount = round2(overtimeMinutes * configuration.OvertimeRatePerMinute)
+			overtimeMinutes = attendance.overtimeMinutes
 		}
-
-		extraAmount := 0.0
+		extraDays := 0
 		if configuration.IsExtraEarningsEnabled {
-			extraAmount = round2(float64(extraDays) * configuration.ExtraRatePerDay)
+			extraDays = attendance.extraDays
 		}
+		overtimeAmount := run.overtimeAmount(attendance)
+		extraAmount := run.extraAmount(attendance)
 
 		rows = append(rows, EarningSummaryRow{
 			EmployeesID:          employee.ID,
