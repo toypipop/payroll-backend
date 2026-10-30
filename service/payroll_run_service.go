@@ -567,8 +567,9 @@ func computeEmployee(run runContext, pay runPay, input *repository.PayrollEmploy
 	figures.absent = run.absentDeduction(absence)
 
 	// Thai law prices tax and social security on income actually earned, so time not worked comes off the base first.
-	bases.taxable = math.Max(0, bases.taxable-figures.late-figures.absent)
-	bases.sso = math.Max(0, bases.sso-deductions.ssoDeductible-figures.late-figures.absent)
+	// Unpaid leave is time not worked as well, so it comes off both bases too (BR-113).
+	bases.taxable = math.Max(0, bases.taxable-figures.unpaidLeave-figures.late-figures.absent)
+	bases.sso = math.Max(0, bases.sso-deductions.ssoDeductible-figures.unpaidLeave-figures.late-figures.absent)
 
 	figures.statutory = run.statutoryFor(bases, deductions.taxDeductible)
 	figures.totalEarning = round2(pay.baseSalary + earnings.total + figures.overtime + figures.extra)

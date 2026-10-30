@@ -318,12 +318,12 @@ func TestSnapshotComputesFullPayslip(t *testing.T) {
 	assertFloat(t, "TotalEarning", got.TotalEarning, 33300)
 	// Unpaid leave 30000/30 + loan 500 + fine 200 + late 15min * 2 + 2 absent days * 1000.
 	assertFloat(t, "TotalDeduction", got.TotalDeduction, 3730)
-	// 5% of a 30270 base exceeds the 750 ceiling.
+	// 5% of a 29270 base (unpaid leave included, BR-113) exceeds the 750 ceiling.
 	assertFloat(t, "SsoAmount", got.SsoAmount, 750)
-	// Taxable 31270 less the tax-deductible fine and the employee's own SSO.
-	assertFloat(t, "TaxableIncome", got.TaxableIncome, 30320)
-	assertFloat(t, "TaxAmount", got.TaxAmount, 224.33)
-	assertFloat(t, "NetPay", got.NetPay, 28595.67)
+	// Taxable 30270 (after unpaid leave) less the tax-deductible fine and the employee's own SSO.
+	assertFloat(t, "TaxableIncome", got.TaxableIncome, 29320)
+	assertFloat(t, "TaxAmount", got.TaxAmount, 174.33)
+	assertFloat(t, "NetPay", got.NetPay, 28645.67)
 	assertFloat(t, "SalariesAtTime", got.SalariesAtTime, 30000)
 	if got.SalariesStructureID != 900 {
 		t.Errorf("SalariesStructureID = %d, want 900", got.SalariesStructureID)
@@ -350,7 +350,7 @@ func TestSnapshotComputesFullPayslip(t *testing.T) {
 		{"Late Amount", 30, "deduction"},
 		{"Absent Amount", 2000, "deduction"},
 		{"Social Security (SSO)", 750, "deduction"},
-		{"Income Tax", 224.33, "deduction"},
+		{"Income Tax", 174.33, "deduction"},
 	}
 	details := repo.saved[0].details
 	if len(details) != len(wantDetails) {
